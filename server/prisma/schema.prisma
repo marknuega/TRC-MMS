@@ -1,0 +1,21 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model DailyReport {
+  id          Int      @id @default(autoincrement())
+  reportDate  DateTime @map("report_date") @db.Date
+  author      String
+  summary     String
+  hoursWorked Decimal? @map("hours_worked") @db.Decimal(5, 2)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([reportDate])
+  @@map("daily_reports")
+}
