@@ -1,6 +1,13 @@
 import express from 'express'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { prisma } from './db.js'
 import reportsRouter from './routes/reports.js'
+import optionsRouter from './routes/options.js'
+import savedReportsRouter from './routes/savedReports.js'
+
+const here = path.dirname(fileURLToPath(import.meta.url)) // server/src
+const clientDist = path.resolve(here, '../../client/dist') // repo/client/dist
 
 // The app is built here but NOT started, so tests can import it
 // without binding a port. src/index.js is what actually listens.
@@ -25,6 +32,19 @@ app.get('/health/db', async (req, res) => {
 })
 
 app.use('/api/reports', reportsRouter)
+app.use('/api/options', optionsRouter)
+app.use('/api/saved-reports', savedReportsRouter)
+
+// In production the same service also serves the built React app, so the
+// browser sees one origin (no CORS). In dev, Vite serves the client instead.
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(clientDist))
+  // SPA fallback: any non-API GET returns index.html.
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/health')) return next()
+    res.sendFile(path.join(clientDist, 'index.html'))
+  })
+}
 
 // Any error thrown in a route lands here. Never leak stack traces in production.
 app.use((err, req, res, next) => {

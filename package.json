@@ -1,0 +1,8 @@
+{
+  "name": "trc-daily-report",
+  "private": true,
+  "description": "TRC Daily Report — single Railway service (Express API serves the built React client).",
+  "engines": {
+    "node": "22.x"
+  }
+}

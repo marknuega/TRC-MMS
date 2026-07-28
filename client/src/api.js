@@ -14,10 +14,25 @@ async function request(path, options) {
   return res.status === 204 ? null : res.json()
 }
 
-export const listReports = () => request('/api/reports')
+export const listEntries = () => request('/api/reports')
 
-export const createReport = (report) =>
-  request('/api/reports', { method: 'POST', body: JSON.stringify(report) })
+export const createEntry = (entry) =>
+  request('/api/reports', { method: 'POST', body: JSON.stringify(entry) })
 
-export const deleteReport = (id) =>
+export const deleteEntry = (id) =>
   request(`/api/reports/${id}`, { method: 'DELETE' })
+
+export const getOptions = () => request('/api/options')
+
+export const saveOptions = (data) =>
+  request('/api/options', { method: 'PUT', body: JSON.stringify(data) })
+
+export const getSavedReports = () => request('/api/saved-reports')
+
+export const saveReport = () => request('/api/saved-reports', { method: 'POST' })
+
+export const loadSavedReport = (id) =>
+  request(`/api/saved-reports/${id}/load`, { method: 'POST' })
+
+export const deleteSavedReport = (id) =>
+  request(`/api/saved-reports/${id}`, { method: 'DELETE' })

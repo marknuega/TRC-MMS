@@ -7,15 +7,67 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model DailyReport {
-  id          Int      @id @default(autoincrement())
-  reportDate  DateTime @map("report_date") @db.Date
-  author      String
-  summary     String
-  hoursWorked Decimal? @map("hours_worked") @db.Decimal(5, 2)
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+// A saved snapshot of the working entries, with a unique REP-#### series number.
+model SavedReport {
+  id         Int      @id @default(autoincrement())
+  seq        Int      @unique // 1-based; renders as REP-0001, REP-0002, ...
+  reportId   String   @unique @map("report_id")
+  savedAt    DateTime @default(now()) @map("saved_at")
+  dateLabel  String   @default("") @map("date_label")
+  entryCount Int      @default(0) @map("entry_count")
+  entries    Json // snapshot of entries + faults, used to reload into the form
+
+  @@map("saved_reports")
+}
+
+// Single-row (id=1) store for the user-managed dropdown option lists.
+model AppOptions {
+  id        Int      @id @default(1)
+  data      Json     @default("{}")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("app_options")
+}
+
+// One report per date, holding the sequential REP-#### id shared by that day's entries.
+model Report {
+  id         Int      @id @default(autoincrement())
+  reportDate DateTime @unique @map("report_date") @db.Date
+  seq        Int      @unique // 1-based; renders as REP-0001, REP-0002, ...
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("reports")
+}
+
+// One entry = one device on a given report date, with up to 6 faults.
+model ReportEntry {
+  id         Int      @id @default(autoincrement())
+  reportDate DateTime @map("report_date") @db.Date
+  technician String
+  agency     String
+  telNumber  String   @map("tel_number")
+  issiNumber String   @map("issi_number")
+  type       String
+  model      String
+  faults     Fault[]
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
 
   @@index([reportDate])
-  @@map("daily_reports")
+  @@map("report_entries")
+}
+
+// A single fault on a device. Max 6 per entry is enforced in the API.
+model Fault {
+  id       Int         @id @default(autoincrement())
+  entryId  Int         @map("entry_id")
+  entry    ReportEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  position Int         @default(0) // 0-5, preserves the order faults were entered
+  issue    String
+  quantity Int         @default(1)
+  action   String // CHANGE|REPAIR|NEW|PCB|PROGRAM|RE-PROGRAM|INSTALL|RE-INSTALL|DISMANTLE
+  company  String   @default("") // MOTECO|MOI|PROJECT 2|PROJECT X|ONLINE|MOTECO LOCAL|FREE
+
+  @@index([entryId])
+  @@map("faults")
 }
