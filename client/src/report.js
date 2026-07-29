@@ -191,18 +191,19 @@ export function deviceBlocksByType(entries) {
         order.push(dev)
       }
       const agg = byDevice.get(dev)
-      // MAINTENANCE counts devices (entries) that had any maintenance fault;
-      // the others sum their quantities.
-      let entryHasMaintenance = false
+      // MAINTENANCE per device = the largest quantity among its maintenance faults
+      // (a multi-component repair counts once; a bulk fault like BATTERY x15 counts 15).
+      // The others sum their quantities.
+      let maxMaint = 0
       for (const f of e.faults) {
         const cat = classify(f.action)
         const q = Math.max(0, Number(f.quantity) || 0)
-        if (cat === 'maintenance') entryHasMaintenance = true
+        if (cat === 'maintenance') maxMaint = Math.max(maxMaint, q)
         else if (cat === 'programming') agg.program += q
         else if (cat === 'install') agg.install += q
         else if (cat === 'dismantle') agg.dismantle += q
       }
-      if (entryHasMaintenance) agg.maintenance += 1
+      agg.maintenance += maxMaint
     }
     const blocks = []
     for (const dev of order) {
@@ -248,16 +249,17 @@ export function headerTotals(entries) {
   let install = 0
   let dismantle = 0
   for (const e of entries) {
-    let entryHasMaintenance = false
+    // MAINTENANCE per device = max quantity among its maintenance faults (see buildDeviceSummary).
+    let maxMaint = 0
     for (const f of e.faults) {
       const cat = classify(f.action)
       const q = Math.max(0, Number(f.quantity) || 0)
-      if (cat === 'maintenance') entryHasMaintenance = true
+      if (cat === 'maintenance') maxMaint = Math.max(maxMaint, q)
       else if (cat === 'programming') programming += q
       else if (cat === 'install') install += q
       else if (cat === 'dismantle') dismantle += q
     }
-    if (entryHasMaintenance) maintenance += 1
+    maintenance += maxMaint
   }
   return { totalEntries: entries.length, programming, maintenance, install, dismantle }
 }
