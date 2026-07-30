@@ -176,6 +176,64 @@ function buildMaterialsSummary(entries) {
   return sections
 }
 
+// Transmittal materials: device items grouped by "TYPE MODEL"; everything else
+// (type OTHER or no real model) becomes a single numbered list.
+// Returns { deviceSections: string[], otherLines: string[] }.
+function transmittalMaterials(entries) {
+  const fmt = (r) =>
+    `${r.label} = ${r.qty}${r.company ? ` (${r.company})` : ''}${r.status ? ` - ${r.status.toUpperCase()}` : ''}`
+  const aggregate = (list) => {
+    const map = new Map()
+    for (const e of list) {
+      for (const f of e.faults) {
+        const label = up(f.issue)
+        if (!label) continue
+        const company = companyDisplay(f.company)
+        const status = String(f.status ?? '').trim()
+        const key = `${label}|${company}|${status}`
+        if (!map.has(key)) map.set(key, { label, company, status, qty: 0 })
+        map.get(key).qty += Math.max(0, Number(f.quantity) || 0)
+      }
+    }
+    return [...map.values()]
+      .filter((r) => r.qty > 0)
+      .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base', numeric: true }))
+  }
+
+  // An entry is "other" if its type is OTHER or it has no real device model.
+  const isOther = (e) => {
+    const md = modelDisplay(e.model)
+    return up(e.type) === 'OTHER' || !md || md === '-'
+  }
+  const normalEntries = entries.filter((e) => !isOther(e))
+  const otherEntries = entries.filter(isOther)
+
+  const deviceSections = []
+  for (const type of orderedTypes(normalEntries)) {
+    const typeEntries = normalEntries.filter((e) => up(e.type) === type)
+    const byModel = new Map()
+    const rawOf = new Map()
+    const order = []
+    for (const e of typeEntries) {
+      const md = modelDisplay(e.model)
+      if (!byModel.has(md)) {
+        byModel.set(md, [])
+        rawOf.set(md, e.model)
+        order.push(md)
+      }
+      byModel.get(md).push(e)
+    }
+    order.sort((a, b) => modelRank(rawOf.get(a)) - modelRank(rawOf.get(b)))
+    for (const md of order) {
+      const rows = aggregate(byModel.get(md))
+      if (rows.length) deviceSections.push(`${type} ${md}\n${rows.map(fmt).join('\n')}`)
+    }
+  }
+
+  const otherLines = aggregate(otherEntries).map((r, i) => `${i + 1}. ${fmt(r)}`)
+  return { deviceSections, otherLines }
+}
+
 // ---- Device Summary (by TYPE then device-short model) ----
 // { AIRBUS: [{header, lines:[...]}], ... } for the split PDF layout.
 export function deviceBlocksByType(entries) {
@@ -329,6 +387,7 @@ export function buildDateReport(dateLabel, reportId, entries, opts = {}) {
     totals: headerTotals(entries),
     materialsSummary: buildMaterialsSummary(entries),
     deviceSummary: buildDeviceSummary(entries),
+    tx: mode === 'transmittal' ? transmittalMaterials(entries) : null,
   }
 }
 
@@ -347,7 +406,7 @@ export function buildTxt(report) {
   const isTransmittal = report.mode === 'transmittal'
   const notes = buildNotes(report.entries)
 
-  const lines = [
+  const header = [
     report.dateLabel,
     isTransmittal ? 'MATERIAL TRANSMITTAL' : 'DAILY ACTIVITY REPORT',
     ...(report.branch ? [`BRANCH: ${report.branch}`] : []),
@@ -355,20 +414,31 @@ export function buildTxt(report) {
     ...(isTransmittal && report.receivedBy ? [`RECEIVED BY: ${report.receivedBy}`] : []),
     `${isTransmittal ? 'TRANSMITTAL' : 'REPORT'} ID: ${report.reportId ?? '-'}`,
     DIVIDER,
-    isTransmittal ? 'Materials' : 'Entry & Materials Summary',
-    DIVIDER,
-    ...join(report.materialsSummary),
   ]
 
-  // Device summary only makes sense for the activity report.
-  if (!isTransmittal) {
-    lines.push(DIVIDER, 'Device Summary', DIVIDER, ...join(report.deviceSummary))
+  if (isTransmittal) {
+    // Device blocks (grouped) then a single numbered list of other materials.
+    const { deviceSections, otherLines } = report.tx ?? { deviceSections: [], otherLines: [] }
+    const parts = [...deviceSections]
+    if (otherLines.length) parts.push(otherLines.join('\n'))
+    const body = parts.length
+      ? parts.reduce((acc, s, i) => (i ? [...acc, DIVIDER, s] : [s]), [])
+      : ['NO ENTRY']
+    const lines = [...header, ...body]
+    if (notes.length) lines.push(DIVIDER, 'Notes', DIVIDER, ...notes)
+    return lines.join('\n')
   }
 
-  // Per-entry comments/notes at the end, when present.
-  if (notes.length) {
-    lines.push(DIVIDER, 'Notes', DIVIDER, ...notes)
-  }
-
+  const lines = [
+    ...header,
+    'Entry & Materials Summary',
+    DIVIDER,
+    ...join(report.materialsSummary),
+    DIVIDER,
+    'Device Summary',
+    DIVIDER,
+    ...join(report.deviceSummary),
+  ]
+  if (notes.length) lines.push(DIVIDER, 'Notes', DIVIDER, ...notes)
   return lines.join('\n')
 }

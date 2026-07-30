@@ -276,9 +276,9 @@ h2 {
   gap: 0.6rem;
   align-items: center;
 }
-/* Transmittal line: Material + Qty + remove only. */
+/* Transmittal line: Material + Qty + Company + Status + remove. */
 .fault-row--tx {
-  grid-template-columns: 1fr 4.75rem auto;
+  grid-template-columns: 1fr 4.75rem 9.5rem 8rem auto;
 }
 .fault-head {
   font-size: 0.78rem;

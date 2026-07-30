@@ -19,12 +19,14 @@ const dateKey = (value) => new Date(value).toISOString().slice(0, 10)
 function parseEntry(body) {
   const reportDate = body?.reportDate
   const type = String(body?.type ?? '').trim()
-  const model = String(body?.model ?? '').trim()
-  const agency = String(body?.agency ?? '').trim()
 
-  if (!reportDate || !agency || !type || !model) {
-    return { error: 'reportDate, agency, type and model are required' }
+  if (!reportDate || !type) {
+    return { error: 'reportDate and type are required' }
   }
+
+  // Model + agency are optional (e.g. OTHER transmittal items) — fall back to placeholders.
+  const model = String(body?.model ?? '').trim() || '-'
+  const agency = String(body?.agency ?? '').trim() || '-'
 
   // Optional — fall back to the MOTECO placeholders when left blank.
   const technician = String(body?.technician ?? '').trim()
@@ -38,13 +40,13 @@ function parseEntry(body) {
       quantity: Math.max(1, Number(f?.quantity) || 1),
       action: String(f?.action ?? '').trim().toUpperCase(),
       company: String(f?.company ?? '').trim().toUpperCase(),
+      status: String(f?.status ?? '').trim(),
     }))
     // Keep a fault if it names an issue, or is a device-level action (issue optional).
     .filter((f) => f.issue !== '' || DEVICE_LEVEL.has(f.action))
     .map((f, i) => ({ ...f, position: i }))
 
   if (faults.length === 0) return { error: 'At least one fault is required (issue, or a device-level action)' }
-  if (faults.length > MAX_FAULTS) return { error: `A device can have at most ${MAX_FAULTS} faults` }
 
   // Actions/companies are user-managed via /api/options, so we only require a
   // non-empty action rather than a fixed whitelist. ACTIONS/COMPANIES stay as the

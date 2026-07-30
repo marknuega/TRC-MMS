@@ -73,6 +73,7 @@ router.post('/', async (req, res, next) => {
         quantity: f.quantity,
         action: f.action,
         company: f.company,
+        status: f.status,
       })),
     }))
 
@@ -123,6 +124,7 @@ router.post('/:id/load', async (req, res, next) => {
                 quantity: Math.max(1, Number(f.quantity) || 1),
                 action: String(f.action ?? '').toUpperCase(),
                 company: String(f.company ?? '').toUpperCase(),
+                status: String(f.status ?? ''),
               })),
             },
           },

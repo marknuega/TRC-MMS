@@ -13,7 +13,7 @@ export const DEFAULT_OPTIONS = {
     'MCI', 'SFES', 'SFSP', 'GACA', 'CC', 'MOFA', 'SFOC', 'SPL',
   ],
 
-  types: ['SEPURA', 'AIRBUS', 'HYTERA'],
+  types: ['SEPURA', 'AIRBUS', 'HYTERA', 'OTHER'],
 
   models: [
     'TH1N', 'THR9', 'TMR 880i', 'STP9000',

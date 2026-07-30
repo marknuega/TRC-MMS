@@ -25,12 +25,13 @@ import {
 } from './report'
 import './App.css'
 
-const MAX_FAULTS = 6
 // Actions whose "fault" is the whole device — no component issue needed.
 const DEVICE_LEVEL = new Set(['PROGRAM', 'RE-PROGRAM', 'INSTALL', 'RE-INSTALL', 'DISMANTLE'])
 const faultIsMeaningful = (f) => f.issue.trim() !== '' || DEVICE_LEVEL.has(String(f.action).toUpperCase())
+// Transmittal item condition.
+const ITEM_STATUS = ['New', 'Refurbish']
 const today = () => new Date().toISOString().slice(0, 10)
-const emptyFault = () => ({ issue: '', quantity: 1, action: 'CHANGE', company: 'PROJECT 2' })
+const emptyFault = () => ({ issue: '', quantity: 1, action: 'CHANGE', company: 'PROJECT 2', status: 'New' })
 
 // Remember the last Model/Type/Agency so the next entry (and next visit) pre-selects them.
 const LAST_KEY = 'trc_last_selection'
@@ -50,7 +51,11 @@ const saveLast = (v) => {
 }
 
 // Report number with the branch prefixed, e.g. "MAKKAH-REP-0001".
-const repLabel = (baseId, branch) => `${branch ? `${branch.toUpperCase()}-` : ''}${baseId ?? '-'}`
+// In transmittal mode the "REP" series reads "TRANS" (e.g. "TAIF-TRANS-0003").
+const repLabel = (baseId, branch, mode) => {
+  const id = mode === 'transmittal' ? String(baseId ?? '-').replace('REP-', 'TRANS-') : baseId ?? '-'
+  return `${branch ? `${branch.toUpperCase()}-` : ''}${id}`
+}
 
 const BRANCH_KEY = 'trc_branch'
 const loadBranch = () => {
@@ -204,7 +209,7 @@ function App() {
       const rep = await saveReport({ branch, mode, transmittedBy, receivedBy })
       setError(null)
       await refreshSaved()
-      window.alert(`Saved as ${repLabel(rep.reportId, rep.branch)}.`)
+      window.alert(`Saved as ${repLabel(rep.reportId, rep.branch, rep.mode)}.`)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -213,7 +218,7 @@ function App() {
   }
 
   async function handleLoadReport(rep) {
-    if (!window.confirm(`Load ${repLabel(rep.reportId, rep.branch)} into the form? This replaces the entries currently listed.`)) return
+    if (!window.confirm(`Load ${repLabel(rep.reportId, rep.branch, rep.mode)} into the form? This replaces the entries currently listed.`)) return
     setBusy(true)
     try {
       await loadSavedReport(rep.id)
@@ -237,7 +242,7 @@ function App() {
   }
 
   async function handleDeleteSaved(rep) {
-    if (!window.confirm(`Delete ${repLabel(rep.reportId, rep.branch)}? This cannot be undone.`)) return
+    if (!window.confirm(`Delete ${repLabel(rep.reportId, rep.branch, rep.mode)}? This cannot be undone.`)) return
     try {
       await deleteSavedReport(rep.id)
       await refreshSaved()
@@ -279,8 +284,7 @@ function App() {
         return next
       }),
     }))
-  const addFault = () =>
-    setForm((f) => (f.faults.length >= MAX_FAULTS ? f : { ...f, faults: [...f.faults, emptyFault()] }))
+  const addFault = () => setForm((f) => ({ ...f, faults: [...f.faults, emptyFault()] }))
   const removeFault = (i) =>
     setForm((f) => ({ ...f, faults: f.faults.length === 1 ? f.faults : f.faults.filter((_, idx) => idx !== i) }))
 
@@ -289,14 +293,12 @@ function App() {
     try {
       const payload = {
         ...form,
-        // In transmittal mode a line is just Material + Qty — no company, action hidden.
+        // Transmittal has no device card: items are "OTHER", no model/agency.
+        ...(isTransmittal ? { type: 'OTHER', model: '', agency: '' } : {}),
+        // Transmittal lines are Material + Qty + Company + Status (Action hidden, defaults harmlessly).
         faults: form.faults
           .filter(faultIsMeaningful)
-          .map((f) => ({
-            ...f,
-            quantity: Math.max(1, Number(f.quantity) || 1),
-            company: isTransmittal ? '' : f.company,
-          })),
+          .map((f) => ({ ...f, quantity: Math.max(1, Number(f.quantity) || 1) })),
       }
       if (payload.faults.length === 0) {
         setError('Add at least one fault — pick an issue, or an action like PROGRAM/INSTALL/DISMANTLE.')
@@ -341,7 +343,7 @@ function App() {
   const reports = useMemo(
     () =>
       groupReports(entries).map((g) =>
-        buildDateReport(g.dateLabel, repLabel(nextReportId, branch), g.entries, {
+        buildDateReport(g.dateLabel, repLabel(nextReportId, branch, mode), g.entries, {
           branch,
           mode,
           transmittedBy,
@@ -429,12 +431,13 @@ function App() {
         )}
 
         <form onSubmit={handleSubmit} className="entry-form">
+          {!isTransmittal && (
           <fieldset>
             <legend>Device</legend>
             <div className="grid">
               <label>
-                Model
-                <select value={form.model} onChange={setModel} required>
+                Model {form.type === 'OTHER' && <span className="opt">(optional)</span>}
+                <select value={form.model} onChange={setModel} required={form.type !== 'OTHER'}>
                   <option value="">— select —</option>
                   {options.models.map((m) => (
                     <option key={m}>{m}</option>
@@ -482,18 +485,20 @@ function App() {
               </label>
             </div>
           </fieldset>
+          )}
 
           <fieldset>
             <legend>
               {isTransmittal ? 'Transmittal' : 'Faults'}{' '}
-              <span className="hint">({form.faults.length}/{MAX_FAULTS})</span>
+              <span className="hint">({form.faults.length})</span>
             </legend>
             <div className="faults">
               <div className={`fault-row fault-head${isTransmittal ? ' fault-row--tx' : ''}`}>
                 <span>{isTransmittal ? 'Material' : 'Issue'}</span>
                 <span>Qty</span>
                 {!isTransmittal && <span>Action</span>}
-                {!isTransmittal && <span>Company</span>}
+                <span>Company</span>
+                {isTransmittal && <span>Status</span>}
                 <span />
               </div>
               {form.faults.map((fault, i) => (
@@ -520,11 +525,16 @@ function App() {
                       ))}
                     </select>
                   )}
-                  {!isTransmittal && (
-                    <select value={fault.company} onChange={setFault(i, 'company')} aria-label="Company">
-                      <option value="">— none —</option>
-                      {options.companies.map((c) => (
-                        <option key={c}>{c}</option>
+                  <select value={fault.company} onChange={setFault(i, 'company')} aria-label="Company">
+                    <option value="">— none —</option>
+                    {options.companies.map((c) => (
+                      <option key={c}>{c}</option>
+                    ))}
+                  </select>
+                  {isTransmittal && (
+                    <select value={fault.status} onChange={setFault(i, 'status')} aria-label="Item status">
+                      {ITEM_STATUS.map((s) => (
+                        <option key={s}>{s}</option>
                       ))}
                     </select>
                   )}
@@ -568,7 +578,7 @@ function App() {
             </label>
 
             <div className="faults-footer">
-              <button type="button" className="add-fault" onClick={addFault} disabled={form.faults.length >= MAX_FAULTS}>
+              <button type="button" className="add-fault" onClick={addFault}>
                 {isTransmittal ? '+ Add material' : '+ Add fault'}
               </button>
               <button type="submit" className="submit">
@@ -623,7 +633,7 @@ function App() {
                   {saved.map((r) => (
                     <li key={r.id}>
                       <div>
-                        <strong>{repLabel(r.reportId, r.branch)}</strong>{' '}
+                        <strong>{repLabel(r.reportId, r.branch, r.mode)}</strong>{' '}
                         <span className="muted small">
                           · {r.dateLabel} · {r.entryCount} {r.entryCount === 1 ? 'entry' : 'entries'} · saved{' '}
                           {new Date(r.savedAt).toLocaleString('en-GB')}
@@ -689,19 +699,26 @@ function App() {
                 <li key={e.id}>
                   <span className="entry-num">{i + 1}</span>
                   <div>
-                    <strong>
-                      {e.type} {e.model}
-                    </strong>{' '}
-                    <span className="muted small">
-                      · {e.agency}
-                      {e.technician ? ` · ${e.technician}` : ''}
-                      {!isTransmittal && ` · TEL ${e.telNumber} · ISSI ${e.issiNumber}`}
-                    </span>
-                    <p>
-                      {isTransmittal
-                        ? e.faults.map((f) => `${f.issue} (${f.quantity})`).join(', ')
-                        : issueActionCell(e)}
-                    </p>
+                    {isTransmittal ? (
+                      <p>
+                        <strong>
+                          {e.faults
+                            .map((f) => `${f.issue} (${f.quantity})${f.status ? ` · ${f.status}` : ''}`)
+                            .join(', ')}
+                        </strong>
+                      </p>
+                    ) : (
+                      <>
+                        <strong>
+                          {e.type} {e.model}
+                        </strong>{' '}
+                        <span className="muted small">
+                          · {e.agency}
+                          {e.technician ? ` · ${e.technician}` : ''} · TEL {e.telNumber} · ISSI {e.issiNumber}
+                        </span>
+                        <p>{issueActionCell(e)}</p>
+                      </>
+                    )}
                     {e.comment && <p className="entry-comment muted small">💬 {e.comment}</p>}
                   </div>
                   <button onClick={() => handleDelete(e.id)} aria-label="Delete entry">

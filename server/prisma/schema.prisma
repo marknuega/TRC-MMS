@@ -72,6 +72,7 @@ model Fault {
   quantity Int         @default(1)
   action   String // CHANGE|REPAIR|NEW|PCB|PROGRAM|RE-PROGRAM|INSTALL|RE-INSTALL|DISMANTLE
   company  String   @default("") // MOTECO|MOI|PROJECT 2|PROJECT X|ONLINE|MOTECO LOCAL|FREE
+  status   String   @default("") // transmittal item status: New | Refurbish
 
   @@index([entryId])
   @@map("faults")
