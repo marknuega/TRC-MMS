@@ -26,6 +26,7 @@ router.get('/', async (req, res, next) => {
         select: {
           id: true, seq: true, reportId: true, branch: true, mode: true,
           transmittedBy: true, receivedBy: true, savedAt: true, dateLabel: true, entryCount: true,
+          entries: true, // snapshot, so the client can search inside report data
         },
       }),
       nextSeq(),

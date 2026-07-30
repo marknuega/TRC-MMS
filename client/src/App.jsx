@@ -353,15 +353,31 @@ function App() {
   )
   const combinedTxt = useMemo(() => reports.map(buildTxt).join('\n\n\n'), [reports])
 
-  // Live-filter saved reports by id / branch / date / mode.
-  const filteredSaved = useMemo(() => {
+  // Live search INSIDE saved report data: returns matching line items with
+  // { date, branch, qty, item, reportId }.
+  const searchResults = useMemo(() => {
     const q = savedSearch.trim().toLowerCase()
-    if (!q) return saved
-    return saved.filter((r) =>
-      `${repLabel(r.reportId, r.branch, r.mode)} ${r.branch} ${r.dateLabel} ${r.mode} ${r.entryCount}`
-        .toLowerCase()
-        .includes(q),
-    )
+    if (!q) return []
+    const out = []
+    for (const r of saved) {
+      const entries = Array.isArray(r.entries) ? r.entries : []
+      for (const e of entries) {
+        const model = e.model && e.model !== '-' ? e.model : ''
+        for (const f of e.faults ?? []) {
+          const hay = `${r.reportId} ${r.branch} ${r.dateLabel} ${e.type} ${e.model} ${f.issue} ${f.company} ${f.status} ${e.comment ?? ''}`
+          if (hay.toLowerCase().includes(q)) {
+            out.push({
+              date: r.dateLabel,
+              branch: r.branch,
+              qty: f.quantity,
+              item: `${model ? `${model} · ` : ''}${f.issue}`,
+              reportId: repLabel(r.reportId, r.branch, r.mode),
+            })
+          }
+        }
+      }
+    }
+    return out.slice(0, 300)
   }, [saved, savedSearch])
 
   function handleDownloadTxt() {
@@ -639,16 +655,37 @@ function App() {
                   className="saved-search"
                   value={savedSearch}
                   onChange={(e) => setSavedSearch(e.target.value)}
-                  placeholder="🔎 Search saved reports (id, branch, date)…"
+                  placeholder="🔎 Search inside all reports (item, model, branch, date)…"
                 />
               )}
               {saved.length === 0 ? (
                 <p className="empty">No saved reports yet — click “Save report” above.</p>
-              ) : filteredSaved.length === 0 ? (
-                <p className="empty">No saved reports match “{savedSearch}”.</p>
+              ) : savedSearch.trim() ? (
+                searchResults.length === 0 ? (
+                  <p className="empty">No items match “{savedSearch}”.</p>
+                ) : (
+                  <ul className="search-results">
+                    <li className="search-results-head muted small">
+                      <span>Item</span>
+                      <span>Date</span>
+                      <span>Branch</span>
+                      <span>Qty</span>
+                      <span>Report</span>
+                    </li>
+                    {searchResults.map((res, idx) => (
+                      <li key={idx}>
+                        <span className="res-item">{res.item}</span>
+                        <span className="muted small">{res.date}</span>
+                        <span className="muted small">{res.branch || '—'}</span>
+                        <span className="muted small">{res.qty}</span>
+                        <span className="muted small">{res.reportId}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )
               ) : (
                 <ul className="saved-list">
-                  {filteredSaved.map((r) => (
+                  {saved.map((r) => (
                     <li key={r.id}>
                       <div>
                         <strong>{repLabel(r.reportId, r.branch, r.mode)}</strong>{' '}
