@@ -263,6 +263,7 @@ function App() {
   }
 
   async function handleDelete(id) {
+    if (!window.confirm('Delete this entry?')) return
     try {
       await deleteEntry(id)
       refresh()

@@ -124,6 +124,8 @@ export default function ManageInputs({ options, onChange }) {
                     <div className="manage-item-actions">
                       <button type="button" onClick={saveEdit}>Save</button>
                       <button type="button" className="ghost" onClick={() => setEditIndex(-1)}>Cancel</button>
+                      {/* Delete lives inside Edit so it can't be hit by accident. */}
+                      <button type="button" className="danger" onClick={() => remove(i)}>Delete</button>
                     </div>
                   </>
                 ) : (
@@ -131,7 +133,6 @@ export default function ManageInputs({ options, onChange }) {
                     <span>{value}</span>
                     <div className="manage-item-actions">
                       <button type="button" className="ghost" onClick={() => startEdit(i)}>Edit</button>
-                      <button type="button" className="danger" onClick={() => remove(i)}>Delete</button>
                     </div>
                   </>
                 )}
