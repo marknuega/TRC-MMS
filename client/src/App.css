@@ -432,6 +432,11 @@ h2 {
 }
 
 /* ---- Saved reports list ---- */
+.saved-search {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0 0 0.9rem;
+}
 .saved-list {
   list-style: none;
   padding: 0;

@@ -41,6 +41,9 @@ export const DEFAULT_OPTIONS = {
 
   // Materials — a managed list you can add to via Manage inputs.
   materials: [],
+
+  // Transmittal item condition.
+  statuses: ['New', 'Refurbish'],
 }
 
 // Branches shown in the header selector; the choice appears in the report header/number.
@@ -69,6 +72,7 @@ export const CATEGORIES = [
   { key: 'actions', label: 'Actions' },
   { key: 'companies', label: 'Companies' },
   { key: 'materials', label: 'Materials' },
+  { key: 'statuses', label: 'Item status' },
 ]
 
 // Merge stored lists over the defaults (a saved category fully replaces its default).

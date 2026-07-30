@@ -28,8 +28,6 @@ import './App.css'
 // Actions whose "fault" is the whole device — no component issue needed.
 const DEVICE_LEVEL = new Set(['PROGRAM', 'RE-PROGRAM', 'INSTALL', 'RE-INSTALL', 'DISMANTLE'])
 const faultIsMeaningful = (f) => f.issue.trim() !== '' || DEVICE_LEVEL.has(String(f.action).toUpperCase())
-// Transmittal item condition.
-const ITEM_STATUS = ['New', 'Refurbish']
 const today = () => new Date().toISOString().slice(0, 10)
 const emptyFault = () => ({ issue: '', quantity: 1, action: 'CHANGE', company: 'PROJECT 2', status: 'New' })
 
@@ -129,6 +127,7 @@ function App() {
   const [options, setOptions] = useState(DEFAULT_OPTIONS)
   const [saved, setSaved] = useState([])
   const [savedOpen, setSavedOpen] = useState(false)
+  const [savedSearch, setSavedSearch] = useState('')
   const [editSavedId, setEditSavedId] = useState(null) // which saved row shows Load/Delete
   const [nextReportId, setNextReportId] = useState('REP-0001')
   const [busy, setBusy] = useState(false)
@@ -354,6 +353,17 @@ function App() {
   )
   const combinedTxt = useMemo(() => reports.map(buildTxt).join('\n\n\n'), [reports])
 
+  // Live-filter saved reports by id / branch / date / mode.
+  const filteredSaved = useMemo(() => {
+    const q = savedSearch.trim().toLowerCase()
+    if (!q) return saved
+    return saved.filter((r) =>
+      `${repLabel(r.reportId, r.branch, r.mode)} ${r.branch} ${r.dateLabel} ${r.mode} ${r.entryCount}`
+        .toLowerCase()
+        .includes(q),
+    )
+  }, [saved, savedSearch])
+
   function handleDownloadTxt() {
     if (!reports.length) return
     // Name after the newest report, like the MOTECO export.
@@ -488,10 +498,7 @@ function App() {
           )}
 
           <fieldset>
-            <legend>
-              {isTransmittal ? 'Transmittal' : 'Faults'}{' '}
-              <span className="hint">({form.faults.length})</span>
-            </legend>
+            <legend>{isTransmittal ? 'Transmittal' : 'Faults'}</legend>
             <div className="faults">
               <div className={`fault-row fault-head${isTransmittal ? ' fault-row--tx' : ''}`}>
                 <span>{isTransmittal ? 'Material' : 'Issue'}</span>
@@ -533,7 +540,7 @@ function App() {
                   </select>
                   {isTransmittal && (
                     <select value={fault.status} onChange={setFault(i, 'status')} aria-label="Item status">
-                      {ITEM_STATUS.map((s) => (
+                      {options.statuses.map((s) => (
                         <option key={s}>{s}</option>
                       ))}
                     </select>
@@ -626,11 +633,22 @@ function App() {
                 Save snapshots the entries below under a unique {`REP-####`} number. Load one back to review or edit
                 it, then Save again to store it as a new report.
               </p>
+              {saved.length > 0 && (
+                <input
+                  type="search"
+                  className="saved-search"
+                  value={savedSearch}
+                  onChange={(e) => setSavedSearch(e.target.value)}
+                  placeholder="🔎 Search saved reports (id, branch, date)…"
+                />
+              )}
               {saved.length === 0 ? (
                 <p className="empty">No saved reports yet — click “Save report” above.</p>
+              ) : filteredSaved.length === 0 ? (
+                <p className="empty">No saved reports match “{savedSearch}”.</p>
               ) : (
                 <ul className="saved-list">
-                  {saved.map((r) => (
+                  {filteredSaved.map((r) => (
                     <li key={r.id}>
                       <div>
                         <strong>{repLabel(r.reportId, r.branch, r.mode)}</strong>{' '}
