@@ -32,16 +32,36 @@ const faultIsMeaningful = (f) => f.issue.trim() !== '' || DEVICE_LEVEL.has(Strin
 const today = () => new Date().toISOString().slice(0, 10)
 const emptyFault = () => ({ issue: '', quantity: 1, action: 'CHANGE', company: 'PROJECT 2' })
 
-const emptyForm = () => ({
-  reportDate: today(),
-  technician: '',
-  agency: '',
-  telNumber: '',
-  issiNumber: '',
-  type: '',
-  model: '',
-  faults: [emptyFault()],
-})
+// Remember the last Model/Type/Agency so the next entry (and next visit) pre-selects them.
+const LAST_KEY = 'trc_last_selection'
+const loadLast = () => {
+  try {
+    return JSON.parse(localStorage.getItem(LAST_KEY)) || {}
+  } catch {
+    return {}
+  }
+}
+const saveLast = (v) => {
+  try {
+    localStorage.setItem(LAST_KEY, JSON.stringify(v))
+  } catch {
+    /* ignore storage errors */
+  }
+}
+
+const emptyForm = () => {
+  const last = loadLast()
+  return {
+    reportDate: today(),
+    technician: '',
+    agency: last.agency ?? '',
+    telNumber: '',
+    issiNumber: '',
+    type: last.type ?? '',
+    model: last.model ?? '',
+    faults: [emptyFault()],
+  }
+}
 
 function downloadText(filename, text) {
   const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
@@ -187,7 +207,9 @@ function App() {
         return
       }
       await createEntry(payload)
-      setForm((f) => ({ ...emptyForm(), reportDate: f.reportDate, technician: f.technician, agency: f.agency }))
+      // Remember Model/Type/Agency so the next entry pre-selects them.
+      saveLast({ model: form.model, type: form.type, agency: form.agency })
+      setForm((f) => ({ ...emptyForm(), reportDate: f.reportDate, technician: f.technician }))
       setError(null)
       refresh()
     } catch (err) {

@@ -8,14 +8,6 @@
 // Order the AIRBUS / SEPURA / HYTERA split summaries appear in.
 export const TYPE_ORDER = ['AIRBUS', 'SEPURA', 'HYTERA']
 
-// Issues that must NOT get a "-MODEL" suffix in the report (they are already
-// model-specific or model-independent). Everything else gets "-<model>".
-export const NO_MODEL_SUFFIX = new Set([
-  'BATTERY 1590', 'BATTERY 1880', 'BATTERY 3180', 'BATTERY CONNECTOR',
-  'HAND MICRO LOUD SPEAKER', 'POWER CABLE', 'POWER SUPPLY', 'POWER',
-  'NOT AVAILABLE',
-])
-
 // company value -> printed label
 const COMPANY_DISPLAY = {
   MOTECO: 'MOT',
@@ -78,13 +70,6 @@ function summaryCompanyText(company) {
   return label ? ` (${label})` : ''
 }
 
-// " -TH1N" suffix for a maintenance issue, unless excluded.
-function issueSuffix(issue, model) {
-  if (NO_MODEL_SUFFIX.has(up(issue))) return ''
-  const short = modelShort(model)
-  return short ? ` -${short}` : ''
-}
-
 // ---- Entry Summary line (one per fault) ----
 function entryFaultLine(fault, model, { includeAgency, agency }) {
   const action = up(fault.action)
@@ -99,9 +84,9 @@ function entryFaultLine(fault, model, { includeAgency, agency }) {
   else if (action === 'INSTALL') label = !issue || /^INSTALL\b/.test(issue) ? 'INSTALL' : `INSTALL ${issue}`
   else if (action === 'RE-INSTALL') label = !issue || /^RE-?INSTALL\b/.test(issue) ? 'RE-INSTALL' : `RE-INSTALL ${issue}`
   else if (action === 'DISMANTLE') label = !issue || /^DISMANTLE\b/.test(issue) ? 'DISMANTLE' : `DISMANTLE ${issue}`
-  else if (action === 'NEW') label = `NEW ${issue}${issueSuffix(issue, model)}`
-  else if (action === 'PCB') label = `PCB ${issue}${issueSuffix(issue, model)}`
-  else label = `${issue}${issueSuffix(issue, model)} (${ACTION_CODE[action] || action})` // CHANGE / REPAIR
+  else if (action === 'NEW') label = `NEW ${issue}`
+  else if (action === 'PCB') label = `PCB ${issue}`
+  else label = `${issue} (${ACTION_CODE[action] || action})` // CHANGE / REPAIR
 
   const tag = cat === 'install' ? ' (I)' : cat === 'programming' ? ' (P)' : cat === 'dismantle' ? ' (D)' : ''
   const companyText = tag || entryCompanyText(fault.company) // program/install/dismantle hide company
@@ -146,7 +131,7 @@ export function materialBlocksByType(entries) {
       const bucket = byModel.get(md)
       for (const f of e.faults) {
         const isProgram = classify(f.action) === 'programming'
-        const label = isProgram ? 'PROGRAMMING' : `${up(f.issue)}${issueSuffix(f.issue, e.model)}`
+        const label = isProgram ? 'PROGRAMMING' : up(f.issue)
         const company = isProgram ? '' : summaryCompanyText(f.company)
         const key = `${label}|${company}`
         if (!bucket.has(key)) bucket.set(key, { label, company, qty: 0 })
@@ -272,9 +257,7 @@ export function issueActionCell(entry) {
       const cat = classify(action)
       const qty = Math.max(0, Number(f.quantity) || 0)
       if (cat === 'programming') return `${action === 'RE-PROGRAM' ? 'RE-PROGRAMMING' : 'PROGRAMMING'} (P) (${qty})`
-      // Device-level actions (install/dismantle) get no "-MODEL" suffix; issue is optional.
-      const deviceLevel = cat === 'install' || cat === 'dismantle'
-      const issue = `${up(f.issue)}${deviceLevel ? '' : issueSuffix(f.issue, entry.model)}`
+      const issue = up(f.issue)
       const code = ACTION_CODE[action] || action
       const comp = companyDisplay(f.company)
       const tag = cat === 'install' ? '(I)' : cat === 'dismantle' ? '(D)' : `(${code})`
