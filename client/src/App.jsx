@@ -402,7 +402,7 @@ function App() {
                 <span>Issue</span>
                 <span>Qty</span>
                 <span>Action</span>
-                <span>Company / material</span>
+                <span>Company</span>
                 <span />
               </div>
               {form.faults.map((fault, i) => (

@@ -38,6 +38,9 @@ export const DEFAULT_OPTIONS = {
 
   // The report engine knows the display codes for these (MOT (P2), MOI, ...).
   companies: ['MOTECO', 'MOI', 'PROJECT 2', 'PROJECT X', 'ONLINE', 'MOTECO LOCAL', 'FREE'],
+
+  // Materials — a managed list you can add to via Manage inputs.
+  materials: [],
 }
 
 // Branches shown in the header selector; the choice appears in the report header/number.
@@ -64,7 +67,8 @@ export const CATEGORIES = [
   { key: 'models', label: 'Models' },
   { key: 'issueTypes', label: 'Issue types' },
   { key: 'actions', label: 'Actions' },
-  { key: 'companies', label: 'Companies / materials' },
+  { key: 'companies', label: 'Companies' },
+  { key: 'materials', label: 'Materials' },
 ]
 
 // Merge stored lists over the defaults (a saved category fully replaces its default).
