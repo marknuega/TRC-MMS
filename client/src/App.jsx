@@ -62,6 +62,7 @@ function App() {
   const [options, setOptions] = useState(DEFAULT_OPTIONS)
   const [saved, setSaved] = useState([])
   const [savedOpen, setSavedOpen] = useState(false)
+  const [editSavedId, setEditSavedId] = useState(null) // which saved row shows Load/Delete
   const [nextReportId, setNextReportId] = useState('REP-0001')
   const [busy, setBusy] = useState(false)
   const saveTimer = useRef(null)
@@ -415,12 +416,37 @@ function App() {
                         </span>
                       </div>
                       <div className="saved-actions">
-                        <button type="button" onClick={() => handleLoadReport(r)} disabled={busy}>
-                          Load
-                        </button>
-                        <button type="button" className="danger" onClick={() => handleDeleteSaved(r)}>
-                          Delete
-                        </button>
+                        {editSavedId === r.id ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleLoadReport(r)
+                                setEditSavedId(null)
+                              }}
+                              disabled={busy}
+                            >
+                              Load
+                            </button>
+                            <button
+                              type="button"
+                              className="danger"
+                              onClick={() => {
+                                handleDeleteSaved(r)
+                                setEditSavedId(null)
+                              }}
+                            >
+                              Delete
+                            </button>
+                            <button type="button" className="ghost" onClick={() => setEditSavedId(null)}>
+                              Close
+                            </button>
+                          </>
+                        ) : (
+                          <button type="button" onClick={() => setEditSavedId(r.id)}>
+                            Edit
+                          </button>
+                        )}
                       </div>
                     </li>
                   ))}

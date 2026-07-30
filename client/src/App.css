@@ -287,6 +287,10 @@ h2 {
   color: #dc2626;
   border-color: #f0a3a3;
 }
+.saved-actions .ghost {
+  border-color: transparent;
+  opacity: 0.65;
+}
 .breakdown textarea {
   width: 100%;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
