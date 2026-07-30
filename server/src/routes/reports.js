@@ -118,6 +118,16 @@ router.post('/', async (req, res, next) => {
   }
 })
 
+// DELETE /api/reports - clear ALL working entries (faults cascade). Returns the count removed.
+router.delete('/', async (req, res, next) => {
+  try {
+    const { count } = await prisma.reportEntry.deleteMany({})
+    res.json({ cleared: count })
+  } catch (err) {
+    next(err)
+  }
+})
+
 // DELETE /api/reports/:id - faults cascade via the schema relation
 router.delete('/:id', async (req, res, next) => {
   try {

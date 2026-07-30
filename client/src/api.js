@@ -22,6 +22,8 @@ export const createEntry = (entry) =>
 export const deleteEntry = (id) =>
   request(`/api/reports/${id}`, { method: 'DELETE' })
 
+export const clearEntries = () => request('/api/reports', { method: 'DELETE' })
+
 export const getOptions = () => request('/api/options')
 
 export const saveOptions = (data) =>

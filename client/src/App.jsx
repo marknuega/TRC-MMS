@@ -3,6 +3,7 @@ import {
   listEntries,
   createEntry,
   deleteEntry,
+  clearEntries,
   getOptions,
   saveOptions,
   getSavedReports,
@@ -197,6 +198,19 @@ function App() {
   async function handleDelete(id) {
     try {
       await deleteEntry(id)
+      refresh()
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  async function handleClearAll() {
+    if (!window.confirm(`Clear all ${entries.length} entries? This can't be undone (Save first to keep a copy).`)) {
+      return
+    }
+    try {
+      await clearEntries()
+      setError(null)
       refresh()
     } catch (err) {
       setError(err.message)
@@ -457,7 +471,14 @@ function App() {
         </section>
 
         <section className="entries">
-          <h2>Entries {entries.length > 0 && <span className="hint">({entries.length})</span>}</h2>
+          <div className="entries-head">
+            <h2>Entries {entries.length > 0 && <span className="hint">({entries.length})</span>}</h2>
+            {entries.length > 0 && (
+              <button type="button" className="clear-all" onClick={handleClearAll}>
+                Clear all
+              </button>
+            )}
+          </div>
           {loading ? (
             <p>Loading…</p>
           ) : entries.length === 0 ? (

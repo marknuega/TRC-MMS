@@ -306,6 +306,22 @@ h2 {
 }
 
 /* ---- Entry list ---- */
+.entries-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.clear-all {
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0.3rem 0.75rem;
+  border: 1px solid #f0a3a3;
+  border-radius: 6px;
+  background: transparent;
+  color: #dc2626;
+  cursor: pointer;
+}
 .entry-list {
   list-style: none;
   padding: 0;
