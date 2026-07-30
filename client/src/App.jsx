@@ -49,8 +49,8 @@ const saveLast = (v) => {
   }
 }
 
-// Report number with the branch appended, e.g. "REP-0001-MAKKAH".
-const repLabel = (baseId, branch) => `${baseId ?? '-'}${branch ? `-${branch.toUpperCase()}` : ''}`
+// Report number with the branch prefixed, e.g. "MAKKAH-REP-0001".
+const repLabel = (baseId, branch) => `${branch ? `${branch.toUpperCase()}-` : ''}${baseId ?? '-'}`
 
 const BRANCH_KEY = 'trc_branch'
 const loadBranch = () => {
