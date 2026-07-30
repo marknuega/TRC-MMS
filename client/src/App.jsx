@@ -11,7 +11,7 @@ import {
   loadSavedReport,
   deleteSavedReport,
 } from './api'
-import { DEFAULT_OPTIONS, mergeOptions, MODEL_TYPE } from './options'
+import { DEFAULT_OPTIONS, mergeOptions, MODEL_TYPE, BRANCHES } from './options'
 import ManageInputs from './ManageInputs'
 import {
   groupReports,
@@ -46,6 +46,18 @@ const saveLast = (v) => {
     localStorage.setItem(LAST_KEY, JSON.stringify(v))
   } catch {
     /* ignore storage errors */
+  }
+}
+
+// Report number with the branch appended, e.g. "REP-0001-MAKKAH".
+const repLabel = (baseId, branch) => `${baseId ?? '-'}${branch ? `-${branch.toUpperCase()}` : ''}`
+
+const BRANCH_KEY = 'trc_branch'
+const loadBranch = () => {
+  try {
+    return localStorage.getItem(BRANCH_KEY) || BRANCHES[0]
+  } catch {
+    return BRANCHES[0]
   }
 }
 
@@ -86,7 +98,18 @@ function App() {
   const [editSavedId, setEditSavedId] = useState(null) // which saved row shows Load/Delete
   const [nextReportId, setNextReportId] = useState('REP-0001')
   const [busy, setBusy] = useState(false)
+  const [branch, setBranch] = useState(loadBranch)
   const saveTimer = useRef(null)
+
+  function changeBranch(e) {
+    const b = e.target.value
+    setBranch(b)
+    try {
+      localStorage.setItem(BRANCH_KEY, b)
+    } catch {
+      /* ignore storage errors */
+    }
+  }
 
   async function refresh() {
     try {
@@ -120,10 +143,10 @@ function App() {
   async function handleSaveReport() {
     setBusy(true)
     try {
-      const rep = await saveReport()
+      const rep = await saveReport(branch)
       setError(null)
       await refreshSaved()
-      window.alert(`Saved as ${rep.reportId}.`)
+      window.alert(`Saved as ${repLabel(rep.reportId, rep.branch)}.`)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -132,7 +155,7 @@ function App() {
   }
 
   async function handleLoadReport(rep) {
-    if (!window.confirm(`Load ${rep.reportId} into the form? This replaces the entries currently listed.`)) return
+    if (!window.confirm(`Load ${repLabel(rep.reportId, rep.branch)} into the form? This replaces the entries currently listed.`)) return
     setBusy(true)
     try {
       await loadSavedReport(rep.id)
@@ -146,7 +169,7 @@ function App() {
   }
 
   async function handleDeleteSaved(rep) {
-    if (!window.confirm(`Delete ${rep.reportId}? This cannot be undone.`)) return
+    if (!window.confirm(`Delete ${repLabel(rep.reportId, rep.branch)}? This cannot be undone.`)) return
     try {
       await deleteSavedReport(rep.id)
       await refreshSaved()
@@ -242,8 +265,8 @@ function App() {
   // One report per date, newest first. The live view uses the draft (next) id
   // until you Save, which mints the real REP-#### number.
   const reports = useMemo(
-    () => groupReports(entries).map((g) => buildDateReport(g.dateLabel, nextReportId, g.entries)),
-    [entries, nextReportId],
+    () => groupReports(entries).map((g) => buildDateReport(g.dateLabel, repLabel(nextReportId, branch), g.entries, branch)),
+    [entries, nextReportId, branch],
   )
   const combinedTxt = useMemo(() => reports.map(buildTxt).join('\n\n\n'), [reports])
 
@@ -262,6 +285,14 @@ function App() {
         <header className="topbar">
           <h1>TRC Daily Report</h1>
           <div className="topbar-right">
+            <label className="date-field">
+              Branch
+              <select value={branch} onChange={changeBranch}>
+                {BRANCHES.map((b) => (
+                  <option key={b}>{b}</option>
+                ))}
+              </select>
+            </label>
             <label className="date-field">
               Report date
               <input type="date" value={form.reportDate} onChange={set('reportDate')} required />
@@ -445,7 +476,7 @@ function App() {
                   {saved.map((r) => (
                     <li key={r.id}>
                       <div>
-                        <strong>{r.reportId}</strong>{' '}
+                        <strong>{repLabel(r.reportId, r.branch)}</strong>{' '}
                         <span className="muted small">
                           · {r.dateLabel} · {r.entryCount} {r.entryCount === 1 ? 'entry' : 'entries'} · saved{' '}
                           {new Date(r.savedAt).toLocaleString('en-GB')}
@@ -555,6 +586,7 @@ function PrintDate({ report }) {
     <section className="print-day">
       <div className="print-meta">
         <div><span>REPORT DATE</span><b>{report.dateLabel}</b></div>
+        <div><span>BRANCH</span><b>{report.branch || '-'}</b></div>
         <div><span>REPORT ID</span><b>{report.reportId ?? '-'}</b></div>
         <div><span>TOTAL ENTRIES</span><b>{t.totalEntries}</b></div>
         <div><span>ALL DEVICE TOTAL PROGRAMMING</span><b>{t.programming}</b></div>

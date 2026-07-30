@@ -40,6 +40,9 @@ export const DEFAULT_OPTIONS = {
   companies: ['MOTECO', 'MOI', 'PROJECT 2', 'PROJECT X', 'ONLINE', 'MOTECO LOCAL', 'FREE'],
 }
 
+// Branches shown in the header selector; the choice appears in the report header/number.
+export const BRANCHES = ['Makkah', 'Taif', 'Jeddah']
+
 // Selecting a model auto-fills the Type. Keyed by UPPERCASE model name.
 export const MODEL_TYPE = {
   TH1N: 'AIRBUS',

@@ -23,7 +23,7 @@ router.get('/', async (req, res, next) => {
     const [reports, seq] = await Promise.all([
       prisma.savedReport.findMany({
         orderBy: { seq: 'desc' },
-        select: { id: true, seq: true, reportId: true, savedAt: true, dateLabel: true, entryCount: true },
+        select: { id: true, seq: true, reportId: true, branch: true, savedAt: true, dateLabel: true, entryCount: true },
       }),
       nextSeq(),
     ])
@@ -75,9 +75,10 @@ router.post('/', async (req, res, next) => {
     const dates = [...new Set(snapshot.map((e) => e.reportDate))].sort()
     const dateLabel = dates.length === 1 ? dmy(dates[0]) : `${dmy(dates[0])} (+${dates.length - 1} more)`
 
+    const branch = String(req.body?.branch ?? '').trim()
     const seq = await nextSeq()
     const saved = await prisma.savedReport.create({
-      data: { seq, reportId: repId(seq), dateLabel, entryCount: snapshot.length, entries: snapshot },
+      data: { seq, reportId: repId(seq), branch, dateLabel, entryCount: snapshot.length, entries: snapshot },
     })
     res.status(201).json(saved)
   } catch (err) {

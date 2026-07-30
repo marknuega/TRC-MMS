@@ -12,6 +12,7 @@ model SavedReport {
   id         Int      @id @default(autoincrement())
   seq        Int      @unique // 1-based; renders as REP-0001, REP-0002, ...
   reportId   String   @unique @map("report_id")
+  branch     String   @default("") // Makkah | Taif | Jeddah
   savedAt    DateTime @default(now()) @map("saved_at")
   dateLabel  String   @default("") @map("date_label")
   entryCount Int      @default(0) @map("entry_count")

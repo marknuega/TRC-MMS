@@ -315,10 +315,11 @@ export function groupReports(entries) {
 }
 
 // ---- Full report model for one date ----
-export function buildDateReport(dateLabel, reportId, entries) {
+export function buildDateReport(dateLabel, reportId, entries, branch = '') {
   return {
     dateLabel,
     reportId,
+    branch,
     entries,
     totals: headerTotals(entries),
     entrySummary: buildEntrySummary(entries),
@@ -335,6 +336,7 @@ export function buildTxt(report) {
   return [
     report.dateLabel,
     'DAILY ACTIVITY REPORT',
+    ...(report.branch ? [`BRANCH: ${report.branch}`] : []),
     `REPORT ID: ${report.reportId ?? '-'}`,
     DIVIDER,
     'Entry & Materials Summary',
