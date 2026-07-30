@@ -456,14 +456,15 @@ function App() {
                 <option key={it} value={it} />
               ))}
             </datalist>
-            <button type="button" className="add-fault" onClick={addFault} disabled={form.faults.length >= MAX_FAULTS}>
-              + Add fault
-            </button>
+            <div className="faults-footer">
+              <button type="button" className="add-fault" onClick={addFault} disabled={form.faults.length >= MAX_FAULTS}>
+                + Add fault
+              </button>
+              <button type="submit" className="submit">
+                Add entry
+              </button>
+            </div>
           </fieldset>
-
-          <button type="submit" className="submit">
-            Add entry
-          </button>
         </form>
 
         <section className="breakdown">

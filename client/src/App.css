@@ -223,6 +223,11 @@ h2 {
   gap: 1rem 1.1rem;
   align-items: end;
 }
+/* Let grid/flex cells shrink below their content so nothing overflows the card. */
+.entry-form .grid > label,
+.fault-row > * {
+  min-width: 0;
+}
 .entry-form label,
 .manage-controls label {
   display: flex;
@@ -278,9 +283,16 @@ h2 {
   opacity: 0.35;
   cursor: not-allowed;
 }
+.faults-footer {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}
 .add-fault {
-  margin-top: 0.9rem;
-  padding: 0.55rem 1rem;
+  height: var(--control-h);
+  padding: 0 1.1rem;
   border: 1.5px dashed var(--border-strong);
   background: transparent;
   color: var(--text);
@@ -295,7 +307,6 @@ h2 {
 }
 
 .submit {
-  margin-top: 0.25rem;
   padding: 0 1.6rem;
   height: var(--control-h);
   font-size: 1rem;
