@@ -438,8 +438,9 @@ function App() {
             <p className="empty">No entries yet.</p>
           ) : (
             <ul className="entry-list">
-              {entries.map((e) => (
+              {entries.map((e, i) => (
                 <li key={e.id}>
+                  <span className="entry-num">{i + 1}</span>
                   <div>
                     <strong>
                       {e.type} {e.model}
