@@ -1,47 +1,85 @@
+/* ============================================================
+   TRC Daily Report — screen UI
+   Layered card layout, large legible controls, strong focus.
+   ============================================================ */
+
 .app {
-  max-width: 60rem;
+  max-width: 64rem;
   margin: 0 auto;
-  padding: 1.5rem 1rem 4rem;
+  padding: 1.75rem 1.25rem 5rem;
   text-align: left;
+  color: var(--text);
 }
 
+/* ---- Shared control base (inputs / selects / textareas) ---- */
+.app input,
+.app select,
+.app textarea {
+  font-family: inherit;
+  font-size: 1rem;
+  color: var(--text-h);
+  background: var(--surface-2);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-sizing: border-box;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.app input,
+.app select {
+  height: var(--control-h);
+  padding: 0 0.8rem;
+}
+.app textarea {
+  padding: 0.8rem;
+  line-height: 1.55;
+}
+.app input::placeholder,
+.app textarea::placeholder {
+  color: var(--muted);
+  opacity: 0.85;
+}
+.app input:hover,
+.app select:hover,
+.app textarea:hover {
+  border-color: var(--border-strong);
+}
+.app input:focus,
+.app select:focus,
+.app textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 4px var(--ring);
+}
+.app select {
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+  padding-right: 2rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23888' stroke-width='1.7' stroke-linecap='round'%3E%3Cpath d='M2.5 4.5L6 8l3.5-3.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.65rem center;
+  background-size: 0.8rem;
+}
+
+/* ---- Header ---- */
 .topbar {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: 1rem 1.5rem;
   flex-wrap: wrap;
-  margin-bottom: 1.5rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.4rem;
 }
 .topbar h1 {
-  line-height: 2.4rem; /* sit level with the control row */
-}
-
-h1 {
-  font-size: 1.6rem;
+  font-size: 1.7rem;
   margin: 0;
+  letter-spacing: -0.01em;
 }
-
-h2 {
-  font-size: 1.1rem;
-  margin: 0 0 0.5rem;
-}
-
-.hint {
-  font-weight: 400;
-  opacity: 0.65;
-  font-size: 0.85em;
-}
-
-.error {
-  background: #fde8e8;
-  color: #9b1c1c;
-  border: 1px solid #f8b4b4;
-  border-radius: 6px;
-  padding: 0.75rem 1rem;
-  margin: 0 0 1rem;
-}
-
 .topbar-right {
   display: flex;
   align-items: flex-end;
@@ -51,99 +89,78 @@ h2 {
 .date-field {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
-  font-size: 0.68rem;
+  gap: 0.35rem;
+  font-size: 0.8rem;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  opacity: 0.7;
+  color: var(--muted);
+  letter-spacing: 0.02em;
 }
-/* Unified control look so Branch <select> and Report date <input> line up. */
-.date-field input,
 .date-field select {
+  min-width: 9rem;
+}
+
+/* ---- Buttons ---- */
+.btn-txt,
+.btn-pdf,
+.submit,
+.add-fault,
+.clear-all,
+.theme-toggle,
+.breakdown-head button,
+.saved-actions button,
+.manage-body button {
   font: inherit;
-  font-size: 0.9rem;
-  font-weight: 500;
-  text-transform: none;
-  letter-spacing: normal;
-  height: 2.4rem;
-  box-sizing: border-box;
-  padding: 0 0.65rem;
-  border: 1px solid var(--border, #cbd5e1);
-  border-radius: 8px;
-  background: transparent;
-  color: inherit;
+  font-weight: 600;
   cursor: pointer;
-  transition: border-color 0.12s, box-shadow 0.12s;
+  border-radius: var(--radius-sm);
+  transition: filter 0.12s, background 0.12s, border-color 0.12s, transform 0.03s;
 }
-.date-field select {
-  -webkit-appearance: none;
-  appearance: none;
-  padding-right: 1.9rem;
-  min-width: 8rem;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23888' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath d='M2.5 4.5L6 8l3.5-3.5'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 0.6rem center;
-  background-size: 0.75rem;
+.btn-txt:active,
+.btn-pdf:active,
+.submit:active,
+.theme-toggle:active {
+  transform: translateY(1px);
 }
-.date-field input:focus,
-.date-field select:focus {
-  outline: none;
-  border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
-}
+
 .actions {
   display: flex;
   gap: 0.5rem;
 }
 .theme-toggle {
-  height: 2.4rem;
-  width: 2.4rem;
+  height: var(--control-h);
+  width: var(--control-h);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.05rem;
+  font-size: 1.15rem;
   line-height: 1;
-  border: 1px solid var(--border, #cbd5e1);
-  border-radius: 8px;
-  background: transparent;
+  border: 1.5px solid var(--border);
+  background: var(--surface-2);
   color: inherit;
-  cursor: pointer;
-  transition: border-color 0.12s, filter 0.12s;
 }
 .theme-toggle:hover {
-  border-color: #2563eb;
-  filter: brightness(1.1);
+  border-color: var(--primary);
 }
 .btn-txt,
 .btn-pdf {
-  height: 2.4rem;
+  height: var(--control-h);
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0 1rem;
-  font: inherit;
-  font-weight: 600;
+  gap: 0.45rem;
+  padding: 0 1.15rem;
   border: 0;
-  border-radius: 8px;
   color: #fff;
-  cursor: pointer;
   white-space: nowrap;
-  transition: filter 0.12s, transform 0.02s;
-}
-.btn-txt:hover,
-.btn-pdf:hover {
-  filter: brightness(1.08);
-}
-.btn-txt:active,
-.btn-pdf:active {
-  transform: translateY(1px);
 }
 .btn-txt {
   background: #475569;
 }
 .btn-pdf {
-  background: #059669;
+  background: var(--success);
+}
+.btn-txt:hover,
+.btn-pdf:hover {
+  filter: brightness(1.08);
 }
 .btn-txt:disabled,
 .btn-pdf:disabled {
@@ -151,104 +168,126 @@ h2 {
   cursor: not-allowed;
 }
 
-/* ---- Form ---- */
-.entry-form fieldset {
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  padding: 1rem;
-  margin: 0 0 1rem;
-}
-.entry-form legend {
-  font-weight: 700;
-  padding: 0 0.4rem;
+.error {
+  background: color-mix(in srgb, var(--danger) 12%, var(--surface));
+  color: var(--danger);
+  border: 1px solid var(--danger-soft);
+  border-radius: var(--radius-sm);
+  padding: 0.85rem 1.1rem;
+  margin: 0 0 1.1rem;
+  font-weight: 500;
 }
 
+/* ---- Card sections ---- */
+.entry-form fieldset,
+.breakdown,
+.entries,
+.saved,
+.manage {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1.35rem 1.4rem;
+  margin: 0 0 1.15rem;
+}
+
+/* Section titles */
+h2 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-h);
+  margin: 0 0 0.9rem;
+}
+.hint {
+  font-weight: 500;
+  color: var(--muted);
+  font-size: 0.85em;
+}
+
+/* ---- Form ---- */
+.entry-form fieldset {
+  border: 1px solid var(--border);
+}
+.entry-form legend {
+  font-weight: 800;
+  font-size: 1.05rem;
+  color: var(--text-h);
+  padding: 0 0.5rem;
+  margin-left: -0.5rem;
+  letter-spacing: 0.01em;
+}
 .entry-form .grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 0.75rem 1rem;
-  /* Bottom-align cells so inputs line up even when a label wraps to two lines. */
+  gap: 1rem 1.1rem;
   align-items: end;
 }
-
-.entry-form label {
+.entry-form label,
+.manage-controls label {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-  font-size: 0.8rem;
+  gap: 0.35rem;
+  font-size: 0.9rem;
   font-weight: 600;
-  /* Keep "Tel number (optional)" on one line instead of wrapping the hint. */
+  color: var(--text);
   white-space: nowrap;
 }
 .opt {
-  font-weight: 400;
-  opacity: 0.55;
-}
-
-.entry-form input,
-.entry-form select,
-.entry-form textarea {
-  font: inherit;
-  font-weight: 400;
-  padding: 0.45rem 0.5rem;
-  border: 1px solid #94a3b8;
-  border-radius: 6px;
-  background: transparent;
-  color: inherit;
+  font-weight: 500;
+  color: var(--muted);
 }
 
 /* ---- Faults ---- */
 .faults {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.6rem;
 }
 .fault-row {
   display: grid;
-  grid-template-columns: 1fr 4.5rem 7rem 9rem auto;
-  gap: 0.5rem;
+  grid-template-columns: 1fr 4.75rem 8rem 9.5rem auto;
+  gap: 0.6rem;
   align-items: center;
 }
 .fault-head {
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  opacity: 0.6;
-}
-.fault-row input,
-.fault-row select {
-  font: inherit;
-  font-weight: 400;
-  padding: 0.45rem 0.5rem;
-  border: 1px solid #94a3b8;
-  border-radius: 6px;
-  background: transparent;
-  color: inherit;
-  min-width: 0;
+  color: var(--muted);
 }
 .fault-remove {
-  height: 2.1rem;
-  border: 1px solid #94a3b8;
-  border-radius: 6px;
-  background: transparent;
-  color: #dc2626;
+  height: var(--control-h);
+  min-width: var(--control-h);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--danger);
   cursor: pointer;
-  padding: 0 0.6rem;
+  font-size: 1rem;
+}
+.fault-remove:hover:not(:disabled) {
+  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 8%, var(--surface-2));
 }
 .fault-remove:disabled {
   opacity: 0.35;
   cursor: not-allowed;
 }
 .add-fault {
-  margin-top: 0.75rem;
-  padding: 0.4rem 0.9rem;
-  font: inherit;
-  border: 1px dashed #94a3b8;
-  border-radius: 6px;
+  margin-top: 0.9rem;
+  padding: 0.55rem 1rem;
+  border: 1.5px dashed var(--border-strong);
   background: transparent;
-  color: inherit;
-  cursor: pointer;
+  color: var(--text);
+}
+.add-fault:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
 }
 .add-fault:disabled {
   opacity: 0.5;
@@ -256,206 +295,67 @@ h2 {
 }
 
 .submit {
-  padding: 0.6rem 1.4rem;
-  font: inherit;
-  font-weight: 600;
+  margin-top: 0.25rem;
+  padding: 0 1.6rem;
+  height: var(--control-h);
+  font-size: 1rem;
   border: 0;
-  border-radius: 6px;
-  background: #2563eb;
+  background: var(--primary);
   color: #fff;
-  cursor: pointer;
+  box-shadow: var(--shadow);
+}
+.submit:hover {
+  background: var(--primary-hover);
 }
 
-/* ---- Breakdown textarea ---- */
-.breakdown {
-  margin: 2rem 0 1.5rem;
-}
+/* ---- Report text ---- */
 .breakdown-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.9rem;
+}
+.breakdown-head h2 {
+  margin: 0;
 }
 .breakdown-actions {
   display: flex;
   gap: 0.5rem;
 }
 .breakdown-head button {
-  font: inherit;
-  border: 1px solid #94a3b8;
-  border-radius: 6px;
-  background: transparent;
-  color: inherit;
-  padding: 0.3rem 0.75rem;
-  cursor: pointer;
+  height: 2.4rem;
+  padding: 0 0.95rem;
+  border: 1.5px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+}
+.breakdown-head button:hover:not(:disabled) {
+  border-color: var(--primary);
 }
 .breakdown-head button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 .breakdown-head .save-report {
-  border-color: #2563eb;
-  background: #2563eb;
+  border-color: var(--primary);
+  background: var(--primary);
   color: #fff;
-  font-weight: 600;
 }
-
-/* ---- Saved reports ---- */
-.saved {
-  margin-top: 2rem;
-  border-top: 1px solid var(--border, #cbd5e1);
-  padding-top: 1rem;
-}
-.saved-body {
-  padding: 0.5rem 0 0.25rem;
-}
-.saved-hint {
-  font-size: 0.82rem;
-  opacity: 0.7;
-  margin: 0 0 0.9rem;
-}
-.saved-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-.saved-list li {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  border: 1px solid var(--border, #cbd5e1);
-  border-radius: 8px;
-  padding: 0.6rem 0.9rem;
-}
-.saved-actions {
-  display: flex;
-  gap: 0.4rem;
-}
-.saved-actions button {
-  font: inherit;
-  padding: 0.3rem 0.75rem;
-  border: 1px solid #94a3b8;
-  border-radius: 6px;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-}
-.saved-actions button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.saved-actions .danger {
-  color: #dc2626;
-  border-color: #f0a3a3;
-}
-.saved-actions .ghost {
-  border-color: transparent;
-  opacity: 0.65;
+.breakdown-head .save-report:hover:not(:disabled) {
+  background: var(--primary-hover);
 }
 .breakdown textarea {
   width: 100%;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.8rem;
-  line-height: 1.5;
-  padding: 0.75rem;
-  border: 1px solid #94a3b8;
-  border-radius: 8px;
-  background: transparent;
-  color: inherit;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  background: var(--surface-3);
   resize: vertical;
-  box-sizing: border-box;
 }
 
-/* ---- Entry list ---- */
-.entries-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-}
-.clear-all {
-  font: inherit;
-  font-size: 0.82rem;
-  padding: 0.3rem 0.75rem;
-  border: 1px solid #f0a3a3;
-  border-radius: 6px;
-  background: transparent;
-  color: #dc2626;
-  cursor: pointer;
-}
-.entry-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-}
-.entry-list li {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 0.75rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  padding: 0.7rem 0.9rem;
-}
-.entry-num {
-  flex: 0 0 auto;
-  min-width: 1.6rem;
-  height: 1.6rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.8rem;
-  font-weight: 700;
-  border-radius: 999px;
-  background: #e0e7ff;
-  color: #3730a3;
-}
-.entry-list li > div {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-.entry-list p {
-  margin: 0.35rem 0 0;
-}
-.entry-list button {
-  font: inherit;
-  border: 0;
-  background: transparent;
-  color: #dc2626;
-  cursor: pointer;
-  padding: 0.25rem 0.5rem;
-}
-.muted {
-  opacity: 0.7;
-}
-.small {
-  font-size: 0.82rem;
-}
-.empty {
-  opacity: 0.7;
-}
-
-@media (max-width: 720px) {
-  .entry-form .grid {
-    grid-template-columns: 1fr 1fr;
-  }
-  .fault-row {
-    grid-template-columns: 1fr 4rem 6.5rem auto;
-  }
-}
-
-/* ---- Manage inputs ---- */
-.manage {
-  margin-top: 2.5rem;
-  border-top: 1px solid var(--border, #cbd5e1);
-  padding-top: 1rem;
-}
+/* ---- Collapsible sections (Saved / Manage) ---- */
 .manage-toggle {
   display: flex;
   align-items: center;
@@ -463,46 +363,187 @@ h2 {
   width: 100%;
   font: inherit;
   font-weight: 700;
-  padding: 0.6rem 0.25rem;
+  font-size: 1.1rem;
+  color: var(--text-h);
+  padding: 0;
   border: 0;
   background: transparent;
-  color: inherit;
   cursor: pointer;
 }
-.manage-body {
-  padding: 0.5rem 0 0.5rem;
+.manage-toggle .chev {
+  color: var(--muted);
+  font-size: 0.85rem;
 }
+.saved-body,
+.manage-body {
+  padding-top: 1rem;
+}
+.saved-hint,
 .manage-hint {
-  font-size: 0.82rem;
-  opacity: 0.7;
+  font-size: 0.9rem;
+  color: var(--muted);
+  margin: 0 0 1rem;
+}
+
+/* ---- Saved reports list ---- */
+.saved-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.saved-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+  padding: 0.8rem 1rem;
+}
+.saved-list strong {
+  color: var(--text-h);
+  font-size: 1rem;
+}
+.saved-actions {
+  display: flex;
+  gap: 0.45rem;
+}
+.saved-actions button {
+  height: 2.3rem;
+  padding: 0 0.9rem;
+  border: 1.5px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text);
+}
+.saved-actions button:hover:not(:disabled) {
+  border-color: var(--primary);
+}
+.saved-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.saved-actions .danger {
+  color: var(--danger);
+  border-color: var(--danger-soft);
+}
+.saved-actions .danger:hover {
+  border-color: var(--danger);
+}
+.saved-actions .ghost {
+  border-color: transparent;
+  color: var(--muted);
+}
+
+/* ---- Entries ---- */
+.entries-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
   margin-bottom: 0.9rem;
 }
+.entries-head h2 {
+  margin: 0;
+}
+.clear-all {
+  height: 2.3rem;
+  padding: 0 0.9rem;
+  font-size: 0.9rem;
+  border: 1.5px solid var(--danger-soft);
+  background: transparent;
+  color: var(--danger);
+}
+.clear-all:hover {
+  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 8%, var(--surface));
+}
+.entry-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+.entry-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+  padding: 0.85rem 1rem;
+}
+.entry-num {
+  flex: 0 0 auto;
+  min-width: 1.9rem;
+  height: 1.9rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  font-weight: 800;
+  border-radius: 999px;
+  background: var(--primary-soft);
+  color: var(--primary-ink);
+}
+.entry-list li > div {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.entry-list li > div strong {
+  color: var(--text-h);
+  font-size: 1.02rem;
+}
+.entry-list p {
+  margin: 0.4rem 0 0;
+  font-size: 1rem;
+}
+.entry-list li > button {
+  flex: 0 0 auto;
+  width: 2.2rem;
+  height: 2.2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: inherit;
+  font-size: 1.05rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--danger);
+  cursor: pointer;
+}
+.entry-list li > button:hover {
+  border-color: var(--danger-soft);
+  background: color-mix(in srgb, var(--danger) 8%, var(--surface-3));
+}
+.muted {
+  color: var(--muted);
+}
+.small {
+  font-size: 0.85rem;
+}
+.empty {
+  color: var(--muted);
+  padding: 0.5rem 0;
+}
+
+/* ---- Manage inputs ---- */
 .manage-controls {
   display: flex;
   gap: 1rem;
   align-items: flex-end;
   flex-wrap: wrap;
 }
-.manage-controls label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  font-size: 0.8rem;
-  font-weight: 600;
-}
 .manage-controls .grow {
   flex: 1;
-  min-width: 16rem;
-}
-.manage-controls select,
-.manage-controls input {
-  font: inherit;
-  font-weight: 400;
-  padding: 0.45rem 0.5rem;
-  border: 1px solid #94a3b8;
-  border-radius: 6px;
-  background: transparent;
-  color: inherit;
+  min-width: 17rem;
 }
 .add-row {
   display: flex;
@@ -513,85 +554,124 @@ h2 {
   min-width: 0;
 }
 .manage-body button {
-  font: inherit;
-  padding: 0.4rem 0.8rem;
-  border: 1px solid #2563eb;
-  border-radius: 6px;
-  background: #2563eb;
+  height: var(--control-h);
+  padding: 0 1.05rem;
+  border: 1.5px solid var(--primary);
+  background: var(--primary);
   color: #fff;
-  cursor: pointer;
+}
+.manage-body button:hover:not(:disabled) {
+  background: var(--primary-hover);
 }
 .manage-body button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 .manage-body button.ghost {
-  background: transparent;
-  color: inherit;
-  border-color: #94a3b8;
+  background: var(--surface-2);
+  color: var(--text);
+  border-color: var(--border-strong);
 }
 .manage-body button.danger {
-  background: transparent;
-  color: #dc2626;
-  border-color: #f0a3a3;
+  background: var(--surface-2);
+  color: var(--danger);
+  border-color: var(--danger-soft);
 }
 .manage-notice {
-  margin: 0.75rem 0 0;
-  color: #9b1c1c;
-  font-size: 0.85rem;
+  margin: 0.9rem 0 0;
+  color: var(--danger);
+  font-size: 0.9rem;
+  font-weight: 500;
 }
 .manage-list {
   list-style: none;
   padding: 0;
-  margin: 1rem 0 0;
+  margin: 1.1rem 0 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
-  gap: 0.4rem;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: 0.5rem;
 }
 .manage-list li {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
-  border: 1px solid var(--border, #cbd5e1);
-  border-radius: 6px;
-  padding: 0.35rem 0.5rem 0.35rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+  padding: 0.4rem 0.5rem 0.4rem 0.85rem;
+  min-height: 2.9rem;
+}
+.manage-list li span {
+  font-size: 0.98rem;
+  color: var(--text-h);
 }
 .manage-list .edit-input {
   flex: 1;
   min-width: 0;
-  font: inherit;
-  padding: 0.3rem 0.4rem;
-  border: 1px solid #2563eb;
-  border-radius: 5px;
-  background: transparent;
-  color: inherit;
+  height: 2.3rem;
+  border-color: var(--primary);
 }
 .manage-item-actions {
   display: flex;
-  gap: 0.3rem;
+  gap: 0.35rem;
 }
 .manage-item-actions button {
-  padding: 0.25rem 0.55rem;
-  font-size: 0.8rem;
+  height: 2.2rem;
+  padding: 0 0.75rem;
+  font-size: 0.9rem;
 }
 .manage-empty {
   grid-column: 1 / -1;
-  opacity: 0.6;
+  color: var(--muted);
   border-style: dashed;
+  justify-content: center;
 }
 
 /* ---- Footer ---- */
 .app-footer {
   margin-top: 2.5rem;
-  padding-top: 1rem;
-  border-top: 1px solid var(--border, #cbd5e1);
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
   text-align: center;
-  font-size: 0.78rem;
-  opacity: 0.65;
+  font-size: 0.82rem;
+  color: var(--muted);
 }
 
-/* ---- Print / PDF ---- */
+/* ---- Responsive ---- */
+@media (max-width: 760px) {
+  .entry-form .grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .fault-head {
+    display: none;
+  }
+  /* Wrap fault controls: issue on its own row, then qty / action / company / remove. */
+  .fault-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .fault-row > input[list] {
+    flex: 1 1 100%;
+  }
+  .fault-row > input[type='number'] {
+    flex: 0 0 4.5rem;
+  }
+  .fault-row > select {
+    flex: 1 1 8rem;
+  }
+  .topbar h1 {
+    font-size: 1.4rem;
+  }
+}
+@media (max-width: 460px) {
+  .entry-form .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---- Print / PDF (unchanged) ---- */
 .print-only {
   display: none;
 }
@@ -613,8 +693,6 @@ h2 {
   .print-day:last-child {
     page-break-after: auto;
   }
-
-  /* Header meta grid */
   .print-meta {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -635,8 +713,6 @@ h2 {
     font-size: 8.5px;
     letter-spacing: 0.02em;
   }
-
-  /* Main entries table */
   .print-main {
     width: 100%;
     border-collapse: collapse;
@@ -663,8 +739,6 @@ h2 {
   .print-main .ia {
     width: 40%;
   }
-
-  /* Split summaries */
   .print-split-title {
     font-size: 11px;
     margin: 10px 0 4px;
