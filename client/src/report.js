@@ -36,6 +36,17 @@ const MODEL_DISPLAY = {
   'SRG3900 BIKE': 'SRG BIKE',
 }
 
+// Fixed model order within each type (AIRBUS, then SEPURA, then HYTERA).
+const MODEL_ORDER = [
+  // AIRBUS
+  'TH1N', 'THR9', 'TMR 880I',
+  // SEPURA
+  'STP9000', 'SRG3900 CARKIT', 'SRG3900 DESKTOP', 'SRG3900 BIKE',
+  // HYTERA
+  'PT580H', 'PT590', 'MT680',
+]
+const MODEL_RANK = new Map(MODEL_ORDER.map((m, i) => [m, i]))
+
 const DIVIDER = '------------------------------' // 30 dashes
 const INDENT = '       ' // 7 spaces — continuation / total lines
 
@@ -53,6 +64,7 @@ export function classify(action) {
 const modelDisplay = (m) => MODEL_DISPLAY[up(m)] ?? String(m ?? '').trim()
 const lastWord = (s) => String(s ?? '').trim().split(/\s+/).pop() || ''
 const modelShort = (m) => lastWord(modelDisplay(m)) // "SRG CARKIT" -> "CARKIT", "TH1N" -> "TH1N"
+const modelRank = (raw) => MODEL_RANK.get(up(raw)) ?? Number.MAX_SAFE_INTEGER // unknown models sort last
 const companyDisplay = (c) => COMPANY_DISPLAY[up(c)] ?? String(c ?? '').trim()
 
 // " (MOT) P2" style used in the Entry Summary.
@@ -121,11 +133,13 @@ export function materialBlocksByType(entries) {
   for (const type of orderedTypes(entries)) {
     const typeEntries = entries.filter((e) => up(e.type) === type)
     const byModel = new Map() // modelDisplay -> Map(key -> {label, company, qty})
+    const rawOf = new Map() // modelDisplay -> raw model (for the fixed sort order)
     const modelOrder = []
     for (const e of typeEntries) {
       const md = modelDisplay(e.model)
       if (!byModel.has(md)) {
         byModel.set(md, new Map())
+        rawOf.set(md, e.model)
         modelOrder.push(md)
       }
       const bucket = byModel.get(md)
@@ -138,6 +152,7 @@ export function materialBlocksByType(entries) {
         bucket.get(key).qty += Math.max(0, Number(f.quantity) || 0)
       }
     }
+    modelOrder.sort((a, b) => modelRank(rawOf.get(a)) - modelRank(rawOf.get(b)))
     const blocks = []
     for (const md of modelOrder) {
       const rows = [...byModel.get(md).values()]
@@ -168,11 +183,13 @@ export function deviceBlocksByType(entries) {
   for (const type of orderedTypes(entries)) {
     const typeEntries = entries.filter((e) => up(e.type) === type)
     const byDevice = new Map() // deviceShort -> {maintenance,program,install,dismantle}
+    const rawOf = new Map() // deviceShort -> raw model (for the fixed sort order)
     const order = []
     for (const e of typeEntries) {
       const dev = modelShort(e.model)
       if (!byDevice.has(dev)) {
         byDevice.set(dev, { maintenance: 0, program: 0, install: 0, dismantle: 0 })
+        rawOf.set(dev, e.model)
         order.push(dev)
       }
       const agg = byDevice.get(dev)
@@ -190,6 +207,7 @@ export function deviceBlocksByType(entries) {
       }
       agg.maintenance += maxMaint
     }
+    order.sort((a, b) => modelRank(rawOf.get(a)) - modelRank(rawOf.get(b)))
     const blocks = []
     for (const dev of order) {
       const a = byDevice.get(dev)
@@ -201,9 +219,11 @@ export function deviceBlocksByType(entries) {
       ].filter(([, v]) => v > 0)
       if (!cats.length) continue
       const total = a.maintenance + a.program + a.install + a.dismantle
+      // Per-block numbered lines (used by the PDF split columns).
       const lines = cats.map(([label, v], i) => `${i + 1}. ${label} = ${v}`)
       lines.push(`${INDENT}TOTAL = ${total}`)
-      blocks.push({ header: `${type} ${dev}`, lines })
+      // cats + total kept so the TXT can number continuously across all blocks.
+      blocks.push({ header: `${type} ${dev}`, lines, cats, total })
     }
     byType[type] = blocks
   }
@@ -213,8 +233,13 @@ export function deviceBlocksByType(entries) {
 function buildDeviceSummary(entries) {
   const byType = deviceBlocksByType(entries)
   const sections = []
+  let n = 0 // continuous line number across every block
   for (const type of Object.keys(byType)) {
-    for (const b of byType[type]) sections.push(`${b.header}\n${b.lines.join('\n')}`)
+    for (const b of byType[type]) {
+      const lines = b.cats.map(([label, v]) => `${(n += 1)}. ${label} = ${v}`)
+      lines.push(`${INDENT}TOTAL = ${b.total}`)
+      sections.push(`${b.header}\n${lines.join('\n')}`)
+    }
   }
   return sections
 }
@@ -312,11 +337,7 @@ export function buildTxt(report) {
     'DAILY ACTIVITY REPORT',
     `REPORT ID: ${report.reportId ?? '-'}`,
     DIVIDER,
-    'Entry Summary',
-    DIVIDER,
-    report.entrySummary,
-    DIVIDER,
-    'Materials Summary',
+    'Entry & Materials Summary',
     DIVIDER,
     ...join(report.materialsSummary),
     DIVIDER,
