@@ -52,6 +52,8 @@ function parseEntry(body) {
   const missingAction = faults.find((f) => !f.action)
   if (missingAction) return { error: 'each fault needs an action' }
 
+  const comment = String(body?.comment ?? '').trim()
+
   return {
     data: {
       reportDate: new Date(reportDate),
@@ -61,6 +63,7 @@ function parseEntry(body) {
       issiNumber,
       type,
       model,
+      comment,
       faults: { create: faults },
     },
   }

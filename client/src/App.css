@@ -183,13 +183,34 @@
 .breakdown,
 .entries,
 .saved,
-.manage {
+.manage,
+.handover {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   padding: 1.35rem 1.4rem;
   margin: 0 0 1.15rem;
+}
+
+/* Handover (transmittal) */
+.handover-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem 1.1rem;
+}
+.handover label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+}
+@media (max-width: 560px) {
+  .handover-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* Section titles */
@@ -255,12 +276,32 @@ h2 {
   gap: 0.6rem;
   align-items: center;
 }
+/* Transmittal line: Material + Qty + remove only. */
+.fault-row--tx {
+  grid-template-columns: 1fr 4.75rem auto;
+}
 .fault-head {
   font-size: 0.78rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.03em;
   color: var(--muted);
+}
+.comment-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 1rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.comment-field textarea {
+  font-weight: 400;
+}
+.entry-comment {
+  margin-top: 0.35rem !important;
+  font-style: italic;
 }
 .fault-remove {
   height: var(--control-h);
@@ -337,13 +378,7 @@ h2 {
 }
 .breakdown-head button {
   height: 2.4rem;
-  padding: 0 0.95rem;
-  border: 1.5px solid var(--border);
-  background: var(--surface-2);
-  color: var(--text);
-}
-.breakdown-head button:hover:not(:disabled) {
-  border-color: var(--primary);
+  padding: 0 1rem;
 }
 .breakdown-head button:disabled {
   opacity: 0.5;

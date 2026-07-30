@@ -72,6 +72,23 @@ const loadTheme = () => {
   return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
 
+const lsGet = (k, d = '') => {
+  try {
+    return localStorage.getItem(k) ?? d
+  } catch {
+    return d
+  }
+}
+const lsSet = (k, v) => {
+  try {
+    localStorage.setItem(k, v)
+  } catch {
+    /* ignore storage errors */
+  }
+}
+const MODE_KEY = 'trc_mode'
+const loadMode = () => (lsGet(MODE_KEY) === 'transmittal' ? 'transmittal' : 'report')
+
 const emptyForm = () => {
   const last = loadLast()
   return {
@@ -82,6 +99,7 @@ const emptyForm = () => {
     issiNumber: '',
     type: last.type ?? '',
     model: last.model ?? '',
+    comment: '',
     faults: [emptyFault()],
   }
 }
@@ -111,7 +129,25 @@ function App() {
   const [busy, setBusy] = useState(false)
   const [branch, setBranch] = useState(loadBranch)
   const [theme, setTheme] = useState(loadTheme)
+  const [mode, setMode] = useState(loadMode)
+  const [transmittedBy, setTransmittedBy] = useState(() => lsGet('trc_tx'))
+  const [receivedBy, setReceivedBy] = useState(() => lsGet('trc_rx'))
   const saveTimer = useRef(null)
+  const isTransmittal = mode === 'transmittal'
+
+  function changeMode(e) {
+    const m = e.target.value === 'transmittal' ? 'transmittal' : 'report'
+    setMode(m)
+    lsSet(MODE_KEY, m)
+  }
+  const changeTransmittedBy = (e) => {
+    setTransmittedBy(e.target.value)
+    lsSet('trc_tx', e.target.value)
+  }
+  const changeReceivedBy = (e) => {
+    setReceivedBy(e.target.value)
+    lsSet('trc_rx', e.target.value)
+  }
 
   // Apply + persist the day/night theme on the root element.
   useEffect(() => {
@@ -165,7 +201,7 @@ function App() {
   async function handleSaveReport() {
     setBusy(true)
     try {
-      const rep = await saveReport(branch)
+      const rep = await saveReport({ branch, mode, transmittedBy, receivedBy })
       setError(null)
       await refreshSaved()
       window.alert(`Saved as ${repLabel(rep.reportId, rep.branch)}.`)
@@ -182,6 +218,16 @@ function App() {
     try {
       await loadSavedReport(rep.id)
       await refresh()
+      // Restore the document's mode / branch / handover so it re-generates identically.
+      if (rep.branch) {
+        setBranch(rep.branch)
+        lsSet(BRANCH_KEY, rep.branch)
+      }
+      const m = rep.mode === 'transmittal' ? 'transmittal' : 'report'
+      setMode(m)
+      lsSet(MODE_KEY, m)
+      setTransmittedBy(rep.transmittedBy ?? '')
+      setReceivedBy(rep.receivedBy ?? '')
       setError(null)
     } catch (err) {
       setError(err.message)
@@ -243,9 +289,14 @@ function App() {
     try {
       const payload = {
         ...form,
+        // In transmittal mode a line is just Material + Qty — no company, action hidden.
         faults: form.faults
           .filter(faultIsMeaningful)
-          .map((f) => ({ ...f, quantity: Math.max(1, Number(f.quantity) || 1) })),
+          .map((f) => ({
+            ...f,
+            quantity: Math.max(1, Number(f.quantity) || 1),
+            company: isTransmittal ? '' : f.company,
+          })),
       }
       if (payload.faults.length === 0) {
         setError('Add at least one fault — pick an issue, or an action like PROGRAM/INSTALL/DISMANTLE.')
@@ -288,8 +339,16 @@ function App() {
   // One report per date, newest first. The live view uses the draft (next) id
   // until you Save, which mints the real REP-#### number.
   const reports = useMemo(
-    () => groupReports(entries).map((g) => buildDateReport(g.dateLabel, repLabel(nextReportId, branch), g.entries, branch)),
-    [entries, nextReportId, branch],
+    () =>
+      groupReports(entries).map((g) =>
+        buildDateReport(g.dateLabel, repLabel(nextReportId, branch), g.entries, {
+          branch,
+          mode,
+          transmittedBy,
+          receivedBy,
+        }),
+      ),
+    [entries, nextReportId, branch, mode, transmittedBy, receivedBy],
   )
   const combinedTxt = useMemo(() => reports.map(buildTxt).join('\n\n\n'), [reports])
 
@@ -308,6 +367,13 @@ function App() {
         <header className="topbar">
           <h1>TRC Daily Report</h1>
           <div className="topbar-right">
+            <label className="date-field">
+              Mode
+              <select value={mode} onChange={changeMode}>
+                <option value="report">Report</option>
+                <option value="transmittal">Transmittal</option>
+              </select>
+            </label>
             <label className="date-field">
               Branch
               <select value={branch} onChange={changeBranch}>
@@ -330,17 +396,37 @@ function App() {
               >
                 {theme === 'dark' ? '☀️' : '🌙'}
               </button>
-              <button type="button" className="btn-txt" onClick={handleDownloadTxt} disabled={!reports.length}>
-                ⭳ Text
-              </button>
-              <button type="button" className="btn-pdf" onClick={() => window.print()} disabled={!reports.length}>
-                ⭳ PDF
-              </button>
             </div>
           </div>
         </header>
 
         {error && <p className="error">{error}</p>}
+
+        {isTransmittal && (
+          <section className="handover">
+            <h2>Handover</h2>
+            <div className="handover-grid">
+              <label>
+                Transmitted by
+                <select value={transmittedBy} onChange={changeTransmittedBy}>
+                  <option value="">— select —</option>
+                  {options.technicians.map((t) => (
+                    <option key={t}>{t}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Received by
+                <select value={receivedBy} onChange={changeReceivedBy}>
+                  <option value="">— select —</option>
+                  {options.technicians.map((t) => (
+                    <option key={t}>{t}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </section>
+        )}
 
         <form onSubmit={handleSubmit} className="entry-form">
           <fieldset>
@@ -373,14 +459,18 @@ function App() {
                   ))}
                 </select>
               </label>
-              <label>
-                <span className="cap">Tel number <span className="opt">(optional)</span></span>
-                <input value={form.telNumber} onChange={set('telNumber')} placeholder="e.g. 0462260" />
-              </label>
-              <label>
-                <span className="cap">ISSI number <span className="opt">(optional)</span></span>
-                <input value={form.issiNumber} onChange={set('issiNumber')} placeholder="e.g. 1839517" />
-              </label>
+              {!isTransmittal && (
+                <>
+                  <label>
+                    <span className="cap">Tel number <span className="opt">(optional)</span></span>
+                    <input value={form.telNumber} onChange={set('telNumber')} placeholder="e.g. 0462260" />
+                  </label>
+                  <label>
+                    <span className="cap">ISSI number <span className="opt">(optional)</span></span>
+                    <input value={form.issiNumber} onChange={set('issiNumber')} placeholder="e.g. 1839517" />
+                  </label>
+                </>
+              )}
               <label>
                 <span className="cap">Technician <span className="opt">(optional)</span></span>
                 <select value={form.technician} onChange={set('technician')}>
@@ -395,24 +485,25 @@ function App() {
 
           <fieldset>
             <legend>
-              Faults <span className="hint">({form.faults.length}/{MAX_FAULTS})</span>
+              {isTransmittal ? 'Transmittal' : 'Faults'}{' '}
+              <span className="hint">({form.faults.length}/{MAX_FAULTS})</span>
             </legend>
             <div className="faults">
-              <div className="fault-row fault-head">
-                <span>Issue</span>
+              <div className={`fault-row fault-head${isTransmittal ? ' fault-row--tx' : ''}`}>
+                <span>{isTransmittal ? 'Material' : 'Issue'}</span>
                 <span>Qty</span>
-                <span>Action</span>
-                <span>Company</span>
+                {!isTransmittal && <span>Action</span>}
+                {!isTransmittal && <span>Company</span>}
                 <span />
               </div>
               {form.faults.map((fault, i) => (
-                <div className="fault-row" key={i}>
+                <div className={`fault-row${isTransmittal ? ' fault-row--tx' : ''}`} key={i}>
                   <input
-                    list="issue-types"
+                    list={isTransmittal ? 'materials-list' : 'issue-types'}
                     value={fault.issue}
                     onChange={setFault(i, 'issue')}
-                    placeholder="e.g. A COVER"
-                    aria-label="Issue"
+                    placeholder={isTransmittal ? 'e.g. A COVER' : 'e.g. A COVER'}
+                    aria-label={isTransmittal ? 'Material' : 'Issue'}
                   />
                   <input
                     type="number"
@@ -422,17 +513,21 @@ function App() {
                     onChange={setFault(i, 'quantity')}
                     aria-label="Quantity"
                   />
-                  <select value={fault.action} onChange={setFault(i, 'action')} aria-label="Action">
-                    {options.actions.map((a) => (
-                      <option key={a}>{a}</option>
-                    ))}
-                  </select>
-                  <select value={fault.company} onChange={setFault(i, 'company')} aria-label="Company">
-                    <option value="">— none —</option>
-                    {options.companies.map((c) => (
-                      <option key={c}>{c}</option>
-                    ))}
-                  </select>
+                  {!isTransmittal && (
+                    <select value={fault.action} onChange={setFault(i, 'action')} aria-label="Action">
+                      {options.actions.map((a) => (
+                        <option key={a}>{a}</option>
+                      ))}
+                    </select>
+                  )}
+                  {!isTransmittal && (
+                    <select value={fault.company} onChange={setFault(i, 'company')} aria-label="Company">
+                      <option value="">— none —</option>
+                      {options.companies.map((c) => (
+                        <option key={c}>{c}</option>
+                      ))}
+                    </select>
+                  )}
                   <button
                     type="button"
                     className="fault-remove"
@@ -456,9 +551,25 @@ function App() {
                 <option key={it} value={it} />
               ))}
             </datalist>
+            <datalist id="materials-list">
+              {options.materials.map((m) => (
+                <option key={m} value={m} />
+              ))}
+            </datalist>
+
+            <label className="comment-field">
+              <span className="cap">Comment <span className="opt">(optional)</span></span>
+              <textarea
+                value={form.comment}
+                onChange={set('comment')}
+                rows={2}
+                placeholder={isTransmittal ? 'Note for this transmittal entry…' : 'Note for this entry…'}
+              />
+            </label>
+
             <div className="faults-footer">
               <button type="button" className="add-fault" onClick={addFault} disabled={form.faults.length >= MAX_FAULTS}>
-                + Add fault
+                {isTransmittal ? '+ Add material' : '+ Add fault'}
               </button>
               <button type="submit" className="submit">
                 Add entry
@@ -477,8 +588,11 @@ function App() {
               <button type="button" className="save-report" onClick={handleSaveReport} disabled={!reports.length || busy}>
                 💾 Save report
               </button>
-              <button type="button" onClick={handleDownloadTxt} disabled={!reports.length}>
-                Download .txt
+              <button type="button" className="btn-txt" onClick={handleDownloadTxt} disabled={!reports.length}>
+                ⭳ Text
+              </button>
+              <button type="button" className="btn-pdf" onClick={() => window.print()} disabled={!reports.length}>
+                ⭳ PDF
               </button>
             </div>
           </div>
@@ -579,9 +693,16 @@ function App() {
                       {e.type} {e.model}
                     </strong>{' '}
                     <span className="muted small">
-                      · {e.agency} · {e.technician} · TEL {e.telNumber} · ISSI {e.issiNumber}
+                      · {e.agency}
+                      {e.technician ? ` · ${e.technician}` : ''}
+                      {!isTransmittal && ` · TEL ${e.telNumber} · ISSI ${e.issiNumber}`}
                     </span>
-                    <p>{issueActionCell(e)}</p>
+                    <p>
+                      {isTransmittal
+                        ? e.faults.map((f) => `${f.issue} (${f.quantity})`).join(', ')
+                        : issueActionCell(e)}
+                    </p>
+                    {e.comment && <p className="entry-comment muted small">💬 {e.comment}</p>}
                   </div>
                   <button onClick={() => handleDelete(e.id)} aria-label="Delete entry">
                     ✕

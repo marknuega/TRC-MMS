@@ -9,14 +9,17 @@ datasource db {
 
 // A saved snapshot of the working entries, with a unique REP-#### series number.
 model SavedReport {
-  id         Int      @id @default(autoincrement())
-  seq        Int      @unique // 1-based; renders as REP-0001, REP-0002, ...
-  reportId   String   @unique @map("report_id")
-  branch     String   @default("") // Makkah | Taif | Jeddah
-  savedAt    DateTime @default(now()) @map("saved_at")
-  dateLabel  String   @default("") @map("date_label")
-  entryCount Int      @default(0) @map("entry_count")
-  entries    Json // snapshot of entries + faults, used to reload into the form
+  id            Int      @id @default(autoincrement())
+  seq           Int      @unique // 1-based; renders as REP-0001, REP-0002, ...
+  reportId      String   @unique @map("report_id")
+  branch        String   @default("") // Makkah | Taif | Jeddah
+  mode          String   @default("report") // report | transmittal
+  transmittedBy String   @default("") @map("transmitted_by")
+  receivedBy    String   @default("") @map("received_by")
+  savedAt       DateTime @default(now()) @map("saved_at")
+  dateLabel     String   @default("") @map("date_label")
+  entryCount    Int      @default(0) @map("entry_count")
+  entries       Json // snapshot of entries + faults, used to reload into the form
 
   @@map("saved_reports")
 }
@@ -50,6 +53,7 @@ model ReportEntry {
   issiNumber String   @map("issi_number")
   type       String
   model      String
+  comment    String   @default("")
   faults     Fault[]
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")

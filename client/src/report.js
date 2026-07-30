@@ -315,36 +315,60 @@ export function groupReports(entries) {
 }
 
 // ---- Full report model for one date ----
-export function buildDateReport(dateLabel, reportId, entries, branch = '') {
+// opts: { branch, mode: 'report'|'transmittal', transmittedBy, receivedBy }
+export function buildDateReport(dateLabel, reportId, entries, opts = {}) {
+  const { branch = '', mode = 'report', transmittedBy = '', receivedBy = '' } = opts
   return {
     dateLabel,
     reportId,
     branch,
+    mode,
+    transmittedBy,
+    receivedBy,
     entries,
     totals: headerTotals(entries),
-    entrySummary: buildEntrySummary(entries),
     materialsSummary: buildMaterialsSummary(entries),
     deviceSummary: buildDeviceSummary(entries),
   }
 }
 
-// ---- TXT export matching the REP-Daily sample ----
+// Per-entry notes: "MODEL — comment".
+function buildNotes(entries) {
+  return entries
+    .filter((e) => String(e.comment ?? '').trim())
+    .map((e) => `${modelDisplay(e.model)} — ${String(e.comment).trim()}`)
+}
+
+// ---- TXT export (Report or Transmittal) ----
 export function buildTxt(report) {
   const join = (sections) =>
     sections.length ? sections.reduce((acc, s, i) => (i ? [...acc, DIVIDER, s] : [s]), []) : ['NO ENTRY']
 
-  return [
+  const isTransmittal = report.mode === 'transmittal'
+  const notes = buildNotes(report.entries)
+
+  const lines = [
     report.dateLabel,
-    'DAILY ACTIVITY REPORT',
+    isTransmittal ? 'MATERIAL TRANSMITTAL' : 'DAILY ACTIVITY REPORT',
     ...(report.branch ? [`BRANCH: ${report.branch}`] : []),
-    `REPORT ID: ${report.reportId ?? '-'}`,
+    ...(isTransmittal && report.transmittedBy ? [`TRANSMITTED BY: ${report.transmittedBy}`] : []),
+    ...(isTransmittal && report.receivedBy ? [`RECEIVED BY: ${report.receivedBy}`] : []),
+    `${isTransmittal ? 'TRANSMITTAL' : 'REPORT'} ID: ${report.reportId ?? '-'}`,
     DIVIDER,
-    'Entry & Materials Summary',
+    isTransmittal ? 'Materials' : 'Entry & Materials Summary',
     DIVIDER,
     ...join(report.materialsSummary),
-    DIVIDER,
-    'Device Summary',
-    DIVIDER,
-    ...join(report.deviceSummary),
-  ].join('\n')
+  ]
+
+  // Device summary only makes sense for the activity report.
+  if (!isTransmittal) {
+    lines.push(DIVIDER, 'Device Summary', DIVIDER, ...join(report.deviceSummary))
+  }
+
+  // Per-entry comments/notes at the end, when present.
+  if (notes.length) {
+    lines.push(DIVIDER, 'Notes', DIVIDER, ...notes)
+  }
+
+  return lines.join('\n')
 }

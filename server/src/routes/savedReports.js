@@ -23,7 +23,10 @@ router.get('/', async (req, res, next) => {
     const [reports, seq] = await Promise.all([
       prisma.savedReport.findMany({
         orderBy: { seq: 'desc' },
-        select: { id: true, seq: true, reportId: true, branch: true, savedAt: true, dateLabel: true, entryCount: true },
+        select: {
+          id: true, seq: true, reportId: true, branch: true, mode: true,
+          transmittedBy: true, receivedBy: true, savedAt: true, dateLabel: true, entryCount: true,
+        },
       }),
       nextSeq(),
     ])
@@ -63,6 +66,7 @@ router.post('/', async (req, res, next) => {
       issiNumber: e.issiNumber,
       type: e.type,
       model: e.model,
+      comment: e.comment,
       faults: e.faults.map((f) => ({
         position: f.position,
         issue: f.issue,
@@ -76,9 +80,15 @@ router.post('/', async (req, res, next) => {
     const dateLabel = dates.length === 1 ? dmy(dates[0]) : `${dmy(dates[0])} (+${dates.length - 1} more)`
 
     const branch = String(req.body?.branch ?? '').trim()
+    const mode = String(req.body?.mode ?? 'report').trim() || 'report'
+    const transmittedBy = String(req.body?.transmittedBy ?? '').trim()
+    const receivedBy = String(req.body?.receivedBy ?? '').trim()
     const seq = await nextSeq()
     const saved = await prisma.savedReport.create({
-      data: { seq, reportId: repId(seq), branch, dateLabel, entryCount: snapshot.length, entries: snapshot },
+      data: {
+        seq, reportId: repId(seq), branch, mode, transmittedBy, receivedBy,
+        dateLabel, entryCount: snapshot.length, entries: snapshot,
+      },
     })
     res.status(201).json(saved)
   } catch (err) {
@@ -105,6 +115,7 @@ router.post('/:id/load', async (req, res, next) => {
             issiNumber: e.issiNumber || '*',
             type: e.type ?? '',
             model: e.model ?? '',
+            comment: e.comment ?? '',
             faults: {
               create: (e.faults ?? []).map((f, i) => ({
                 position: f.position ?? i,

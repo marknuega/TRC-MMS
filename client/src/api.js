@@ -31,8 +31,8 @@ export const saveOptions = (data) =>
 
 export const getSavedReports = () => request('/api/saved-reports')
 
-export const saveReport = (branch = '') =>
-  request('/api/saved-reports', { method: 'POST', body: JSON.stringify({ branch }) })
+export const saveReport = (meta = {}) =>
+  request('/api/saved-reports', { method: 'POST', body: JSON.stringify(meta) })
 
 export const loadSavedReport = (id) =>
   request(`/api/saved-reports/${id}/load`, { method: 'POST' })
