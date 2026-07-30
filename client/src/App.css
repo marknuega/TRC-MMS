@@ -7,10 +7,14 @@
 
 .topbar {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1.25rem;
+  gap: 1rem 1.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+.topbar h1 {
+  line-height: 2.4rem; /* sit level with the control row */
 }
 
 h1 {
@@ -41,24 +45,52 @@ h2 {
 .topbar-right {
   display: flex;
   align-items: flex-end;
-  gap: 1rem;
+  gap: 0.75rem;
   flex-wrap: wrap;
 }
 .date-field {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-  font-size: 0.8rem;
-  font-weight: 600;
+  gap: 0.3rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
 }
-.date-field input {
+/* Unified control look so Branch <select> and Report date <input> line up. */
+.date-field input,
+.date-field select {
   font: inherit;
-  font-weight: 400;
-  padding: 0.45rem 0.5rem;
-  border: 1px solid #94a3b8;
-  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: normal;
+  height: 2.4rem;
+  box-sizing: border-box;
+  padding: 0 0.65rem;
+  border: 1px solid var(--border, #cbd5e1);
+  border-radius: 8px;
   background: transparent;
   color: inherit;
+  cursor: pointer;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.date-field select {
+  -webkit-appearance: none;
+  appearance: none;
+  padding-right: 1.9rem;
+  min-width: 8rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none' stroke='%23888' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath d='M2.5 4.5L6 8l3.5-3.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.6rem center;
+  background-size: 0.75rem;
+}
+.date-field input:focus,
+.date-field select:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
 }
 .actions {
   display: flex;
@@ -66,14 +98,27 @@ h2 {
 }
 .btn-txt,
 .btn-pdf {
-  padding: 0.5rem 1rem;
+  height: 2.4rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0 1rem;
   font: inherit;
   font-weight: 600;
   border: 0;
-  border-radius: 6px;
+  border-radius: 8px;
   color: #fff;
   cursor: pointer;
   white-space: nowrap;
+  transition: filter 0.12s, transform 0.02s;
+}
+.btn-txt:hover,
+.btn-pdf:hover {
+  filter: brightness(1.08);
+}
+.btn-txt:active,
+.btn-pdf:active {
+  transform: translateY(1px);
 }
 .btn-txt {
   background: #475569;
