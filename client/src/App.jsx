@@ -61,6 +61,17 @@ const loadBranch = () => {
   }
 }
 
+const THEME_KEY = 'trc_theme'
+const loadTheme = () => {
+  try {
+    const t = localStorage.getItem(THEME_KEY)
+    if (t === 'light' || t === 'dark') return t
+  } catch {
+    /* fall through to system preference */
+  }
+  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+}
+
 const emptyForm = () => {
   const last = loadLast()
   return {
@@ -99,7 +110,18 @@ function App() {
   const [nextReportId, setNextReportId] = useState('REP-0001')
   const [busy, setBusy] = useState(false)
   const [branch, setBranch] = useState(loadBranch)
+  const [theme, setTheme] = useState(loadTheme)
   const saveTimer = useRef(null)
+
+  // Apply + persist the day/night theme on the root element.
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+    try {
+      localStorage.setItem(THEME_KEY, theme)
+    } catch {
+      /* ignore storage errors */
+    }
+  }, [theme])
 
   function changeBranch(e) {
     const b = e.target.value
@@ -298,6 +320,15 @@ function App() {
               <input type="date" value={form.reportDate} onChange={set('reportDate')} required />
             </label>
             <div className="actions">
+              <button
+                type="button"
+                className="theme-toggle"
+                onClick={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
+                aria-label={theme === 'dark' ? 'Switch to day theme' : 'Switch to night theme'}
+                title={theme === 'dark' ? 'Day mode' : 'Night mode'}
+              >
+                {theme === 'dark' ? '☀️' : '🌙'}
+              </button>
               <button type="button" className="btn-txt" onClick={handleDownloadTxt} disabled={!reports.length}>
                 ⭳ Text
               </button>

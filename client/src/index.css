@@ -13,13 +13,30 @@
   -webkit-font-smoothing: antialiased;
 }
 
+/* Dark palette, shared by the system preference and the explicit toggle. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     --text: #cbd5e1;
     --text-h: #f8fafc;
     --bg: #16171d;
     --border: #3f4654;
+    color-scheme: dark;
   }
+}
+:root[data-theme='dark'] {
+  --text: #cbd5e1;
+  --text-h: #f8fafc;
+  --bg: #16171d;
+  --border: #3f4654;
+  color-scheme: dark;
+}
+/* Explicit light choice overrides the system dark preference. */
+:root[data-theme='light'] {
+  --text: #334155;
+  --text-h: #0f172a;
+  --bg: #fff;
+  --border: #cbd5e1;
+  color-scheme: light;
 }
 
 body {
