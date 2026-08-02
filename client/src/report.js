@@ -486,7 +486,7 @@ const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frid
 // columns list the entry types that feed them.
 const MONTHLY_GROUPS = [
   {
-    group: 'Airbus Terminals (Repair & Programing)',
+    group: 'Airbus Terminals (Repair& Programing)',
     cols: [
       { key: 'th1n', label: 'TH1n', kind: 'model', models: ['TH1N'] },
       { key: 'thr880i', label: 'THR880i', kind: 'model', models: ['THR880I'] },
@@ -503,7 +503,7 @@ const MONTHLY_GROUPS = [
     ],
   },
   {
-    group: 'Sepura Terminals (Repair & Programing, Installation, Dismantling)',
+    group: 'Sepura Terminals (Repair& Programing, Installation, Dismantling)',
     cols: [
       { key: 'stp9000', label: 'STP 9000', kind: 'model', models: ['STP9000'] },
       { key: 'srg_carkit', label: 'SRG 3900 Car Kit', kind: 'model', models: ['SRG3900 CARKIT', 'SRG CARKIT'] },
@@ -514,7 +514,7 @@ const MONTHLY_GROUPS = [
     ],
   },
   {
-    group: 'Hytera (Repair & Programing, Installation, Dismantling)',
+    group: 'Hytera (Repair& Programing, Installation, Dismantling)',
     cols: [
       { key: 'pt580', label: 'PT580', kind: 'model', models: ['PT580H', 'PT580'] },
       { key: 'pt590', label: 'PT590', kind: 'model', models: ['PT590'] },

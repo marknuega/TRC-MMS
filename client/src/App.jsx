@@ -889,20 +889,28 @@ function App() {
                 <table className="monthly-table">
                   <thead>
                     <tr>
-                      <th rowSpan={2}>Date</th>
-                      <th rowSpan={2}>Day</th>
+                      <th colSpan={2} rowSpan={2} className="corner" />
                       {matrixGroups.map((g) => (
                         <th key={g.group} colSpan={g.span} className="grp">
                           {g.group}
                         </th>
                       ))}
-                      <th rowSpan={2}>Activity &amp; spare parts used</th>
+                      <th rowSpan={3} className="act-head">
+                        Activity description and spare parts was used
+                      </th>
                     </tr>
                     <tr>
                       {matrix.columns.map((c) => (
                         <th key={c.key} className="col-sub">
                           {c.label}
                         </th>
+                      ))}
+                    </tr>
+                    <tr>
+                      <th className="dh">Date</th>
+                      <th className="dh">Day</th>
+                      {matrix.columns.map((c) => (
+                        <th key={c.key} className="col-blank" />
                       ))}
                     </tr>
                   </thead>

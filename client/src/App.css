@@ -497,12 +497,25 @@ h2 {
   font-weight: 700;
 }
 .monthly-table .grp {
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
+  font-size: 0.74rem;
+  font-weight: 700;
 }
 .monthly-table .col-sub {
   font-size: 0.72rem;
   font-weight: 600;
+  vertical-align: bottom;
+}
+.monthly-table .corner,
+.monthly-table .col-blank {
+  background: var(--surface);
+}
+.monthly-table .dh {
+  font-weight: 700;
+}
+.monthly-table .act-head {
+  min-width: 22rem;
+  text-align: left;
+  vertical-align: middle;
 }
 .monthly-table .num {
   font-variant-numeric: tabular-nums;
@@ -516,10 +529,21 @@ h2 {
   white-space: normal;
   min-width: 20rem;
   max-width: 34rem;
-  color: var(--text);
+  color: #c81e1e; /* red characters, like the source sheet */
+  font-weight: 600;
 }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .monthly-table .desc {
+    color: #f87171;
+  }
+}
+:root[data-theme='dark'] .monthly-table .desc {
+  color: #f87171;
+}
+/* Weekend rows: solid green across the whole row, like the sheet. */
 .monthly-table tr.weekend td {
-  background: color-mix(in srgb, var(--success) 14%, var(--surface));
+  background: #22c55e;
+  color: #052e16;
 }
 .monthly-table tr.totals td {
   font-weight: 800;
