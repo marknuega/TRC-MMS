@@ -183,6 +183,7 @@
 .breakdown,
 .entries,
 .saved,
+.monthly,
 .manage,
 .handover {
   background: var(--surface);
@@ -436,6 +437,78 @@ h2 {
   width: 100%;
   box-sizing: border-box;
   margin: 0 0 0.9rem;
+}
+
+/* ---- Monthly matrix ---- */
+.monthly-body {
+  padding-top: 1rem;
+}
+.monthly-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+.monthly-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+.monthly-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.monthly-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.82rem;
+}
+.monthly-table th,
+.monthly-table td {
+  border: 1px solid var(--border);
+  padding: 0.35rem 0.5rem;
+  text-align: center;
+  white-space: nowrap;
+}
+.monthly-table thead th {
+  background: var(--surface-3);
+  color: var(--text-h);
+  font-weight: 700;
+}
+.monthly-table .grp {
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.monthly-table .col-sub {
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+.monthly-table .num {
+  font-variant-numeric: tabular-nums;
+}
+.monthly-table .nowrap {
+  white-space: nowrap;
+  text-align: left;
+}
+.monthly-table .desc {
+  text-align: left;
+  white-space: normal;
+  min-width: 20rem;
+  max-width: 34rem;
+  color: var(--text);
+}
+.monthly-table tr.weekend td {
+  background: color-mix(in srgb, var(--success) 14%, var(--surface));
+}
+.monthly-table tr.totals td {
+  font-weight: 800;
+  background: var(--surface-3);
+  color: var(--text-h);
 }
 .search-results {
   list-style: none;

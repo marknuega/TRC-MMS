@@ -473,3 +473,101 @@ export function buildTxt(report) {
   if (notes.length) lines.push(DIVIDER, 'Notes', DIVIDER, ...notes)
   return lines.join('\n')
 }
+
+// ---- Monthly activity matrix (dates × terminal columns) ----
+// savedReports: [{ dateLabel:'dd/mm/yyyy', branch, mode, seq, entries:[...] }]
+// opts: { year, month(0-11), branch, models:[...], modelType:{ MODELUPPER: TYPE } }
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December']
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+
+export function buildMonthlyMatrix(savedReports, opts = {}) {
+  const { year, month, branch = '', models = [], modelType = {} } = opts
+  const typeOf = (m) => up(modelType[up(m)] || '')
+
+  // Columns: per type, each model (repair/programming count) + Install + Dismantle.
+  const byTypeModels = {}
+  for (const t of TYPE_ORDER) byTypeModels[t] = []
+  for (const m of models) {
+    const t = typeOf(m)
+    if (byTypeModels[t]) byTypeModels[t].push(m)
+  }
+  const columns = []
+  for (const t of TYPE_ORDER) {
+    for (const m of byTypeModels[t]) {
+      columns.push({ key: `m|${up(m)}`, label: modelShort(m) || modelDisplay(m), group: t, kind: 'model' })
+    }
+    columns.push({ key: `i|${t}`, label: 'Install', group: t, kind: 'install' })
+    columns.push({ key: `d|${t}`, label: 'Dismantle', group: t, kind: 'dismantle' })
+  }
+
+  // Latest saved "report" per date within the month (+ branch filter).
+  const parse = (label) => {
+    const m = String(label || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+    return m ? { d: +m[1], mo: +m[2] - 1, y: +m[3] } : null
+  }
+  const byDay = new Map()
+  for (const r of savedReports ?? []) {
+    if (up(r.mode) === 'TRANSMITTAL') continue
+    if (branch && up(r.branch) !== up(branch)) continue
+    const p = parse(r.dateLabel)
+    if (!p || p.y !== year || p.mo !== month) continue
+    const prev = byDay.get(p.d)
+    if (!prev || (r.seq ?? 0) > (prev.seq ?? 0)) {
+      byDay.set(p.d, { entries: Array.isArray(r.entries) ? r.entries : [], seq: r.seq ?? 0 })
+    }
+  }
+
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const rows = []
+  const totals = {}
+  for (const c of columns) totals[c.key] = 0
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dow = new Date(year, month, day).getDay()
+    const isWeekend = dow === 5 || dow === 6 // Fri / Sat
+    const rec = byDay.get(day)
+    const counts = {}
+    for (const c of columns) counts[c.key] = 0
+    const parts = []
+    if (rec) {
+      for (const e of rec.entries) {
+        const mk = up(e.model)
+        const t = up(e.type)
+        let maxMaint = 0
+        let program = 0
+        let install = 0
+        let dismantle = 0
+        for (const f of e.faults ?? []) {
+          const cat = classify(f.action)
+          const q = Math.max(0, Number(f.quantity) || 0)
+          if (cat === 'maintenance') maxMaint = Math.max(maxMaint, q)
+          else if (cat === 'programming') program += q
+          else if (cat === 'install') install += q
+          else if (cat === 'dismantle') dismantle += q
+        }
+        const mKey = `m|${mk}`
+        if (counts[mKey] !== undefined) counts[mKey] += maxMaint + program
+        if (counts[`i|${t}`] !== undefined) counts[`i|${t}`] += install
+        if (counts[`d|${t}`] !== undefined) counts[`d|${t}`] += dismantle
+        const items = (e.faults ?? []).filter((f) => up(f.issue)).map((f) => `${up(f.issue)} (${f.quantity})`)
+        if (items.length) {
+          const tag = mk && mk !== '-' ? `${t}-${modelDisplay(e.model)}` : t
+          parts.push(`(${tag}) ${items.join(' ')}`)
+        }
+      }
+      for (const c of columns) totals[c.key] += counts[c.key]
+    }
+    rows.push({
+      day,
+      date: `${String(day).padStart(2, '0')}/${String(month + 1).padStart(2, '0')}/${year}`,
+      dayName: DAY_NAMES[dow],
+      isWeekend,
+      counts,
+      description: parts.join('   '),
+      hasData: !!rec,
+    })
+  }
+
+  return { year, month, monthName: MONTH_NAMES[month], branch, columns, rows, totals }
+}

@@ -23,6 +23,7 @@ import {
   deviceBlocksByType,
   transmittalRows,
   reportNotes,
+  buildMonthlyMatrix,
   TYPE_ORDER,
 } from './report'
 import './App.css'
@@ -130,6 +131,9 @@ function App() {
   const [saved, setSaved] = useState([])
   const [savedOpen, setSavedOpen] = useState(false)
   const [savedSearch, setSavedSearch] = useState('')
+  const [monthlyOpen, setMonthlyOpen] = useState(false)
+  const [monthValue, setMonthValue] = useState(() => today().slice(0, 7)) // YYYY-MM
+  const [monthBranch, setMonthBranch] = useState('')
   const [editSavedId, setEditSavedId] = useState(null) // which saved row shows Load/Delete
   const [nextReportId, setNextReportId] = useState('REP-0001')
   const [busy, setBusy] = useState(false)
@@ -354,6 +358,43 @@ function App() {
     [entries, nextReportId, branch, mode, transmittedBy, receivedBy],
   )
   const combinedTxt = useMemo(() => reports.map(buildTxt).join('\n\n\n'), [reports])
+
+  // Monthly activity matrix (dates × terminal columns) from saved reports.
+  const matrix = useMemo(() => {
+    const [y, m] = monthValue.split('-').map(Number)
+    if (!y || !m) return null
+    return buildMonthlyMatrix(saved, {
+      year: y,
+      month: m - 1,
+      branch: monthBranch,
+      models: options.models,
+      modelType: MODEL_TYPE,
+    })
+  }, [saved, monthValue, monthBranch, options.models])
+
+  // Grouped header spans for the matrix (AIRBUS / SEPURA / HYTERA).
+  const matrixGroups = useMemo(() => {
+    if (!matrix) return []
+    const groups = []
+    for (const c of matrix.columns) {
+      const last = groups[groups.length - 1]
+      if (last && last.group === c.group) last.span += 1
+      else groups.push({ group: c.group, span: 1 })
+    }
+    return groups
+  }, [matrix])
+
+  function handleExportMonthlyCsv() {
+    if (!matrix) return
+    const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
+    const header = ['Date', 'Day', ...matrix.columns.map((c) => `${c.group} ${c.label}`), 'Activity / spare parts']
+    const lines = [header.map(esc).join(',')]
+    for (const r of matrix.rows) {
+      lines.push([r.date, r.dayName, ...matrix.columns.map((c) => r.counts[c.key] || 0), r.description].map(esc).join(','))
+    }
+    lines.push(['Total', '', ...matrix.columns.map((c) => matrix.totals[c.key] || 0), ''].map(esc).join(','))
+    downloadText(`Monthly-${matrix.monthName}-${matrix.year}${matrix.branch ? `-${matrix.branch}` : ''}.csv`, lines.join('\n'))
+  }
 
   // Live search INSIDE saved report data: returns matching line items with
   // { date, branch, qty, item, reportId }.
@@ -733,6 +774,91 @@ function App() {
                   ))}
                 </ul>
               )}
+            </div>
+          )}
+        </section>
+
+        <section className="monthly">
+          <button
+            type="button"
+            className="manage-toggle"
+            onClick={() => setMonthlyOpen((o) => !o)}
+            aria-expanded={monthlyOpen}
+          >
+            <span>📅 Monthly report</span>
+            <span className="chev">{monthlyOpen ? '▲' : '▼'}</span>
+          </button>
+
+          {monthlyOpen && matrix && (
+            <div className="monthly-body">
+              <div className="monthly-controls">
+                <label>
+                  Month
+                  <input type="month" value={monthValue} onChange={(e) => setMonthValue(e.target.value)} />
+                </label>
+                <label>
+                  Branch
+                  <select value={monthBranch} onChange={(e) => setMonthBranch(e.target.value)}>
+                    <option value="">All branches</option>
+                    {BRANCHES.map((b) => (
+                      <option key={b}>{b}</option>
+                    ))}
+                  </select>
+                </label>
+                <button type="button" className="btn-txt" onClick={handleExportMonthlyCsv}>
+                  ⭳ CSV
+                </button>
+              </div>
+              <p className="saved-hint">
+                Activity counts per terminal, built from your saved <strong>reports</strong> for {matrix.monthName}{' '}
+                {matrix.year}. Repair/programming counts sit under each model; Install/Dismantle are per brand.
+              </p>
+              <div className="monthly-scroll">
+                <table className="monthly-table">
+                  <thead>
+                    <tr>
+                      <th rowSpan={2}>Date</th>
+                      <th rowSpan={2}>Day</th>
+                      {matrixGroups.map((g) => (
+                        <th key={g.group} colSpan={g.span} className="grp">
+                          {g.group}
+                        </th>
+                      ))}
+                      <th rowSpan={2}>Activity &amp; spare parts used</th>
+                    </tr>
+                    <tr>
+                      {matrix.columns.map((c) => (
+                        <th key={c.key} className="col-sub">
+                          {c.label}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {matrix.rows.map((r) => (
+                      <tr key={r.day} className={r.isWeekend ? 'weekend' : ''}>
+                        <td className="nowrap">{r.date}</td>
+                        <td className="nowrap">{r.dayName}</td>
+                        {matrix.columns.map((c) => (
+                          <td key={c.key} className="num">
+                            {r.counts[c.key] || ''}
+                          </td>
+                        ))}
+                        <td className="desc">{r.description}</td>
+                      </tr>
+                    ))}
+                    <tr className="totals">
+                      <td colSpan={2}>Total</td>
+                      {matrix.columns.map((c) => (
+                        <td key={c.key} className="num">
+                          {matrix.totals[c.key] || 0}
+                        </td>
+                      ))}
+                      <td />
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </section>
