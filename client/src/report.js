@@ -481,24 +481,62 @@ const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December']
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
-export function buildMonthlyMatrix(savedReports, opts = {}) {
-  const { year, month, branch = '', models = [], modelType = {} } = opts
-  const typeOf = (m) => up(modelType[up(m)] || '')
+// Fixed column layout that matches the MOTECO monthly activity sheet exactly.
+// Each model column lists the entry-model values that feed it; install/dismantle
+// columns list the entry types that feed them.
+const MONTHLY_GROUPS = [
+  {
+    group: 'Airbus Terminals (Repair & Programing)',
+    cols: [
+      { key: 'th1n', label: 'TH1n', kind: 'model', models: ['TH1N'] },
+      { key: 'thr880i', label: 'THR880i', kind: 'model', models: ['THR880I'] },
+      { key: 'thr9', label: 'THR9', kind: 'model', models: ['THR9'] },
+      { key: 'thr3i', label: 'THR3i', kind: 'model', models: ['THR3I'] },
+      { key: 'tmr880i', label: 'TMR880i', kind: 'model', models: ['TMR 880I', 'TMR880I'] },
+    ],
+  },
+  {
+    group: 'Airbus Car Kit (TH1n/TH9)',
+    cols: [
+      { key: 'ack_i', label: 'Installation', kind: 'install', types: ['AIRBUS'] },
+      { key: 'ack_d', label: 'Dismantling', kind: 'dismantle', types: ['AIRBUS'] },
+    ],
+  },
+  {
+    group: 'Sepura Terminals (Repair & Programing, Installation, Dismantling)',
+    cols: [
+      { key: 'stp9000', label: 'STP 9000', kind: 'model', models: ['STP9000'] },
+      { key: 'srg_carkit', label: 'SRG 3900 Car Kit', kind: 'model', models: ['SRG3900 CARKIT', 'SRG CARKIT'] },
+      { key: 'srg_moto', label: 'SRG 3900 Motorcycle', kind: 'model', models: ['SRG3900 BIKE', 'SRG3900 MOTORCYCLE', 'SRG BIKE'] },
+      { key: 'srg_desktop', label: 'SRG 3900 Desktop', kind: 'model', models: ['SRG3900 DESKTOP', 'SRG DESKTOP'] },
+      { key: 'sep_i', label: 'Installation', kind: 'install', types: ['SEPURA'] },
+      { key: 'sep_d', label: 'Dismantling', kind: 'dismantle', types: ['SEPURA'] },
+    ],
+  },
+  {
+    group: 'Hytera (Repair & Programing, Installation, Dismantling)',
+    cols: [
+      { key: 'pt580', label: 'PT580', kind: 'model', models: ['PT580H', 'PT580'] },
+      { key: 'pt590', label: 'PT590', kind: 'model', models: ['PT590'] },
+      { key: 'mt680', label: 'MT680', kind: 'model', models: ['MT680'] },
+      { key: 'hyt_i', label: 'Installation', kind: 'install', types: ['HYTERA'] },
+      { key: 'hyt_d', label: 'Dismantling', kind: 'dismantle', types: ['HYTERA'] },
+    ],
+  },
+]
 
-  // Columns: per type, each model (repair/programming count) + Install + Dismantle.
-  const byTypeModels = {}
-  for (const t of TYPE_ORDER) byTypeModels[t] = []
-  for (const m of models) {
-    const t = typeOf(m)
-    if (byTypeModels[t]) byTypeModels[t].push(m)
-  }
-  const columns = []
-  for (const t of TYPE_ORDER) {
-    for (const m of byTypeModels[t]) {
-      columns.push({ key: `m|${up(m)}`, label: modelShort(m) || modelDisplay(m), group: t, kind: 'model' })
-    }
-    columns.push({ key: `i|${t}`, label: 'Install', group: t, kind: 'install' })
-    columns.push({ key: `d|${t}`, label: 'Dismantle', group: t, kind: 'dismantle' })
+export function buildMonthlyMatrix(savedReports, opts = {}) {
+  const { year, month, branch = '' } = opts
+
+  const columns = MONTHLY_GROUPS.flatMap((g) => g.cols.map((c) => ({ ...c, group: g.group })))
+  const groups = MONTHLY_GROUPS.map((g) => ({ group: g.group, span: g.cols.length }))
+  const modelToKey = new Map() // MODELUPPER -> column key
+  const installByType = new Map() // TYPEUPPER -> column key
+  const dismantleByType = new Map()
+  for (const c of columns) {
+    if (c.kind === 'model') for (const m of c.models) modelToKey.set(up(m), c.key)
+    if (c.kind === 'install') for (const t of c.types) installByType.set(up(t), c.key)
+    if (c.kind === 'dismantle') for (const t of c.types) dismantleByType.set(up(t), c.key)
   }
 
   // Latest saved "report" per date within the month (+ branch filter).
@@ -546,10 +584,12 @@ export function buildMonthlyMatrix(savedReports, opts = {}) {
           else if (cat === 'install') install += q
           else if (cat === 'dismantle') dismantle += q
         }
-        const mKey = `m|${mk}`
-        if (counts[mKey] !== undefined) counts[mKey] += maxMaint + program
-        if (counts[`i|${t}`] !== undefined) counts[`i|${t}`] += install
-        if (counts[`d|${t}`] !== undefined) counts[`d|${t}`] += dismantle
+        const mKey = modelToKey.get(mk)
+        if (mKey) counts[mKey] += maxMaint + program
+        const iKey = installByType.get(t)
+        if (iKey) counts[iKey] += install
+        const dKey = dismantleByType.get(t)
+        if (dKey) counts[dKey] += dismantle
         const items = (e.faults ?? []).filter((f) => up(f.issue)).map((f) => `${up(f.issue)} (${f.quantity})`)
         if (items.length) {
           const tag = mk && mk !== '-' ? `${t}-${modelDisplay(e.model)}` : t
@@ -569,5 +609,5 @@ export function buildMonthlyMatrix(savedReports, opts = {}) {
     })
   }
 
-  return { year, month, monthName: MONTH_NAMES[month], branch, columns, rows, totals }
+  return { year, month, monthName: MONTH_NAMES[month], branch, columns, groups, rows, totals }
 }

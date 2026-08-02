@@ -363,26 +363,10 @@ function App() {
   const matrix = useMemo(() => {
     const [y, m] = monthValue.split('-').map(Number)
     if (!y || !m) return null
-    return buildMonthlyMatrix(saved, {
-      year: y,
-      month: m - 1,
-      branch: monthBranch,
-      models: options.models,
-      modelType: MODEL_TYPE,
-    })
-  }, [saved, monthValue, monthBranch, options.models])
+    return buildMonthlyMatrix(saved, { year: y, month: m - 1, branch: monthBranch })
+  }, [saved, monthValue, monthBranch])
 
-  // Grouped header spans for the matrix (AIRBUS / SEPURA / HYTERA).
-  const matrixGroups = useMemo(() => {
-    if (!matrix) return []
-    const groups = []
-    for (const c of matrix.columns) {
-      const last = groups[groups.length - 1]
-      if (last && last.group === c.group) last.span += 1
-      else groups.push({ group: c.group, span: 1 })
-    }
-    return groups
-  }, [matrix])
+  const matrixGroups = matrix?.groups ?? []
 
   function handleExportMonthlyCsv() {
     if (!matrix) return
