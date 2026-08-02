@@ -24,6 +24,18 @@ model SavedReport {
   @@map("saved_reports")
 }
 
+// Pasted/edited monthly activity matrix, per month + branch.
+model MonthlySheet {
+  id        Int      @id @default(autoincrement())
+  monthKey  String   @map("month_key") // YYYY-MM
+  branch    String   @default("")
+  data      Json // { [day]: { counts, description } }
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([monthKey, branch])
+  @@map("monthly_sheets")
+}
+
 // Single-row (id=1) store for the user-managed dropdown option lists.
 model AppOptions {
   id        Int      @id @default(1)

@@ -39,3 +39,14 @@ export const loadSavedReport = (id) =>
 
 export const deleteSavedReport = (id) =>
   request(`/api/saved-reports/${id}`, { method: 'DELETE' })
+
+const monthlyQs = (month, branch) =>
+  `?month=${encodeURIComponent(month)}&branch=${encodeURIComponent(branch)}`
+
+export const getMonthly = (month, branch) => request(`/api/monthly${monthlyQs(month, branch)}`)
+
+export const saveMonthly = (month, branch, data) =>
+  request('/api/monthly', { method: 'PUT', body: JSON.stringify({ month, branch, data }) })
+
+export const clearMonthly = (month, branch) =>
+  request(`/api/monthly${monthlyQs(month, branch)}`, { method: 'DELETE' })

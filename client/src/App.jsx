@@ -10,6 +10,9 @@ import {
   saveReport,
   loadSavedReport,
   deleteSavedReport,
+  getMonthly,
+  saveMonthly,
+  clearMonthly,
 } from './api'
 import { DEFAULT_OPTIONS, mergeOptions, MODEL_TYPE, BRANCHES } from './options'
 import ManageInputs from './ManageInputs'
@@ -24,6 +27,7 @@ import {
   transmittalRows,
   reportNotes,
   buildMonthlyMatrix,
+  parseMonthlyPaste,
   TYPE_ORDER,
 } from './report'
 import './App.css'
@@ -134,6 +138,9 @@ function App() {
   const [monthlyOpen, setMonthlyOpen] = useState(false)
   const [monthValue, setMonthValue] = useState(() => today().slice(0, 7)) // YYYY-MM
   const [monthBranch, setMonthBranch] = useState('')
+  const [manualSheet, setManualSheet] = useState(null) // pasted override for current month+branch
+  const [pasteOpen, setPasteOpen] = useState(false)
+  const [pasteText, setPasteText] = useState('')
   const [editSavedId, setEditSavedId] = useState(null) // which saved row shows Load/Delete
   const [nextReportId, setNextReportId] = useState('REP-0001')
   const [busy, setBusy] = useState(false)
@@ -363,10 +370,48 @@ function App() {
   const matrix = useMemo(() => {
     const [y, m] = monthValue.split('-').map(Number)
     if (!y || !m) return null
-    return buildMonthlyMatrix(saved, { year: y, month: m - 1, branch: monthBranch })
-  }, [saved, monthValue, monthBranch])
+    return buildMonthlyMatrix(saved, { year: y, month: m - 1, branch: monthBranch, manual: manualSheet })
+  }, [saved, monthValue, monthBranch, manualSheet])
 
   const matrixGroups = matrix?.groups ?? []
+
+  // Load any pasted sheet for the selected month + branch.
+  useEffect(() => {
+    let active = true
+    getMonthly(monthValue, monthBranch)
+      .then((r) => active && setManualSheet(r?.data ?? null))
+      .catch(() => active && setManualSheet(null))
+    return () => {
+      active = false
+    }
+  }, [monthValue, monthBranch])
+
+  async function handleLoadPaste() {
+    const data = parseMonthlyPaste(pasteText)
+    if (Object.keys(data).length === 0) {
+      setError('Nothing recognised — paste rows as Date, Day, the 18 columns, then Description (tab-separated).')
+      return
+    }
+    try {
+      await saveMonthly(monthValue, monthBranch, data)
+      setManualSheet(data)
+      setPasteText('')
+      setPasteOpen(false)
+      setError(null)
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  async function handleClearManual() {
+    if (!window.confirm('Remove the pasted data for this month/branch and revert to live report data?')) return
+    try {
+      await clearMonthly(monthValue, monthBranch)
+      setManualSheet(null)
+    } catch (err) {
+      setError(err.message)
+    }
+  }
 
   function handleExportMonthlyCsv() {
     if (!matrix) return
@@ -792,10 +837,53 @@ function App() {
                 <button type="button" className="btn-txt" onClick={handleExportMonthlyCsv}>
                   ⭳ CSV
                 </button>
+                <button type="button" className="add-fault" onClick={() => setPasteOpen((o) => !o)}>
+                  📋 Paste data
+                </button>
+                {manualSheet && (
+                  <button type="button" className="clear-all" onClick={handleClearManual}>
+                    Clear pasted data
+                  </button>
+                )}
               </div>
+
+              {pasteOpen && (
+                <div className="paste-box">
+                  <p className="saved-hint">
+                    Paste rows from your sheet (copy from Excel = tab-separated): <strong>Date, Day, the 18 columns
+                    in order, then Description</strong>. Empty cells stay blank. Saved for {matrix.monthName}{' '}
+                    {matrix.year}
+                    {monthBranch ? ` · ${monthBranch}` : ' · all branches'}.
+                  </p>
+                  <textarea
+                    value={pasteText}
+                    onChange={(e) => setPasteText(e.target.value)}
+                    rows={6}
+                    placeholder={'04/01/2026\tSunday\t12\t\t\t\t\t\t\t5\t4\t\t\t\t\t\t\t\t\t(Sepura-Carkit) …'}
+                  />
+                  <div className="paste-actions">
+                    <button type="button" className="submit" onClick={handleLoadPaste} disabled={!pasteText.trim()}>
+                      Load into {matrix.monthName} {matrix.year}
+                    </button>
+                    <button type="button" className="add-fault" onClick={() => setPasteOpen(false)}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <p className="saved-hint">
-                Activity counts per terminal, built from your saved <strong>reports</strong> for {matrix.monthName}{' '}
-                {matrix.year}. Repair/programming counts sit under each model; Install/Dismantle are per brand.
+                {manualSheet ? (
+                  <>
+                    📌 Showing <strong>pasted data</strong> for {matrix.monthName} {matrix.year}
+                    {monthBranch ? ` · ${monthBranch}` : ''}. Paste again to replace, or Clear to revert to live.
+                  </>
+                ) : (
+                  <>
+                    Activity counts per terminal, built from your saved <strong>reports</strong> for {matrix.monthName}{' '}
+                    {matrix.year}. Model cells = total part quantity; Install/Dismantle are per brand.
+                  </>
+                )}
               </p>
               <div className="monthly-scroll">
                 <table className="monthly-table">

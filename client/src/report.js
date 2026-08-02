@@ -526,7 +526,8 @@ const MONTHLY_GROUPS = [
 ]
 
 export function buildMonthlyMatrix(savedReports, opts = {}) {
-  const { year, month, branch = '' } = opts
+  // manual: optional pasted override -> { [day]: { counts:{colKey:number}, description:string } }
+  const { year, month, branch = '', manual = null } = opts
 
   const columns = MONTHLY_GROUPS.flatMap((g) => g.cols.map((c) => ({ ...c, group: g.group })))
   const groups = MONTHLY_GROUPS.map((g) => ({ group: g.group, span: g.cols.length }))
@@ -568,24 +569,28 @@ export function buildMonthlyMatrix(savedReports, opts = {}) {
     const counts = {}
     for (const c of columns) counts[c.key] = 0
     const parts = []
-    if (rec) {
+    const man = manual && manual[day]
+    if (man) {
+      // Pasted data wins for this day.
+      for (const c of columns) counts[c.key] = Math.max(0, Number(man.counts?.[c.key]) || 0)
+    } else if (rec) {
       for (const e of rec.entries) {
         const mk = up(e.model)
         const t = up(e.type)
-        let maxMaint = 0
+        let maintSum = 0
         let program = 0
         let install = 0
         let dismantle = 0
         for (const f of e.faults ?? []) {
           const cat = classify(f.action)
           const q = Math.max(0, Number(f.quantity) || 0)
-          if (cat === 'maintenance') maxMaint = Math.max(maxMaint, q)
+          if (cat === 'maintenance') maintSum += q
           else if (cat === 'programming') program += q
           else if (cat === 'install') install += q
           else if (cat === 'dismantle') dismantle += q
         }
         const mKey = modelToKey.get(mk)
-        if (mKey) counts[mKey] += maxMaint + program
+        if (mKey) counts[mKey] += maintSum + program
         const iKey = installByType.get(t)
         if (iKey) counts[iKey] += install
         const dKey = dismantleByType.get(t)
@@ -596,18 +601,49 @@ export function buildMonthlyMatrix(savedReports, opts = {}) {
           parts.push(`(${tag}) ${items.join(' ')}`)
         }
       }
-      for (const c of columns) totals[c.key] += counts[c.key]
     }
+    const description = man ? String(man.description ?? '') : parts.join('   ')
+    for (const c of columns) totals[c.key] += counts[c.key]
     rows.push({
       day,
       date: `${String(day).padStart(2, '0')}/${String(month + 1).padStart(2, '0')}/${year}`,
       dayName: DAY_NAMES[dow],
       isWeekend,
       counts,
-      description: parts.join('   '),
-      hasData: !!rec,
+      description,
+      hasData: !!(man || rec),
     })
   }
 
   return { year, month, monthName: MONTH_NAMES[month], branch, columns, groups, rows, totals }
+}
+
+// Column keys in matrix order (18), for parsing pasted rows.
+export function monthlyColumnKeys() {
+  return MONTHLY_GROUPS.flatMap((g) => g.cols.map((c) => c.key))
+}
+
+// Parse a pasted sheet (Excel TSV or CSV). Expected columns per row:
+//   Date, Day, <18 count columns in matrix order>, Description
+// Returns { [day]: { counts:{colKey:number}, description } }. Header/blank rows are skipped.
+export function parseMonthlyPaste(text) {
+  const keys = monthlyColumnKeys()
+  const manual = {}
+  for (const line of String(text || '').split(/\r?\n/)) {
+    if (!line.trim()) continue
+    const fields = line.includes('\t') ? line.split('\t') : line.split(',')
+    const dateCell = (fields[0] || '').trim()
+    const dm = dateCell.match(/^(\d{1,2})[/-]\d{1,2}[/-]\d{2,4}$/)
+    let day = null
+    if (dm) day = +dm[1]
+    else if (/^\d{1,2}$/.test(dateCell)) day = +dateCell
+    if (!day || day < 1 || day > 31) continue // skip headers / non-data rows
+    const counts = {}
+    for (let i = 0; i < keys.length; i++) {
+      const v = (fields[2 + i] || '').trim()
+      counts[keys[i]] = v !== '' && !Number.isNaN(Number(v)) ? Number(v) : 0
+    }
+    manual[day] = { counts, description: (fields[2 + keys.length] || '').trim() }
+  }
+  return manual
 }

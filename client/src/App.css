@@ -458,6 +458,22 @@ h2 {
   font-weight: 700;
   color: var(--muted);
 }
+.paste-box {
+  margin: 0 0 0.75rem;
+}
+.paste-box textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.82rem;
+  background: var(--surface-3);
+  resize: vertical;
+}
+.paste-actions {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+}
 .monthly-scroll {
   overflow-x: auto;
   border: 1px solid var(--border);
