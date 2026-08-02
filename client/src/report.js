@@ -234,6 +234,37 @@ function transmittalMaterials(entries) {
   return { deviceSections, otherLines }
 }
 
+// Flat per-line rows for the transmittal PDF manifest.
+// [{ type, model, material, qty, company, status }]
+export function transmittalRows(entries) {
+  const rows = []
+  for (const e of entries) {
+    for (const f of e.faults ?? []) {
+      const material = up(f.issue)
+      if (!material) continue
+      rows.push({
+        type: up(e.type),
+        model: modelDisplay(e.model),
+        material,
+        qty: Math.max(0, Number(f.quantity) || 0),
+        company: companyDisplay(f.company),
+        status: String(f.status ?? '').trim(),
+      })
+    }
+  }
+  return rows
+}
+
+// Per-entry notes for the print view: [{ label, comment }].
+export function reportNotes(entries) {
+  return (entries ?? [])
+    .filter((e) => String(e.comment ?? '').trim())
+    .map((e) => ({
+      label: modelDisplay(e.model) && modelDisplay(e.model) !== '-' ? modelDisplay(e.model) : (up(e.type) || 'Entry'),
+      comment: String(e.comment).trim(),
+    }))
+}
+
 // ---- Device Summary (by TYPE then device-short model) ----
 // { AIRBUS: [{header, lines:[...]}], ... } for the split PDF layout.
 export function deviceBlocksByType(entries) {

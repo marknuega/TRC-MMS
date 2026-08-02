@@ -21,6 +21,8 @@ import {
   entryQty,
   materialBlocksByType,
   deviceBlocksByType,
+  transmittalRows,
+  reportNotes,
   TYPE_ORDER,
 } from './report'
 import './App.css'
@@ -802,8 +804,83 @@ function App() {
   )
 }
 
-// One printed page per report date, laid out like the MOTECO REP-0004 sheet.
+// Route each printed page to the right layout for its mode.
 function PrintDate({ report }) {
+  return report.mode === 'transmittal' ? <TransmittalPrint report={report} /> : <ReportPrint report={report} />
+}
+
+// Transmittal manifest: material lines + handover signatures.
+function TransmittalPrint({ report }) {
+  const rows = transmittalRows(report.entries)
+  const notes = reportNotes(report.entries)
+  const totalQty = rows.reduce((s, r) => s + r.qty, 0)
+
+  return (
+    <section className="print-day">
+      <h3 className="print-title">MATERIAL TRANSMITTAL</h3>
+      <div className="print-meta">
+        <div><span>DATE</span><b>{report.dateLabel}</b></div>
+        <div><span>TRANSMITTAL ID</span><b>{report.reportId ?? '-'}</b></div>
+        <div><span>BRANCH</span><b>{report.branch || '-'}</b></div>
+        <div><span>TRANSMITTED BY</span><b>{report.transmittedBy || '-'}</b></div>
+        <div><span>RECEIVED BY</span><b>{report.receivedBy || '-'}</b></div>
+        <div><span>TOTAL QTY</span><b>{totalQty}</b></div>
+      </div>
+
+      <table className="print-main">
+        <thead>
+          <tr>
+            <th>#</th><th>TYPE</th><th>MODEL</th><th>MATERIAL</th><th>QTY</th><th>COMPANY</th><th>STATUS</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={i}>
+              <td>{i + 1}</td>
+              <td>{r.type}</td>
+              <td>{r.model}</td>
+              <td className="ia">{r.material}</td>
+              <td>{r.qty}</td>
+              <td>{r.company}</td>
+              <td>{r.status}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {notes.length > 0 && (
+        <>
+          <h4 className="print-split-title">Notes</h4>
+          <ul className="print-notes">
+            {notes.map((n, i) => (
+              <li key={i}>
+                <b>{n.label}</b> — {n.comment}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      <div className="print-sign">
+        <div>
+          <span className="print-sign-line" />
+          Transmitted by{report.transmittedBy ? `: ${report.transmittedBy}` : ''}
+        </div>
+        <div>
+          <span className="print-sign-line" />
+          Received by{report.receivedBy ? `: ${report.receivedBy}` : ''}
+        </div>
+      </div>
+
+      <p className="print-footer">
+        Software Developed by Muhammad Amir MT# MT1063 © 2026 Muhammad Amir. All rights reserved.
+      </p>
+    </section>
+  )
+}
+
+// Daily activity report sheet (MOTECO REP-0004 style).
+function ReportPrint({ report }) {
   const t = report.totals
   const materials = materialBlocksByType(report.entries)
   const devices = deviceBlocksByType(report.entries)

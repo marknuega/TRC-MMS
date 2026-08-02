@@ -876,4 +876,33 @@ h2 {
     text-align: center;
     font-size: 8.5px;
   }
+
+  /* Transmittal-specific */
+  .print-title {
+    font-size: 15px;
+    text-align: center;
+    letter-spacing: 0.06em;
+    margin: 0 0 8px;
+  }
+  .print-notes {
+    margin: 4px 0 0;
+    padding-left: 16px;
+    font-size: 10px;
+  }
+  .print-notes li {
+    margin-bottom: 2px;
+  }
+  .print-sign {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 40px;
+    margin-top: 34px;
+    page-break-inside: avoid;
+    font-size: 10px;
+  }
+  .print-sign-line {
+    display: block;
+    border-top: 1px solid #000;
+    margin-bottom: 4px;
+  }
 }
