@@ -44,6 +44,8 @@ import './App.css'
 const DEVICE_LEVEL = new Set(['PROGRAM', 'RE-PROGRAM', 'INSTALL', 'RE-INSTALL', 'DISMANTLE'])
 const faultIsMeaningful = (f) => f.issue.trim() !== '' || DEVICE_LEVEL.has(String(f.action).toUpperCase())
 const today = () => new Date().toISOString().slice(0, 10)
+const ALL_BRANCHES = 'All Branches'
+const dmyOf = (isoDate) => new Date(isoDate).toLocaleDateString('en-GB') // YYYY-MM-DD -> dd/mm/yyyy
 
 // Render a matrix description: device tags like "(AIRBUS-TH1N)" in red, the
 // issue/fault text (and quantities like "(6)") in normal colour.
@@ -170,6 +172,9 @@ function App() {
   const [nextReportId, setNextReportId] = useState('REP-0001')
   const [busy, setBusy] = useState(false)
   const [branch, setBranch] = useState(loadBranch)
+  const [deviceOpen, setDeviceOpen] = useState(true)
+  const [faultsOpen, setFaultsOpen] = useState(true)
+  const isAllBranches = branch === ALL_BRANCHES
   const [theme, setTheme] = useState(loadTheme)
   const [mode, setMode] = useState(loadMode)
   const [transmittedBy, setTransmittedBy] = useState(() => lsGet('trc_tx'))
@@ -377,20 +382,37 @@ function App() {
 
   // One report per date, newest first. The live view uses the draft (next) id
   // until you Save, which mints the real REP-#### number.
-  const reports = useMemo(
-    () =>
-      groupReports(entries).map((g) =>
-        buildDateReport(g.dateLabel, repLabel(nextReportId, branch, mode), g.entries, {
-          branch,
-          mode,
-          transmittedBy,
-          receivedBy,
-        }),
-      ),
-    [entries, nextReportId, branch, mode, transmittedBy, receivedBy],
-  )
+  const reports = useMemo(() => {
+    // All Branches: merge every branch's saved report for the selected date into one.
+    if (isAllBranches) {
+      const dl = dmyOf(form.reportDate)
+      const byBranch = new Map()
+      for (const r of saved ?? []) {
+        if (String(r.mode).toUpperCase() === 'TRANSMITTAL' || r.dateLabel !== dl) continue
+        const prev = byBranch.get(r.branch || '')
+        if (!prev || (r.seq ?? 0) > (prev.seq ?? 0)) byBranch.set(r.branch || '', r)
+      }
+      const merged = [...byBranch.values()].flatMap((r) => (Array.isArray(r.entries) ? r.entries : []))
+      if (!merged.length) return []
+      return [buildDateReport(dl, 'ALL-BRANCHES', merged, { branch: ALL_BRANCHES, mode: 'report' })]
+    }
+    return groupReports(entries).map((g) =>
+      buildDateReport(g.dateLabel, repLabel(nextReportId, branch, mode), g.entries, {
+        branch,
+        mode,
+        transmittedBy,
+        receivedBy,
+      }),
+    )
+  }, [isAllBranches, form.reportDate, saved, entries, nextReportId, branch, mode, transmittedBy, receivedBy])
   const combinedTxt = useMemo(() => reports.map(buildTxt).join('\n\n\n'), [reports])
-  const agencyCmt = useMemo(() => agencyComment(entries), [entries])
+  const agencyCmt = useMemo(() => agencyComment(reports.flatMap((r) => r.entries)), [reports])
+
+  // Collapse the Device/Faults cards in All-Branches (read-only merged) mode.
+  useEffect(() => {
+    setDeviceOpen(!isAllBranches)
+    setFaultsOpen(!isAllBranches)
+  }, [isAllBranches])
 
   // Monthly activity matrix (dates × terminal columns) from saved reports.
   const matrix = useMemo(() => {
@@ -506,6 +528,7 @@ function App() {
                 {BRANCHES.map((b) => (
                   <option key={b}>{b}</option>
                 ))}
+                <option value={ALL_BRANCHES}>{ALL_BRANCHES}</option>
               </select>
             </label>
             <label className="date-field">
@@ -556,8 +579,17 @@ function App() {
 
         <form onSubmit={handleSubmit} className="entry-form">
           {!isTransmittal && (
-          <fieldset>
-            <legend>Device</legend>
+          <div className="form-card">
+            <button
+              type="button"
+              className="manage-toggle"
+              onClick={() => setDeviceOpen((o) => !o)}
+              aria-expanded={deviceOpen}
+            >
+              <span>Device</span>
+              <span className="chev">{deviceOpen ? '▲' : '▼'}</span>
+            </button>
+            {deviceOpen && (
             <div className="grid">
               <label>
                 Model {form.type === 'OTHER' && <span className="opt">(optional)</span>}
@@ -608,11 +640,22 @@ function App() {
                 </select>
               </label>
             </div>
-          </fieldset>
+            )}
+          </div>
           )}
 
-          <fieldset>
-            <legend>{isTransmittal ? 'Transmittal' : 'Faults'}</legend>
+          <div className="form-card">
+            <button
+              type="button"
+              className="manage-toggle"
+              onClick={() => setFaultsOpen((o) => !o)}
+              aria-expanded={faultsOpen}
+            >
+              <span>{isTransmittal ? 'Transmittal' : 'Faults'}</span>
+              <span className="chev">{faultsOpen ? '▲' : '▼'}</span>
+            </button>
+            {faultsOpen && (
+            <>
             <div className="faults">
               <div className={`fault-row fault-head${isTransmittal ? ' fault-row--tx' : ''}`}>
                 <span>{isTransmittal ? 'Material' : 'Issue'}</span>
@@ -706,7 +749,9 @@ function App() {
                 Add entry
               </button>
             </div>
-          </fieldset>
+            </>
+            )}
+          </div>
         </form>
 
         <section className="breakdown">
@@ -716,7 +761,13 @@ function App() {
               {reports.length > 0 && <span className="hint">(next: {nextReportId} · unsaved)</span>}
             </h2>
             <div className="breakdown-actions">
-              <button type="button" className="save-report" onClick={handleSaveReport} disabled={!reports.length || busy}>
+              <button
+                type="button"
+                className="save-report"
+                onClick={handleSaveReport}
+                disabled={!reports.length || busy || isAllBranches}
+                title={isAllBranches ? 'All-Branches is a merged read-only view' : undefined}
+              >
                 💾 Save report
               </button>
               <button type="button" className="btn-txt" onClick={handleDownloadTxt} disabled={!reports.length}>

@@ -179,7 +179,7 @@
 }
 
 /* ---- Card sections ---- */
-.entry-form fieldset,
+.form-card,
 .breakdown,
 .entries,
 .saved,
@@ -240,6 +240,11 @@ h2 {
   padding: 0 0.5rem;
   margin-left: -0.5rem;
   letter-spacing: 0.01em;
+}
+/* Collapsible Device/Faults cards: spacing under the toggle header. */
+.form-card > .grid,
+.form-card > .faults {
+  margin-top: 1rem;
 }
 .entry-form .grid {
   display: grid;
