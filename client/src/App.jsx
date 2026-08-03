@@ -597,6 +597,15 @@ function App() {
           <div className="brand">
             <span className="brand-ico">🛠️</span>
             <span>TRC Daily</span>
+            <button
+              type="button"
+              className="theme-toggle brand-theme"
+              onClick={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
+              aria-label={theme === 'dark' ? 'Switch to day theme' : 'Switch to night theme'}
+              title={theme === 'dark' ? 'Day mode' : 'Night mode'}
+            >
+              {theme === 'dark' ? '☀️' : '🌙'}
+            </button>
           </div>
           <nav className="side-nav">
             {NAV.map((n) => (
@@ -611,17 +620,6 @@ function App() {
               </button>
             ))}
           </nav>
-          <div className="side-foot">
-            <button
-              type="button"
-              className="theme-toggle"
-              onClick={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
-              aria-label={theme === 'dark' ? 'Switch to day theme' : 'Switch to night theme'}
-              title={theme === 'dark' ? 'Day mode' : 'Night mode'}
-            >
-              {theme === 'dark' ? '☀️' : '🌙'}
-            </button>
-          </div>
         </aside>
 
         <main className="page-main app">

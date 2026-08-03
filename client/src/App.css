@@ -44,6 +44,12 @@
 .brand-ico {
   font-size: 1.35rem;
 }
+.brand .brand-theme {
+  margin-left: auto;
+  height: 2rem;
+  width: 2rem;
+  font-size: 1rem;
+}
 .side-nav {
   display: flex;
   flex-direction: column;
@@ -82,6 +88,9 @@
 .page-main {
   flex: 1 1 auto;
   min-width: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 .page-title {
   font-size: 1.4rem;
@@ -1198,13 +1207,25 @@ h2 {
 }
 
 /* ---- Footer ---- */
+/* Copyright footer — AMIR DEV STANDARD: bottom of page, theme-aware colours. */
 .app-footer {
-  margin-top: 2.5rem;
-  padding-top: 1.25rem;
+  margin-top: auto; /* push to the bottom of the page */
+  padding: 1rem;
   border-top: 1px solid var(--border);
   text-align: center;
-  font-size: 0.82rem;
-  color: var(--muted);
+  font-size: 0.75rem;
+  color: rgba(0, 0, 0, 0.4); /* light theme */
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .app-footer {
+    color: rgba(255, 255, 255, 0.5);
+  }
+}
+:root[data-theme='dark'] .app-footer {
+  color: rgba(255, 255, 255, 0.5);
+}
+:root[data-theme='light'] .app-footer {
+  color: rgba(0, 0, 0, 0.4);
 }
 
 /* ---- Responsive ---- */
