@@ -4,6 +4,9 @@ const BASE = import.meta.env.VITE_API_URL ?? ''
 
 async function request(path, options) {
   const res = await fetch(`${BASE}${path}`, {
+    // Never serve API responses from the browser cache — the app must always
+    // read the current data (otherwise a saved change looks stale until reload).
+    cache: 'no-store',
     headers: { 'Content-Type': 'application/json' },
     ...options,
   })

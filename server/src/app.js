@@ -85,10 +85,24 @@ app.use('/api/inventory', inventoryRouter)
 // In production the same service also serves the built React app, so the
 // browser sees one origin (no CORS). In dev, Vite serves the client instead.
 if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(clientDist))
-  // SPA fallback: any non-API GET returns index.html.
+  app.use(
+    express.static(clientDist, {
+      // index.html is the pointer to the current build — it must always be
+      // revalidated so a new deploy is picked up on the next load. The Vite
+      // assets are content-hashed, so they can be cached forever.
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith('index.html')) {
+          res.setHeader('Cache-Control', 'no-cache')
+        } else if (/[.-][A-Za-z0-9_-]{8,}\.(?:js|css|woff2?|png|jpe?g|svg|ico)$/.test(filePath)) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')
+        }
+      },
+    }),
+  )
+  // SPA fallback: any non-API GET returns index.html (never cached).
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api') || req.path.startsWith('/health')) return next()
+    res.setHeader('Cache-Control', 'no-cache')
     res.sendFile(path.join(clientDist, 'index.html'))
   })
 }

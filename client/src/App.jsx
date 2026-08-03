@@ -237,6 +237,31 @@ function App() {
     return () => window.removeEventListener('resize', onResize)
   }, [])
 
+  // When the tab regains focus: if a newer build has shipped, reload to run it;
+  // otherwise just refetch so calculations reflect the latest saved data —
+  // without the user having to refresh the page manually.
+  useEffect(() => {
+    const currentBundle = document
+      .querySelector('script[type="module"][src*="/assets/index-"]')
+      ?.getAttribute('src')
+    const onFocus = async () => {
+      try {
+        const html = await fetch('/', { cache: 'no-store' }).then((r) => r.text())
+        const m = html.match(/\/assets\/index-[A-Za-z0-9_-]+\.js/)
+        if (currentBundle && m && !currentBundle.endsWith(m[0])) {
+          window.location.reload()
+          return
+        }
+      } catch {
+        /* offline — fall through and just refetch what we can */
+      }
+      refreshSaved()
+      refresh()
+    }
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [])
+
   const toggleSidebar = () =>
     setSidebarCollapsed((c) => {
       const next = !c
