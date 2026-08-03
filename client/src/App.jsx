@@ -163,6 +163,7 @@ function App() {
   const [savedOpen, setSavedOpen] = useState(false)
   const [savedSearch, setSavedSearch] = useState('')
   const [monthlyOpen, setMonthlyOpen] = useState(false)
+  const [monthExpanded, setMonthExpanded] = useState(false) // false = show 7 days only
   const [monthValue, setMonthValue] = useState(() => today().slice(0, 7)) // YYYY-MM
   const [monthBranch, setMonthBranch] = useState('')
   const [manualSheet, setManualSheet] = useState(null) // pasted override for current month+branch
@@ -422,6 +423,21 @@ function App() {
   }, [saved, monthValue, monthBranch, manualSheet])
 
   const matrixGroups = matrix?.groups ?? []
+
+  // Collapsed matrix shows a 7-day window (the week of today when viewing the
+  // current month, otherwise the first 7 days); expanded shows the whole month.
+  const visibleRows = useMemo(() => {
+    if (!matrix) return []
+    if (monthExpanded) return matrix.rows
+    const daysInMonth = matrix.rows.length
+    let start = 1
+    const t = new Date()
+    if (t.getFullYear() === matrix.year && t.getMonth() === matrix.month) {
+      const sunday = t.getDate() - t.getDay() // day-of-month of this week's Sunday
+      start = Math.min(Math.max(sunday, 1), Math.max(1, daysInMonth - 6))
+    }
+    return matrix.rows.slice(start - 1, start - 1 + 7)
+  }, [matrix, monthExpanded])
 
   // Load any pasted sheet for the selected month + branch.
   useEffect(() => {
@@ -1096,7 +1112,7 @@ function App() {
                     </tr>
                   </thead>
                   <tbody>
-                    {matrix.rows.map((r) => (
+                    {visibleRows.map((r) => (
                       <tr key={r.day} className={r.isWeekend ? 'weekend' : ''}>
                         <td className="nowrap col-date">{r.date}</td>
                         <td className="nowrap col-day">{r.dayName}</td>
@@ -1120,6 +1136,11 @@ function App() {
                   </tbody>
                 </table>
               </div>
+              {matrix.rows.length > 7 && (
+                <button type="button" className="month-expand" onClick={() => setMonthExpanded((o) => !o)}>
+                  {monthExpanded ? '▲ Show 7 days only' : `▼ View whole month (${matrix.rows.length} days)`}
+                </button>
+              )}
             </div>
           )}
         </section>
