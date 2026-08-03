@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "node --watch-path=./src --env-file=.env src/index.js",
     "start": "node src/index.js",
-    "test": "node --test --env-file=.env test/",
+    "test": "node --test --env-file=.env \"test/**/*.test.js\"",
     "migrate:dev": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
     "studio": "prisma studio"

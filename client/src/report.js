@@ -67,63 +67,10 @@ const modelShort = (m) => lastWord(modelDisplay(m)) // "SRG CARKIT" -> "CARKIT",
 const modelRank = (raw) => MODEL_RANK.get(up(raw)) ?? Number.MAX_SAFE_INTEGER // unknown models sort last
 const companyDisplay = (c) => COMPANY_DISPLAY[up(c)] ?? String(c ?? '').trim()
 
-// " (MOT) P2" style used in the Entry Summary.
-function entryCompanyText(company) {
-  const label = companyDisplay(company)
-  if (!label) return ''
-  const m = label.match(/^(.*?)\s*\((P\d+)\)$/i)
-  if (m) return ` (${m[1].trim()}) ${m[2].toUpperCase()}`
-  return ` (${label})`
-}
-
 // " (MOT (P2))" style used in the Materials Summary.
 function summaryCompanyText(company) {
   const label = companyDisplay(company)
   return label ? ` (${label})` : ''
-}
-
-// ---- Entry Summary line (one per fault) ----
-function entryFaultLine(fault, model, { includeAgency, agency }) {
-  const action = up(fault.action)
-  const issue = up(fault.issue)
-  const qty = Math.max(0, Number(fault.quantity) || 0)
-  const cat = classify(action)
-
-  // INSTALL / RE-INSTALL / DISMANTLE are device-level: no "-MODEL" suffix, and the
-  // component issue is optional (the action stands alone).
-  let label
-  if (cat === 'programming') label = action === 'RE-PROGRAM' ? 'RE-PROGRAMMING' : 'PROGRAMMING'
-  else if (action === 'INSTALL') label = !issue || /^INSTALL\b/.test(issue) ? 'INSTALL' : `INSTALL ${issue}`
-  else if (action === 'RE-INSTALL') label = !issue || /^RE-?INSTALL\b/.test(issue) ? 'RE-INSTALL' : `RE-INSTALL ${issue}`
-  else if (action === 'DISMANTLE') label = !issue || /^DISMANTLE\b/.test(issue) ? 'DISMANTLE' : `DISMANTLE ${issue}`
-  else if (action === 'NEW') label = `NEW ${issue}`
-  else if (action === 'PCB') label = `PCB ${issue}`
-  else label = `${issue} (${ACTION_CODE[action] || action})` // CHANGE / REPAIR
-
-  const tag = cat === 'install' ? ' (I)' : cat === 'programming' ? ' (P)' : cat === 'dismantle' ? ' (D)' : ''
-  const companyText = tag || entryCompanyText(fault.company) // program/install/dismantle hide company
-  const agencyText = includeAgency && agency && up(agency) !== '-' ? ` ${up(agency)}` : ''
-  return `${label}${companyText}${qty > 0 ? ` (${qty})` : ''}${agencyText}`.trim()
-}
-
-// ---- Entry Summary block (grouped by model, numbered per entry) ----
-function buildEntrySummary(entries) {
-  const lines = []
-  let prevModelKey = ''
-  let n = 0
-  for (const e of entries) {
-    const modelKey = up(e.model)
-    if (lines.length && modelKey !== prevModelKey) lines.push(DIVIDER)
-    if (modelKey !== prevModelKey) lines.push(modelDisplay(e.model))
-    prevModelKey = modelKey
-    n += 1
-    e.faults.forEach((f, i) => {
-      const prefix = i === 0 ? `${n}. ` : INDENT
-      const includeAgency = i === e.faults.length - 1 // agency on the last fault line only
-      lines.push(`${prefix}${entryFaultLine(f, e.model, { includeAgency, agency: e.agency })}`)
-    })
-  }
-  return lines.join('\n')
 }
 
 // ---- Materials Summary (by TYPE then model, qty aggregated) ----
