@@ -754,6 +754,56 @@ function App() {
           </div>
         </form>
 
+        <section className="entries">
+          <div className="entries-head">
+            <h2>Entries {entries.length > 0 && <span className="hint">({entries.length})</span>}</h2>
+            {entries.length > 0 && (
+              <button type="button" className="clear-all" onClick={handleClearAll}>
+                Clear all
+              </button>
+            )}
+          </div>
+          {loading ? (
+            <p>Loading…</p>
+          ) : entries.length === 0 ? (
+            <p className="empty">No entries yet.</p>
+          ) : (
+            <ul className="entry-list">
+              {entries.map((e, i) => (
+                <li key={e.id}>
+                  <span className="entry-num">{i + 1}</span>
+                  <div>
+                    {isTransmittal ? (
+                      <p>
+                        <strong>
+                          {e.faults
+                            .map((f) => `${f.issue} (${f.quantity})${f.status ? ` · ${f.status}` : ''}`)
+                            .join(', ')}
+                        </strong>
+                      </p>
+                    ) : (
+                      <>
+                        <strong>
+                          {e.type} {e.model}
+                        </strong>{' '}
+                        <span className="muted small">
+                          · {e.agency}
+                          {e.technician ? ` · ${e.technician}` : ''} · TEL {e.telNumber} · ISSI {e.issiNumber}
+                        </span>
+                        <p>{issueActionCell(e)}</p>
+                      </>
+                    )}
+                    {e.comment && <p className="entry-comment muted small">💬 {e.comment}</p>}
+                  </div>
+                  <button onClick={() => handleDelete(e.id)} aria-label="Delete entry">
+                    ✕
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
         <section className="breakdown">
           <div className="breakdown-head">
             <h2>
@@ -1023,56 +1073,6 @@ function App() {
                 </table>
               </div>
             </div>
-          )}
-        </section>
-
-        <section className="entries">
-          <div className="entries-head">
-            <h2>Entries {entries.length > 0 && <span className="hint">({entries.length})</span>}</h2>
-            {entries.length > 0 && (
-              <button type="button" className="clear-all" onClick={handleClearAll}>
-                Clear all
-              </button>
-            )}
-          </div>
-          {loading ? (
-            <p>Loading…</p>
-          ) : entries.length === 0 ? (
-            <p className="empty">No entries yet.</p>
-          ) : (
-            <ul className="entry-list">
-              {entries.map((e, i) => (
-                <li key={e.id}>
-                  <span className="entry-num">{i + 1}</span>
-                  <div>
-                    {isTransmittal ? (
-                      <p>
-                        <strong>
-                          {e.faults
-                            .map((f) => `${f.issue} (${f.quantity})${f.status ? ` · ${f.status}` : ''}`)
-                            .join(', ')}
-                        </strong>
-                      </p>
-                    ) : (
-                      <>
-                        <strong>
-                          {e.type} {e.model}
-                        </strong>{' '}
-                        <span className="muted small">
-                          · {e.agency}
-                          {e.technician ? ` · ${e.technician}` : ''} · TEL {e.telNumber} · ISSI {e.issiNumber}
-                        </span>
-                        <p>{issueActionCell(e)}</p>
-                      </>
-                    )}
-                    {e.comment && <p className="entry-comment muted small">💬 {e.comment}</p>}
-                  </div>
-                  <button onClick={() => handleDelete(e.id)} aria-label="Delete entry">
-                    ✕
-                  </button>
-                </li>
-              ))}
-            </ul>
           )}
         </section>
 
