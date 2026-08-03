@@ -473,6 +473,51 @@ function App() {
     downloadText(`Monthly-${matrix.monthName}-${matrix.year}${matrix.branch ? `-${matrix.branch}` : ''}.csv`, lines.join('\n'))
   }
 
+  // Excel export that mirrors the on-screen table (grouped headers, green
+  // weekends, red device tags) via an HTML table Excel can open.
+  function handleExportMonthlyExcel() {
+    if (!matrix) return
+    const esc = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    const descHtml = (text) =>
+      String(text ?? '')
+        .split(/(\([^)]*\))/g)
+        .map((p) => (/^\([^)]*[A-Za-z][^)]*\)$/.test(p) ? `<span style="color:#c81e1e">${esc(p)}</span>` : esc(p)))
+        .join('')
+    const b = 'border:1px solid #999;'
+    const hb = `${b}background:#dfe3ee;font-weight:bold;text-align:center;padding:4px;`
+    let h = `<table style="border-collapse:collapse;font-family:Arial;font-size:11px;">`
+    h += '<thead>'
+    h += `<tr><th rowspan="2" colspan="2" style="${b}"></th>`
+    for (const g of matrix.groups) h += `<th colspan="${g.span}" style="${hb}">${esc(g.group)}</th>`
+    h += `<th rowspan="3" style="${hb}">Activity description and spare parts was used</th></tr>`
+    h += '<tr>'
+    for (const c of matrix.columns) h += `<th style="${hb}">${esc(c.label)}</th>`
+    h += '</tr><tr>'
+    h += `<th style="${hb}">Date</th><th style="${hb}">Day</th>`
+    for (const c of matrix.columns) h += `<th style="${b}background:#dfe3ee;"></th>`
+    h += '</tr></thead><tbody>'
+    for (const r of matrix.rows) {
+      const bg = r.isWeekend ? 'background:#22c55e;' : ''
+      h += '<tr>'
+      h += `<td style="${b}${bg}padding:4px;mso-number-format:'\\@';">${esc(r.date)}</td>`
+      h += `<td style="${b}${bg}padding:4px;">${esc(r.dayName)}</td>`
+      for (const c of matrix.columns) h += `<td style="${b}${bg}text-align:center;padding:4px;">${r.counts[c.key] || ''}</td>`
+      h += `<td style="${b}${bg}padding:4px;">${descHtml(r.description)}</td>`
+      h += '</tr>'
+    }
+    h += `<tr><td colspan="2" style="${b}background:#eee;font-weight:bold;padding:4px;">Total</td>`
+    for (const c of matrix.columns) h += `<td style="${b}background:#eee;font-weight:bold;text-align:center;padding:4px;">${matrix.totals[c.key] || 0}</td>`
+    h += `<td style="${b}background:#eee;"></td></tr></tbody></table>`
+    const full = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8"></head><body>${h}</body></html>`
+    const blob = new Blob(['\ufeff', full], { type: 'application/vnd.ms-excel' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `Monthly-${matrix.monthName}-${matrix.year}${matrix.branch ? `-${matrix.branch}` : ''}.xls`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   // Live search INSIDE saved report data: returns matching line items with
   // { date, branch, qty, item, reportId }.
   const searchResults = useMemo(() => {
@@ -967,6 +1012,9 @@ function App() {
                     ))}
                   </select>
                 </label>
+                <button type="button" className="btn-pdf" onClick={handleExportMonthlyExcel}>
+                  ⭳ Excel
+                </button>
                 <button type="button" className="btn-txt" onClick={handleExportMonthlyCsv}>
                   ⭳ CSV
                 </button>
@@ -1040,8 +1088,8 @@ function App() {
                       ))}
                     </tr>
                     <tr>
-                      <th className="dh">Date</th>
-                      <th className="dh">Day</th>
+                      <th className="dh col-date">Date</th>
+                      <th className="dh col-day">Day</th>
                       {matrix.columns.map((c) => (
                         <th key={c.key} className="col-blank" />
                       ))}
@@ -1050,8 +1098,8 @@ function App() {
                   <tbody>
                     {matrix.rows.map((r) => (
                       <tr key={r.day} className={r.isWeekend ? 'weekend' : ''}>
-                        <td className="nowrap">{r.date}</td>
-                        <td className="nowrap">{r.dayName}</td>
+                        <td className="nowrap col-date">{r.date}</td>
+                        <td className="nowrap col-day">{r.dayName}</td>
                         {matrix.columns.map((c) => (
                           <td key={c.key} className="num">
                             {r.counts[c.key] || ''}
@@ -1061,7 +1109,7 @@ function App() {
                       </tr>
                     ))}
                     <tr className="totals">
-                      <td colSpan={2}>Total</td>
+                      <td colSpan={2} className="col-total">Total</td>
                       {matrix.columns.map((c) => (
                         <td key={c.key} className="num">
                           {matrix.totals[c.key] || 0}

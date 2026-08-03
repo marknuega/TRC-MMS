@@ -671,6 +671,42 @@ h2 {
 .monthly-table .col-blank {
   background: var(--surface);
 }
+/* Freeze the first two columns (Date + Day) on horizontal scroll. */
+.monthly-table .col-date,
+.monthly-table .col-total,
+.monthly-table .corner {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+}
+.monthly-table .col-day {
+  position: sticky;
+  left: 7rem;
+  z-index: 2;
+}
+.monthly-table .col-date,
+.monthly-table .col-day {
+  width: 7rem;
+  min-width: 7rem;
+}
+.monthly-table thead .col-date,
+.monthly-table thead .col-day,
+.monthly-table .corner {
+  z-index: 3;
+  background: var(--surface-3);
+}
+/* Sticky body cells need an opaque background so content doesn't show through. */
+.monthly-table tbody td.col-date,
+.monthly-table tbody td.col-day {
+  background: var(--surface);
+}
+.monthly-table tbody tr.weekend td.col-date,
+.monthly-table tbody tr.weekend td.col-day {
+  background: #22c55e;
+}
+.monthly-table tr.totals .col-total {
+  background: var(--surface-3);
+}
 .monthly-table .dh {
   font-weight: 700;
 }
