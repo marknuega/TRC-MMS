@@ -24,6 +24,24 @@ model SavedReport {
   @@map("saved_reports")
 }
 
+// Spare-parts inventory. Avail is derived (begin - out), not stored.
+model InventoryItem {
+  id        Int      @id @default(autoincrement())
+  sku       String   @unique
+  store     String   @default("")
+  shelf     String   @default("")
+  itemCode  String   @default("") @map("item_code")
+  begin     Int      @default(0)
+  out       Int      @default(0)
+  lowStock  Int      @default(0) @map("low_stock")
+  remarks   String   @default("")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([store])
+  @@map("inventory_items")
+}
+
 // Pasted/edited monthly activity matrix, per month + branch.
 model MonthlySheet {
   id        Int      @id @default(autoincrement())

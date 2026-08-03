@@ -16,6 +16,7 @@ import {
 } from './api'
 import { DEFAULT_OPTIONS, mergeOptions, MODEL_TYPE, BRANCHES } from './options'
 import ManageInputs from './ManageInputs'
+import Inventory from './Inventory'
 import {
   groupReports,
   buildDateReport,
@@ -992,6 +993,8 @@ function App() {
             </ul>
           )}
         </section>
+
+        <Inventory />
 
         <ManageInputs options={options} onChange={setCategory} />
 

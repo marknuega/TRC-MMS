@@ -50,3 +50,16 @@ export const saveMonthly = (month, branch, data) =>
 
 export const clearMonthly = (month, branch) =>
   request(`/api/monthly${monthlyQs(month, branch)}`, { method: 'DELETE' })
+
+export const getInventory = () => request('/api/inventory')
+
+export const createInventory = (item) =>
+  request('/api/inventory', { method: 'POST', body: JSON.stringify(item) })
+
+export const updateInventory = (id, item) =>
+  request(`/api/inventory/${id}`, { method: 'PUT', body: JSON.stringify(item) })
+
+export const deleteInventory = (id) => request(`/api/inventory/${id}`, { method: 'DELETE' })
+
+export const importInventory = (items) =>
+  request('/api/inventory/import', { method: 'POST', body: JSON.stringify({ items }) })

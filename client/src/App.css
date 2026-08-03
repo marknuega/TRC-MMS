@@ -184,6 +184,7 @@
 .entries,
 .saved,
 .monthly,
+.inventory,
 .manage,
 .handover {
   background: var(--surface);
@@ -458,6 +459,123 @@ h2 {
   font-weight: 700;
   color: var(--muted);
 }
+/* ---- Inventory ---- */
+.inventory-body {
+  padding-top: 1rem;
+}
+.inv-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.8rem;
+}
+.inv-search {
+  flex: 1;
+  min-width: 12rem;
+}
+.inv-form {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+  padding: 1rem 1.1rem;
+  margin: 0 0 1rem;
+}
+.inv-form h3 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+  color: var(--text-h);
+}
+.inv-form-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.75rem 0.9rem;
+}
+.inv-form-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  min-width: 0;
+}
+.inv-form-grid .wide {
+  grid-column: span 2;
+}
+.inv-form-actions {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.9rem;
+}
+.inv-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.inv-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.85rem;
+}
+.inv-table th,
+.inv-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 0.45rem 0.6rem;
+  text-align: left;
+  vertical-align: top;
+}
+.inv-table thead th {
+  background: var(--surface-3);
+  color: var(--text-h);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.inv-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.inv-table .avail {
+  font-weight: 700;
+}
+.inv-table .nowrap {
+  white-space: nowrap;
+}
+.inv-table .item {
+  min-width: 16rem;
+}
+.inv-table .rem {
+  min-width: 12rem;
+  color: var(--muted);
+}
+.inv-table tr.low td {
+  background: color-mix(in srgb, var(--danger) 12%, var(--surface));
+}
+.inv-table tr.low .avail {
+  color: var(--danger);
+}
+.inv-edit {
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0.25rem 0.7rem;
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+  cursor: pointer;
+}
+.inv-edit:hover {
+  border-color: var(--primary);
+}
+@media (max-width: 720px) {
+  .inv-form-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .inv-form-grid .wide {
+    grid-column: span 2;
+  }
+}
+
 .paste-box {
   margin: 0 0 0.75rem;
 }

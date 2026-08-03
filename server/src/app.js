@@ -6,6 +6,7 @@ import reportsRouter from './routes/reports.js'
 import optionsRouter from './routes/options.js'
 import savedReportsRouter from './routes/savedReports.js'
 import monthlyRouter from './routes/monthly.js'
+import inventoryRouter from './routes/inventory.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url)) // server/src
 const clientDist = path.resolve(here, '../../client/dist') // repo/client/dist
@@ -36,6 +37,7 @@ app.use('/api/reports', reportsRouter)
 app.use('/api/options', optionsRouter)
 app.use('/api/saved-reports', savedReportsRouter)
 app.use('/api/monthly', monthlyRouter)
+app.use('/api/inventory', inventoryRouter)
 
 // In production the same service also serves the built React app, so the
 // browser sees one origin (no CORS). In dev, Vite serves the client instead.
