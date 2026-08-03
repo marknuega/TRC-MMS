@@ -486,7 +486,6 @@ const MONTHLY_GROUPS = [
       { key: 'th1n', label: 'TH1n', kind: 'model', models: ['TH1N'] },
       { key: 'thr880i', label: 'THR880i', kind: 'model', models: ['THR880I'] },
       { key: 'thr9', label: 'THR9', kind: 'model', models: ['THR9'] },
-      { key: 'thr3i', label: 'THR3i', kind: 'model', models: ['THR3I'] },
       { key: 'tmr880i', label: 'TMR880i', kind: 'model', models: ['TMR 880I', 'TMR880I'] },
     ],
   },
