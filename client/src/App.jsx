@@ -394,7 +394,7 @@ function App() {
       }
       const merged = [...byBranch.values()].flatMap((r) => (Array.isArray(r.entries) ? r.entries : []))
       if (!merged.length) return []
-      return [buildDateReport(dl, 'ALL-BRANCHES', merged, { branch: ALL_BRANCHES, mode: 'report', combineMaterials: true })]
+      return [buildDateReport(dl, 'ALL-BRANCHES', merged, { branch: ALL_BRANCHES, mode: 'report' })]
     }
     return groupReports(entries).map((g) =>
       buildDateReport(g.dateLabel, repLabel(nextReportId, branch, mode), g.entries, {
@@ -1175,7 +1175,7 @@ function TransmittalPrint({ report }) {
 // Daily activity report sheet (MOTECO REP-0004 style).
 function ReportPrint({ report }) {
   const t = report.totals
-  const materials = materialBlocksByType(report.entries, { combineByName: report.combineMaterials })
+  const materials = materialBlocksByType(report.entries)
   const devices = deviceBlocksByType(report.entries)
 
   return (
