@@ -75,7 +75,9 @@ function summaryCompanyText(company) {
 
 // ---- Materials Summary (by TYPE then model, qty aggregated) ----
 // { AIRBUS: [{header, lines:[...]}], SEPURA: [...], ... } for the split PDF layout.
-export function materialBlocksByType(entries) {
+// combineByName: merge identical materials by name only (first-seen company kept).
+// Used by the All-Branches merged report so the same part sums across branches.
+export function materialBlocksByType(entries, { combineByName = false } = {}) {
   const byType = {}
   for (const type of orderedTypes(entries)) {
     const typeEntries = entries.filter((e) => up(e.type) === type)
@@ -94,7 +96,7 @@ export function materialBlocksByType(entries) {
         const isProgram = classify(f.action) === 'programming'
         const label = isProgram ? 'PROGRAMMING' : up(f.issue)
         const company = isProgram ? '' : summaryCompanyText(f.company)
-        const key = `${label}|${company}`
+        const key = combineByName ? label : `${label}|${company}`
         if (!bucket.has(key)) bucket.set(key, { label, company, qty: 0 })
         bucket.get(key).qty += Math.max(0, Number(f.quantity) || 0)
       }
@@ -114,8 +116,8 @@ export function materialBlocksByType(entries) {
   return byType
 }
 
-function buildMaterialsSummary(entries) {
-  const byType = materialBlocksByType(entries)
+function buildMaterialsSummary(entries, combineByName = false) {
+  const byType = materialBlocksByType(entries, { combineByName })
   const sections = []
   for (const type of Object.keys(byType)) {
     for (const b of byType[type]) sections.push(`${b.header}\n${b.lines.join('\n')}`)
@@ -401,7 +403,7 @@ export function groupReports(entries) {
 // ---- Full report model for one date ----
 // opts: { branch, mode: 'report'|'transmittal', transmittedBy, receivedBy }
 export function buildDateReport(dateLabel, reportId, entries, opts = {}) {
-  const { branch = '', mode = 'report', transmittedBy = '', receivedBy = '' } = opts
+  const { branch = '', mode = 'report', transmittedBy = '', receivedBy = '', combineMaterials = false } = opts
   return {
     dateLabel,
     reportId,
@@ -409,9 +411,10 @@ export function buildDateReport(dateLabel, reportId, entries, opts = {}) {
     mode,
     transmittedBy,
     receivedBy,
+    combineMaterials,
     entries,
     totals: headerTotals(entries),
-    materialsSummary: buildMaterialsSummary(entries),
+    materialsSummary: buildMaterialsSummary(entries, combineMaterials),
     deviceSummary: buildDeviceSummary(entries),
     tx: mode === 'transmittal' ? transmittalMaterials(entries) : null,
   }
