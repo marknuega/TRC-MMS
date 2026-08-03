@@ -280,6 +280,47 @@ function buildDeviceSummary(entries) {
   return sections
 }
 
+// Per-agency action tally: { agency, cats:[[label,value]], total }[] (agencies A-Z).
+export function agencyBlocks(entries) {
+  const byAgency = new Map()
+  for (const e of entries ?? []) {
+    const ag = up(e.agency) || '-'
+    if (!byAgency.has(ag)) byAgency.set(ag, { maintenance: 0, program: 0, install: 0, dismantle: 0 })
+    const a = byAgency.get(ag)
+    let maxMaint = 0
+    for (const f of e.faults ?? []) {
+      const cat = classify(f.action)
+      const q = Math.max(0, Number(f.quantity) || 0)
+      if (cat === 'maintenance') maxMaint = Math.max(maxMaint, q)
+      else if (cat === 'programming') a.program += q
+      else if (cat === 'install') a.install += q
+      else if (cat === 'dismantle') a.dismantle += q
+    }
+    a.maintenance += maxMaint
+  }
+  return [...byAgency.keys()]
+    .sort((x, y) => x.localeCompare(y))
+    .map((ag) => {
+      const a = byAgency.get(ag)
+      const cats = [
+        ['MAINTENANCE', a.maintenance],
+        ['PROGRAMMING', a.program],
+        ['INSTALLATION', a.install],
+        ['DISMANTLE', a.dismantle],
+      ].filter(([, v]) => v > 0)
+      return { agency: ag, cats, total: a.maintenance + a.program + a.install + a.dismantle }
+    })
+    .filter((b) => b.cats.length)
+}
+
+function buildAgencySummary(entries) {
+  return agencyBlocks(entries).map((b) => {
+    const lines = b.cats.map(([label, v], i) => `${i + 1}. ${label} = ${v}`)
+    lines.push(`${INDENT}TOTAL = ${b.total}`)
+    return `${b.agency}\n${lines.join('\n')}`
+  })
+}
+
 // Types present, in the canonical AIRBUS/SEPURA/HYTERA order, then any extras.
 function orderedTypes(entries) {
   const present = new Set(entries.map((e) => up(e.type)))
@@ -365,6 +406,7 @@ export function buildDateReport(dateLabel, reportId, entries, opts = {}) {
     totals: headerTotals(entries),
     materialsSummary: buildMaterialsSummary(entries),
     deviceSummary: buildDeviceSummary(entries),
+    agencySummary: buildAgencySummary(entries),
     tx: mode === 'transmittal' ? transmittalMaterials(entries) : null,
   }
 }
@@ -416,6 +458,10 @@ export function buildTxt(report) {
     'Device Summary',
     DIVIDER,
     ...join(report.deviceSummary),
+    DIVIDER,
+    'Agency Summary',
+    DIVIDER,
+    ...join(report.agencySummary),
   ]
   if (notes.length) lines.push(DIVIDER, 'Notes', DIVIDER, ...notes)
   return lines.join('\n')

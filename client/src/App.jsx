@@ -32,6 +32,7 @@ import {
   deviceBlocksByType,
   transmittalRows,
   reportNotes,
+  agencyBlocks,
   buildMonthlyMatrix,
   parseMonthlyPaste,
   TYPE_ORDER,
@@ -1140,6 +1141,30 @@ function ReportPrint({ report }) {
 
       <h4 className="print-split-title">Split Format (Airbus / Sepura / Hytera) — Device Summary</h4>
       <SplitColumns byType={devices} />
+
+      <h4 className="print-split-title">Agency Summary</h4>
+      <table className="print-main">
+        <thead>
+          <tr>
+            <th>Agency</th><th>Maintenance</th><th>Programming</th><th>Installation</th><th>Dismantle</th><th>Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {agencyBlocks(report.entries).map((b) => {
+            const get = (label) => b.cats.find(([l]) => l === label)?.[1] || 0
+            return (
+              <tr key={b.agency}>
+                <td>{b.agency}</td>
+                <td>{get('MAINTENANCE') || ''}</td>
+                <td>{get('PROGRAMMING') || ''}</td>
+                <td>{get('INSTALLATION') || ''}</td>
+                <td>{get('DISMANTLE') || ''}</td>
+                <td>{b.total}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
 
       <p className="print-footer">
         Software Developed by Muhammad Amir · MT# MT1063 · © 2026 Muhammad Amir. All rights reserved.
