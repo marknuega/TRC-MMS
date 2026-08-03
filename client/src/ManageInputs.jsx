@@ -3,8 +3,9 @@ import { CATEGORIES } from './options'
 
 // Add / edit / delete the dropdown option lists. Changes are pushed up via
 // onChange(categoryKey, newList); the parent persists them to the backend.
-export default function ManageInputs({ options, onChange }) {
-  const [open, setOpen] = useState(false)
+export default function ManageInputs({ options, onChange, embedded = false }) {
+  const [openState, setOpen] = useState(false)
+  const open = embedded || openState
   const [cat, setCat] = useState(CATEGORIES[0].key)
   const [newValue, setNewValue] = useState('')
   const [editIndex, setEditIndex] = useState(-1)
@@ -55,10 +56,14 @@ export default function ManageInputs({ options, onChange }) {
 
   return (
     <section className="manage">
-      <button type="button" className="manage-toggle" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-        <span>⚙️ Manage inputs</span>
-        <span className="chev">{open ? '▲' : '▼'}</span>
-      </button>
+      {embedded ? (
+        <h2 className="page-title">⚙️ Manage inputs</h2>
+      ) : (
+        <button type="button" className="manage-toggle" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+          <span>⚙️ Manage inputs</span>
+          <span className="chev">{open ? '▲' : '▼'}</span>
+        </button>
+      )}
 
       {open && (
         <div className="manage-body">

@@ -30,8 +30,9 @@ function periodRange(refDate, period) {
 
 const fmt = (d) => d.toLocaleDateString('en-GB')
 
-export default function AgencyTotals({ saved, branches }) {
-  const [open, setOpen] = useState(false)
+export default function AgencyTotals({ saved, branches, embedded = false }) {
+  const [openState, setOpen] = useState(false)
+  const open = embedded || openState
   const [period, setPeriod] = useState('month')
   const [refDate, setRefDate] = useState(today)
   const [branch, setBranch] = useState('')
@@ -86,10 +87,14 @@ export default function AgencyTotals({ saved, branches }) {
 
   return (
     <section className="agency">
-      <button type="button" className="manage-toggle" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-        <span>🏢 Agency totals</span>
-        <span className="chev">{open ? '▲' : '▼'}</span>
-      </button>
+      {embedded ? (
+        <h2 className="page-title">🏢 Agency totals</h2>
+      ) : (
+        <button type="button" className="manage-toggle" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+          <span>🏢 Agency totals</span>
+          <span className="chev">{open ? '▲' : '▼'}</span>
+        </button>
+      )}
 
       {open && (
         <div className="agency-body">

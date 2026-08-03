@@ -45,6 +45,13 @@ const DEVICE_LEVEL = new Set(['PROGRAM', 'RE-PROGRAM', 'INSTALL', 'RE-INSTALL', 
 const faultIsMeaningful = (f) => f.issue.trim() !== '' || DEVICE_LEVEL.has(String(f.action).toUpperCase())
 const today = () => new Date().toISOString().slice(0, 10)
 const ALL_BRANCHES = 'All Branches'
+const NAV = [
+  { id: 'report', icon: '📋', label: 'Report' },
+  { id: 'monthly', icon: '📅', label: 'Monthly Report' },
+  { id: 'agency', icon: '🏢', label: 'Agency Totals' },
+  { id: 'inventory', icon: '📦', label: 'Inventory' },
+  { id: 'manage', icon: '⚙️', label: 'Manage Inputs' },
+]
 const dmyOf = (isoDate) => new Date(isoDate).toLocaleDateString('en-GB') // YYYY-MM-DD -> dd/mm/yyyy
 
 // Render a matrix description: device tags like "(AIRBUS-TH1N)" in red, the
@@ -162,7 +169,7 @@ function App() {
   const [saved, setSaved] = useState([])
   const [savedOpen, setSavedOpen] = useState(false)
   const [savedSearch, setSavedSearch] = useState('')
-  const [monthlyOpen, setMonthlyOpen] = useState(false)
+  const [page, setPage] = useState('report')
   const [monthExpanded, setMonthExpanded] = useState(false) // false = show 7 days only
   const [collapsedGroups, setCollapsedGroups] = useState(() => new Set()) // horizontally-collapsed groups
   const [monthValue, setMonthValue] = useState(() => today().slice(0, 7)) // YYYY-MM
@@ -585,9 +592,45 @@ function App() {
 
   return (
     <>
-      <main className="app no-print">
-        <header className="topbar">
-          <h1>TRC Daily Report</h1>
+      <div className="layout no-print">
+        <aside className="sidebar">
+          <div className="brand">
+            <span className="brand-ico">🛠️</span>
+            <span>TRC Daily</span>
+          </div>
+          <nav className="side-nav">
+            {NAV.map((n) => (
+              <button
+                key={n.id}
+                type="button"
+                className={`side-link${page === n.id ? ' active' : ''}`}
+                onClick={() => setPage(n.id)}
+              >
+                <span className="side-ico">{n.icon}</span>
+                <span>{n.label}</span>
+              </button>
+            ))}
+          </nav>
+          <div className="side-foot">
+            <button
+              type="button"
+              className="theme-toggle"
+              onClick={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
+              aria-label={theme === 'dark' ? 'Switch to day theme' : 'Switch to night theme'}
+              title={theme === 'dark' ? 'Day mode' : 'Night mode'}
+            >
+              {theme === 'dark' ? '☀️' : '🌙'}
+            </button>
+          </div>
+        </aside>
+
+        <main className="page-main app">
+          {error && <p className="error">{error}</p>}
+
+          {page === 'report' && (
+            <>
+              <header className="topbar">
+                <h1>TRC Daily Report</h1>
           <div className="topbar-right">
             <label className="date-field">
               Mode
@@ -609,21 +652,8 @@ function App() {
               Report date
               <input type="date" value={form.reportDate} onChange={set('reportDate')} required />
             </label>
-            <div className="actions">
-              <button
-                type="button"
-                className="theme-toggle"
-                onClick={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
-                aria-label={theme === 'dark' ? 'Switch to day theme' : 'Switch to night theme'}
-                title={theme === 'dark' ? 'Day mode' : 'Night mode'}
-              >
-                {theme === 'dark' ? '☀️' : '🌙'}
-              </button>
-            </div>
           </div>
         </header>
-
-        {error && <p className="error">{error}</p>}
 
         {isTransmittal && (
           <section className="handover">
@@ -1013,19 +1043,14 @@ function App() {
             </div>
           )}
         </section>
+            </>
+          )}
 
-        <section className="monthly">
-          <button
-            type="button"
-            className="manage-toggle"
-            onClick={() => setMonthlyOpen((o) => !o)}
-            aria-expanded={monthlyOpen}
-          >
-            <span>📅 Monthly report</span>
-            <span className="chev">{monthlyOpen ? '▲' : '▼'}</span>
-          </button>
+          {page === 'monthly' && (
+            <section className="monthly">
+              <h2 className="page-title">📅 Monthly report</h2>
 
-          {monthlyOpen && matrix && (
+              {matrix && (
             <div className="monthly-body">
               <div className="monthly-controls">
                 <label>
@@ -1184,18 +1209,20 @@ function App() {
               )}
             </div>
           )}
-        </section>
+            </section>
+          )}
 
-        <AgencyTotals saved={saved} branches={BRANCHES} />
+          {page === 'agency' && <AgencyTotals saved={saved} branches={BRANCHES} embedded />}
 
-        <Inventory />
+          {page === 'inventory' && <Inventory embedded />}
 
-        <ManageInputs options={options} onChange={setCategory} />
+          {page === 'manage' && <ManageInputs options={options} onChange={setCategory} embedded />}
 
-        <footer className="app-footer">
-          Software Developed by Muhammad Amir · MT# MT1063 · © 2026 Muhammad Amir. All rights reserved.
-        </footer>
-      </main>
+          <footer className="app-footer">
+            Software Developed by Muhammad Amir · MT# MT1063 · © 2026 Muhammad Amir. All rights reserved.
+          </footer>
+        </main>
+      </div>
 
       {/* Printable view — hidden on screen, shown only when printing (Save as PDF). */}
       <div className="print-only print-report">

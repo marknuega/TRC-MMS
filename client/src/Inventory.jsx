@@ -43,9 +43,10 @@ function downloadCsv(filename, items) {
 
 const isLow = (i) => i.lowStock > 0 && i.avail <= i.lowStock
 
-export default function Inventory() {
+export default function Inventory({ embedded = false }) {
   const [items, setItems] = useState([])
-  const [open, setOpen] = useState(false)
+  const [openState, setOpen] = useState(false)
+  const open = embedded || openState
   const [loaded, setLoaded] = useState(false)
   const [store, setStore] = useState('')
   const [search, setSearch] = useState('')
@@ -135,12 +136,18 @@ export default function Inventory() {
 
   return (
     <section className="inventory">
-      <button type="button" className="manage-toggle" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-        <span>
+      {embedded ? (
+        <h2 className="page-title">
           📦 Inventory {loaded && <span className="hint">({items.length}{lowCount ? ` · ${lowCount} low` : ''})</span>}
-        </span>
-        <span className="chev">{open ? '▲' : '▼'}</span>
-      </button>
+        </h2>
+      ) : (
+        <button type="button" className="manage-toggle" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+          <span>
+            📦 Inventory {loaded && <span className="hint">({items.length}{lowCount ? ` · ${lowCount} low` : ''})</span>}
+          </span>
+          <span className="chev">{open ? '▲' : '▼'}</span>
+        </button>
+      )}
 
       {open && (
         <div className="inventory-body">
