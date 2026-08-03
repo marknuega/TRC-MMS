@@ -678,6 +678,34 @@ h2 {
   font-size: 0.74rem;
   font-weight: 700;
 }
+.monthly-table .grp-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  width: 100%;
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--text-h);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  padding: 0;
+}
+.monthly-table .grp-toggle .chev {
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+.monthly-table .collapsed-col {
+  background: var(--surface-3);
+  color: var(--muted);
+  min-width: 2.4rem;
+  font-weight: 700;
+}
+.monthly-table td.collapsed-col {
+  color: var(--text-h);
+}
 .monthly-table .col-sub {
   font-size: 0.72rem;
   font-weight: 600;

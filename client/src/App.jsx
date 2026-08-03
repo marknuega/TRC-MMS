@@ -164,6 +164,7 @@ function App() {
   const [savedSearch, setSavedSearch] = useState('')
   const [monthlyOpen, setMonthlyOpen] = useState(false)
   const [monthExpanded, setMonthExpanded] = useState(false) // false = show 7 days only
+  const [collapsedGroups, setCollapsedGroups] = useState(() => new Set()) // horizontally-collapsed groups
   const [monthValue, setMonthValue] = useState(() => today().slice(0, 7)) // YYYY-MM
   const [monthBranch, setMonthBranch] = useState('')
   const [manualSheet, setManualSheet] = useState(null) // pasted override for current month+branch
@@ -422,7 +423,19 @@ function App() {
     return buildMonthlyMatrix(saved, { year: y, month: m - 1, branch: monthBranch, manual: manualSheet })
   }, [saved, monthValue, monthBranch, manualSheet])
 
-  const matrixGroups = matrix?.groups ?? []
+  // Columns grouped by their brand header, for horizontal collapse.
+  const groupCols = useMemo(
+    () => (matrix ? matrix.groups.map((g) => ({ group: g.group, cols: matrix.columns.filter((c) => c.group === g.group) })) : []),
+    [matrix],
+  )
+  const toggleGroup = (g) =>
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(g)) next.delete(g)
+      else next.add(g)
+      return next
+    })
+  const sumCols = (cols, source) => cols.reduce((s, c) => s + (source[c.key] || 0), 0)
 
   // Collapsed matrix shows a 7-day window (the week of today when viewing the
   // current month, otherwise the first 7 days); expanded shows the whole month.
@@ -510,7 +523,7 @@ function App() {
     for (const c of matrix.columns) h += `<th style="${hb}">${esc(c.label)}</th>`
     h += '</tr><tr>'
     h += `<th style="${hb}">Date</th><th style="${hb}">Day</th>`
-    for (const c of matrix.columns) h += `<th style="${b}background:#dfe3ee;"></th>`
+    for (const _c of matrix.columns) h += `<th style="${b}background:#dfe3ee;"></th>`
     h += '</tr></thead><tbody>'
     for (const r of matrix.rows) {
       const bg = r.isWeekend ? 'background:#22c55e;' : ''
@@ -1087,28 +1100,40 @@ function App() {
                   <thead>
                     <tr>
                       <th colSpan={2} rowSpan={2} className="corner" />
-                      {matrixGroups.map((g) => (
-                        <th key={g.group} colSpan={g.span} className="grp">
-                          {g.group}
-                        </th>
-                      ))}
+                      {groupCols.map(({ group, cols }) => {
+                        const collapsed = collapsedGroups.has(group)
+                        return (
+                          <th key={group} colSpan={collapsed ? 1 : cols.length} className="grp">
+                            <button type="button" className="grp-toggle" onClick={() => toggleGroup(group)}>
+                              <span>{collapsed ? group.split(' ')[0] : group}</span>
+                              <span className="chev">{collapsed ? '▸' : '▾'}</span>
+                            </button>
+                          </th>
+                        )
+                      })}
                       <th rowSpan={3} className="act-head">
                         Activity description and spare parts was used
                       </th>
                     </tr>
                     <tr>
-                      {matrix.columns.map((c) => (
-                        <th key={c.key} className="col-sub">
-                          {c.label}
-                        </th>
-                      ))}
+                      {groupCols.flatMap(({ group, cols }) =>
+                        collapsedGroups.has(group)
+                          ? [<th key={group} className="col-sub collapsed-col">Σ</th>]
+                          : cols.map((c) => (
+                              <th key={c.key} className="col-sub">
+                                {c.label}
+                              </th>
+                            )),
+                      )}
                     </tr>
                     <tr>
                       <th className="dh col-date">Date</th>
                       <th className="dh col-day">Day</th>
-                      {matrix.columns.map((c) => (
-                        <th key={c.key} className="col-blank" />
-                      ))}
+                      {groupCols.flatMap(({ group, cols }) =>
+                        collapsedGroups.has(group)
+                          ? [<th key={group} className="col-blank collapsed-col" />]
+                          : cols.map((c) => <th key={c.key} className="col-blank" />),
+                      )}
                     </tr>
                   </thead>
                   <tbody>
@@ -1116,21 +1141,37 @@ function App() {
                       <tr key={r.day} className={r.isWeekend ? 'weekend' : ''}>
                         <td className="nowrap col-date">{r.date}</td>
                         <td className="nowrap col-day">{r.dayName}</td>
-                        {matrix.columns.map((c) => (
-                          <td key={c.key} className="num">
-                            {r.counts[c.key] || ''}
-                          </td>
-                        ))}
+                        {groupCols.flatMap(({ group, cols }) =>
+                          collapsedGroups.has(group)
+                            ? [
+                                <td key={group} className="num collapsed-col">
+                                  {sumCols(cols, r.counts) || ''}
+                                </td>,
+                              ]
+                            : cols.map((c) => (
+                                <td key={c.key} className="num">
+                                  {r.counts[c.key] || ''}
+                                </td>
+                              )),
+                        )}
                         <td className="desc">{renderDesc(r.description)}</td>
                       </tr>
                     ))}
                     <tr className="totals">
                       <td colSpan={2} className="col-total">Total</td>
-                      {matrix.columns.map((c) => (
-                        <td key={c.key} className="num">
-                          {matrix.totals[c.key] || 0}
-                        </td>
-                      ))}
+                      {groupCols.flatMap(({ group, cols }) =>
+                        collapsedGroups.has(group)
+                          ? [
+                              <td key={group} className="num collapsed-col">
+                                {sumCols(cols, matrix.totals)}
+                              </td>,
+                            ]
+                          : cols.map((c) => (
+                              <td key={c.key} className="num">
+                                {matrix.totals[c.key] || 0}
+                              </td>
+                            )),
+                      )}
                       <td />
                     </tr>
                   </tbody>
