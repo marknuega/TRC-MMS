@@ -22,6 +22,7 @@ import {
 import { DEFAULT_OPTIONS, mergeOptions, MODEL_TYPE, BRANCHES } from './options'
 import ManageInputs from './ManageInputs'
 import Inventory from './Inventory'
+import AgencyTotals from './AgencyTotals'
 import {
   groupReports,
   buildDateReport,
@@ -999,6 +1000,8 @@ function App() {
             </ul>
           )}
         </section>
+
+        <AgencyTotals saved={saved} branches={BRANCHES} />
 
         <Inventory />
 

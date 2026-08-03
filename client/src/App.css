@@ -185,6 +185,7 @@
 .saved,
 .monthly,
 .inventory,
+.agency,
 .manage,
 .handover {
   background: var(--surface);
@@ -459,9 +460,22 @@ h2 {
   font-weight: 700;
   color: var(--muted);
 }
-/* ---- Inventory ---- */
-.inventory-body {
+/* ---- Inventory / Agency ---- */
+.inventory-body,
+.agency-body {
   padding-top: 1rem;
+}
+.inv-table tr.totals td {
+  font-weight: 800;
+  background: var(--surface-3);
+  color: var(--text-h);
+  border-top: 2px solid var(--border-strong);
+}
+.agency-table th {
+  text-align: right;
+}
+.agency-table th:first-child {
+  text-align: left;
 }
 .inv-toolbar {
   display: flex;
