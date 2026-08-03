@@ -599,7 +599,12 @@ export function buildMonthlyMatrix(savedReports, opts = {}) {
         if (iKey) counts[iKey] += install
         const dKey = dismantleByType.get(t)
         if (dKey) counts[dKey] += dismantle
-        const items = (e.faults ?? []).filter((f) => up(f.issue)).map((f) => `${up(f.issue)} (${f.quantity})`)
+        const items = (e.faults ?? [])
+          .filter((f) => up(f.issue))
+          .map((f) => {
+            const comp = companyDisplay(f.company)
+            return `${up(f.issue)} (${f.quantity})${comp ? ` ${comp}` : ''}`
+          })
         if (items.length) {
           const tag = mk && mk !== '-' ? `${t}-${modelDisplay(e.model)}` : t
           if (!byDevice.has(tag)) {
