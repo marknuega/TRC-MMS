@@ -484,7 +484,6 @@ const MONTHLY_GROUPS = [
     group: 'Airbus Terminals (Repair& Programing)',
     cols: [
       { key: 'th1n', label: 'TH1n', kind: 'model', models: ['TH1N'] },
-      { key: 'thr880i', label: 'THR880i', kind: 'model', models: ['THR880I'] },
       { key: 'thr9', label: 'THR9', kind: 'model', models: ['THR9'] },
       { key: 'tmr880i', label: 'TMR880i', kind: 'model', models: ['TMR 880I', 'TMR880I'] },
     ],
