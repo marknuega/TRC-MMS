@@ -1,6 +1,6 @@
 {
-  "name": "TRC Daily Report",
-  "short_name": "TRC Daily",
+  "name": "TRC-DAR",
+  "short_name": "TRC-DAR",
   "description": "MOTECO maintenance daily reports, transmittals, monthly activity and inventory.",
   "id": "/",
   "start_url": "/",
