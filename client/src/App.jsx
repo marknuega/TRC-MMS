@@ -33,7 +33,7 @@ import {
   deviceBlocksByType,
   transmittalRows,
   reportNotes,
-  agencyBlocks,
+  agencyComment,
   buildMonthlyMatrix,
   parseMonthlyPaste,
   TYPE_ORDER,
@@ -44,6 +44,23 @@ import './App.css'
 const DEVICE_LEVEL = new Set(['PROGRAM', 'RE-PROGRAM', 'INSTALL', 'RE-INSTALL', 'DISMANTLE'])
 const faultIsMeaningful = (f) => f.issue.trim() !== '' || DEVICE_LEVEL.has(String(f.action).toUpperCase())
 const today = () => new Date().toISOString().slice(0, 10)
+
+// Render a matrix description: device tags like "(AIRBUS-TH1N)" in red, the
+// issue/fault text (and quantities like "(6)") in normal colour.
+function renderDesc(text) {
+  if (!text) return null
+  return String(text)
+    .split(/(\([^)]*\))/g)
+    .map((p, i) =>
+      /^\([^)]*[A-Za-z][^)]*\)$/.test(p) ? (
+        <span key={i} className="dev-tag">
+          {p}
+        </span>
+      ) : (
+        <span key={i}>{p}</span>
+      ),
+    )
+}
 const emptyFault = () => ({ issue: '', quantity: 1, action: 'CHANGE', company: 'PROJECT 2', status: 'New' })
 
 // Remember the last Model/Type/Agency so the next entry (and next visit) pre-selects them.
@@ -373,6 +390,7 @@ function App() {
     [entries, nextReportId, branch, mode, transmittedBy, receivedBy],
   )
   const combinedTxt = useMemo(() => reports.map(buildTxt).join('\n\n\n'), [reports])
+  const agencyCmt = useMemo(() => agencyComment(entries), [entries])
 
   // Monthly activity matrix (dates × terminal columns) from saved reports.
   const matrix = useMemo(() => {
@@ -710,6 +728,12 @@ function App() {
             </div>
           </div>
           <textarea readOnly value={combinedTxt || 'No entries yet.'} rows={18} />
+          {agencyCmt && (
+            <div className="agency-comment">
+              <div className="agency-comment-tag">comment · not exported</div>
+              <pre>{agencyCmt}</pre>
+            </div>
+          )}
         </section>
 
         <section className="saved">
@@ -932,7 +956,7 @@ function App() {
                             {r.counts[c.key] || ''}
                           </td>
                         ))}
-                        <td className="desc">{r.description}</td>
+                        <td className="desc">{renderDesc(r.description)}</td>
                       </tr>
                     ))}
                     <tr className="totals">
@@ -1144,30 +1168,6 @@ function ReportPrint({ report }) {
 
       <h4 className="print-split-title">Split Format (Airbus / Sepura / Hytera) — Device Summary</h4>
       <SplitColumns byType={devices} />
-
-      <h4 className="print-split-title">Agency Summary</h4>
-      <table className="print-main">
-        <thead>
-          <tr>
-            <th>Agency</th><th>Maintenance</th><th>Programming</th><th>Installation</th><th>Dismantle</th><th>Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          {agencyBlocks(report.entries).map((b) => {
-            const get = (label) => b.cats.find(([l]) => l === label)?.[1] || 0
-            return (
-              <tr key={b.agency}>
-                <td>{b.agency}</td>
-                <td>{get('MAINTENANCE') || ''}</td>
-                <td>{get('PROGRAMMING') || ''}</td>
-                <td>{get('INSTALLATION') || ''}</td>
-                <td>{get('DISMANTLE') || ''}</td>
-                <td>{b.total}</td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
 
       <p className="print-footer">
         Software Developed by Muhammad Amir · MT# MT1063 · © 2026 Muhammad Amir. All rights reserved.

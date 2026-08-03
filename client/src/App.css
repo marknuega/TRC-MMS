@@ -590,6 +590,31 @@ h2 {
   }
 }
 
+/* Agency summary shown as an on-screen comment (not exported). */
+.agency-comment {
+  margin-top: 0.9rem;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+  padding: 0.6rem 0.8rem;
+}
+.agency-comment-tag {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-bottom: 0.3rem;
+}
+.agency-comment pre {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  color: var(--text-h);
+}
+
 .paste-box {
   margin: 0 0 0.75rem;
 }
@@ -661,15 +686,19 @@ h2 {
   white-space: normal;
   min-width: 20rem;
   max-width: 34rem;
-  color: #c81e1e; /* red characters, like the source sheet */
+  color: var(--text-h); /* issue/fault text — normal (black in light theme) */
   font-weight: 600;
 }
+/* Device tags like "(AIRBUS-TH1N)" — red, like the source sheet. */
+.monthly-table .dev-tag {
+  color: #c81e1e;
+}
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .monthly-table .desc {
+  :root:not([data-theme='light']) .monthly-table .dev-tag {
     color: #f87171;
   }
 }
-:root[data-theme='dark'] .monthly-table .desc {
+:root[data-theme='dark'] .monthly-table .dev-tag {
   color: #f87171;
 }
 /* Weekend rows: solid green across the whole row, like the sheet. */

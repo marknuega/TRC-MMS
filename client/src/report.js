@@ -313,12 +313,19 @@ export function agencyBlocks(entries) {
     .filter((b) => b.cats.length)
 }
 
-function buildAgencySummary(entries) {
-  return agencyBlocks(entries).map((b) => {
-    const lines = b.cats.map(([label, v], i) => `${i + 1}. ${label} = ${v}`)
-    lines.push(`${INDENT}TOTAL = ${b.total}`)
-    return `${b.agency}\n${lines.join('\n')}`
-  })
+// Compact on-screen comment (NOT part of the exported report):
+//   Agency Summary
+//   ------------------------------
+//   KINGDOM [MAIN 7]
+//   ------------------------------
+//   PSD [INS 1]
+const AGENCY_ABBR = { MAINTENANCE: 'MAIN', PROGRAMMING: 'PROG', INSTALLATION: 'INS', DISMANTLE: 'DISM' }
+export function agencyComment(entries) {
+  const blocks = agencyBlocks(entries)
+  if (!blocks.length) return ''
+  const lines = blocks.map((b) => `${b.agency} ${b.cats.map(([l, v]) => `[${AGENCY_ABBR[l] || l} ${v}]`).join(' ')}`)
+  const body = lines.reduce((acc, s, i) => (i ? [...acc, DIVIDER, s] : [s]), [])
+  return ['Agency Summary', DIVIDER, ...body].join('\n')
 }
 
 // Types present, in the canonical AIRBUS/SEPURA/HYTERA order, then any extras.
@@ -406,7 +413,6 @@ export function buildDateReport(dateLabel, reportId, entries, opts = {}) {
     totals: headerTotals(entries),
     materialsSummary: buildMaterialsSummary(entries),
     deviceSummary: buildDeviceSummary(entries),
-    agencySummary: buildAgencySummary(entries),
     tx: mode === 'transmittal' ? transmittalMaterials(entries) : null,
   }
 }
@@ -458,10 +464,6 @@ export function buildTxt(report) {
     'Device Summary',
     DIVIDER,
     ...join(report.deviceSummary),
-    DIVIDER,
-    'Agency Summary',
-    DIVIDER,
-    ...join(report.agencySummary),
   ]
   if (notes.length) lines.push(DIVIDER, 'Notes', DIVIDER, ...notes)
   return lines.join('\n')
