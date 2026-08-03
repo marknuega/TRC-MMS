@@ -1,5 +1,8 @@
 # TRC Daily Report
 
+Software Developed by Muhammad Amir · MT# MT1063
+© 2026 Muhammad Amir. All rights reserved.
+
 React (Vite) frontend + Node/Express API + PostgreSQL, deployed on Railway.
 
 ```

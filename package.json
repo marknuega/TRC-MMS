@@ -1,7 +1,7 @@
 {
   "name": "trc-daily-report",
   "private": true,
-  "description": "TRC Daily Report — single Railway service (Express API serves the built React client).",
+  "description": "TRC Daily Report — Software Developed by Muhammad Amir MT# MT1063 © 2026 Muhammad Amir. All rights reserved.",
   "engines": {
     "node": "22.x"
   }

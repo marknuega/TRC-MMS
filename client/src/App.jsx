@@ -1,3 +1,8 @@
+/*
+ * Software Developed by Muhammad Amir  MT# MT1063
+ * © 2026 Muhammad Amir. All rights reserved.
+ */
+
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   listEntries,
@@ -999,7 +1004,7 @@ function App() {
         <ManageInputs options={options} onChange={setCategory} />
 
         <footer className="app-footer">
-          Software Developed by Muhammad Amir MT# MT1063 © 2026 Muhammad Amir. All rights reserved.
+          Software Developed by Muhammad Amir · MT# MT1063 · © 2026 Muhammad Amir. All rights reserved.
         </footer>
       </main>
 
@@ -1082,7 +1087,7 @@ function TransmittalPrint({ report }) {
       </div>
 
       <p className="print-footer">
-        Software Developed by Muhammad Amir MT# MT1063 © 2026 Muhammad Amir. All rights reserved.
+        Software Developed by Muhammad Amir · MT# MT1063 · © 2026 Muhammad Amir. All rights reserved.
       </p>
     </section>
   )
@@ -1137,7 +1142,7 @@ function ReportPrint({ report }) {
       <SplitColumns byType={devices} />
 
       <p className="print-footer">
-        Software Developed by Muhammad Amir MT# MT1063 © 2026 Muhammad Amir. All rights reserved.
+        Software Developed by Muhammad Amir · MT# MT1063 · © 2026 Muhammad Amir. All rights reserved.
       </p>
     </section>
   )

@@ -1,4 +1,11 @@
+/*
+ * Software Developed by Muhammad Amir  MT# MT1063
+ * © 2026 Muhammad Amir. All rights reserved.
+ */
+
 import express from 'express'
+import helmet from 'helmet'
+import rateLimit from 'express-rate-limit'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { prisma } from './db.js'
@@ -15,7 +22,43 @@ const clientDist = path.resolve(here, '../../client/dist') // repo/client/dist
 // without binding a port. src/index.js is what actually listens.
 export const app = express()
 
-app.use(express.json())
+// Behind Railway's proxy — needed so rate-limit sees the real client IP.
+app.set('trust proxy', 1)
+
+// Security headers. CSP is tuned for the Vite SPA this server also serves
+// (same-origin scripts/styles; data: URIs for the select chevron + images).
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", 'data:', 'https:'],
+        connectSrc: ["'self'"],
+        fontSrc: ["'self'", 'data:'],
+        objectSrc: ["'none'"],
+      },
+    },
+    crossOriginEmbedderPolicy: false,
+  }),
+)
+
+// Bulk imports (inventory, saved reports) send sizeable JSON, so the cap is
+// higher than the 10kb default — still bounded against abuse.
+app.use(express.json({ limit: '2mb' }))
+
+// General API rate limit.
+app.use(
+  '/api/',
+  rateLimit({
+    windowMs: 60 * 1000,
+    max: 300,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many requests. Slow down.' },
+  }),
+)
 
 // Railway hits this to decide whether a deploy is healthy.
 // Keep it cheap and dependency-free so a slow DB never fails the deploy.

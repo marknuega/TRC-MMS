@@ -1,3 +1,8 @@
+/*
+ * Software Developed by Muhammad Amir  MT# MT1063
+ * © 2026 Muhammad Amir. All rights reserved.
+ */
+
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'

@@ -2,6 +2,7 @@
   "name": "client",
   "private": true,
   "version": "0.0.0",
+  "description": "TRC Daily Report client — Software Developed by Muhammad Amir MT# MT1063 © 2026 Muhammad Amir. All rights reserved.",
   "type": "module",
   "scripts": {
     "dev": "vite",
