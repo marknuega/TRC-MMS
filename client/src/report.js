@@ -529,8 +529,16 @@ export function buildMonthlyMatrix(savedReports, opts = {}) {
   const modelToKey = new Map() // MODELUPPER -> column key
   const installByType = new Map() // TYPEUPPER -> column key
   const dismantleByType = new Map()
+  const modelRankMap = new Map() // MODELUPPER -> position in the column order (for description sort)
+  let modelRankIdx = 0
   for (const c of columns) {
-    if (c.kind === 'model') for (const m of c.models) modelToKey.set(up(m), c.key)
+    if (c.kind === 'model') {
+      for (const m of c.models) {
+        modelToKey.set(up(m), c.key)
+        modelRankMap.set(up(m), modelRankIdx)
+      }
+      modelRankIdx += 1
+    }
     if (c.kind === 'install') for (const t of c.types) installByType.set(up(t), c.key)
     if (c.kind === 'dismantle') for (const t of c.types) dismantleByType.set(up(t), c.key)
   }
@@ -569,6 +577,7 @@ export function buildMonthlyMatrix(savedReports, opts = {}) {
       // Pasted data wins for this day.
       for (const c of columns) counts[c.key] = Math.max(0, Number(man.counts?.[c.key]) || 0)
     } else if (rec) {
+      const byDevice = new Map() // tag -> { items:[], rank }
       for (const e of rec.entries) {
         const mk = up(e.model)
         const t = up(e.type)
@@ -593,11 +602,19 @@ export function buildMonthlyMatrix(savedReports, opts = {}) {
         const items = (e.faults ?? []).filter((f) => up(f.issue)).map((f) => `${up(f.issue)} (${f.quantity})`)
         if (items.length) {
           const tag = mk && mk !== '-' ? `${t}-${modelDisplay(e.model)}` : t
-          parts.push(`(${tag}) ${items.join(' ')}`)
+          if (!byDevice.has(tag)) {
+            const rank = modelRankMap.get(mk) ?? modelRankMap.get(up(modelDisplay(e.model))) ?? Number.MAX_SAFE_INTEGER
+            byDevice.set(tag, { items: [], rank })
+          }
+          byDevice.get(tag).items.push(...items)
         }
       }
+      // One tag per device (no repeats); faults comma-separated + period; devices in column order.
+      for (const [tag, dev] of [...byDevice.entries()].sort((a, b) => a[1].rank - b[1].rank)) {
+        parts.push(`(${tag}) ${dev.items.join(', ')}.`)
+      }
     }
-    const description = man ? String(man.description ?? '') : parts.join('   ')
+    const description = man ? String(man.description ?? '') : parts.join(' ')
     for (const c of columns) totals[c.key] += counts[c.key]
     rows.push({
       day,
