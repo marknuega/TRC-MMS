@@ -31,6 +31,25 @@
   padding: 1.25rem 0.9rem;
   background: var(--surface);
   border-right: 1px solid var(--border);
+  transition: width 0.15s ease, flex-basis 0.15s ease, padding 0.15s ease;
+}
+.side-collapse {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 2rem;
+  width: 2rem;
+  padding: 0;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.side-collapse:hover {
+  background: var(--surface-3);
 }
 .brand {
   display: flex;
@@ -85,6 +104,30 @@
   margin-top: auto;
   padding-top: 1rem;
 }
+/* ---- Collapsed (icon-only) rail ---- */
+.sidebar.collapsed {
+  width: 4.25rem;
+  flex-basis: 4.25rem;
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+}
+.sidebar.collapsed .brand {
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.2rem 0 0.8rem;
+}
+.sidebar.collapsed .brand-text,
+.sidebar.collapsed .side-label {
+  display: none;
+}
+.sidebar.collapsed .brand .brand-theme {
+  margin-left: 0;
+}
+.sidebar.collapsed .side-link {
+  justify-content: center;
+  gap: 0;
+  padding: 0.65rem 0;
+}
 .page-main {
   flex: 1 1 auto;
   min-width: 0;
@@ -131,6 +174,19 @@
   .side-foot {
     margin: 0;
     padding: 0;
+  }
+  /* On the mobile top-nav, ignore the icon-only rail so labels stay visible. */
+  .sidebar.collapsed {
+    width: 100%;
+    flex: none;
+    padding: 0.6rem 0.75rem;
+  }
+  .sidebar.collapsed .brand {
+    flex-direction: row;
+  }
+  .sidebar.collapsed .brand-text,
+  .sidebar.collapsed .side-label {
+    display: inline;
   }
 }
 

@@ -52,6 +52,17 @@ const NAV = [
   { id: 'inventory', icon: '📦', label: 'Inventory' },
   { id: 'manage', icon: '⚙️', label: 'Manage Inputs' },
 ]
+const SIDEBAR_KEY = 'trc_sidebar'
+const loadSidebar = () => {
+  try {
+    const s = localStorage.getItem(SIDEBAR_KEY)
+    if (s === 'collapsed') return true
+    if (s === 'expanded') return false
+  } catch {
+    /* ignore */
+  }
+  return typeof window !== 'undefined' && window.innerWidth < 1100 // auto-collapse on smaller screens
+}
 const dmyOf = (isoDate) => new Date(isoDate).toLocaleDateString('en-GB') // YYYY-MM-DD -> dd/mm/yyyy
 
 // Render a matrix description: device tags like "(AIRBUS-TH1N)" in red, the
@@ -170,6 +181,7 @@ function App() {
   const [savedOpen, setSavedOpen] = useState(false)
   const [savedSearch, setSavedSearch] = useState('')
   const [page, setPage] = useState('report')
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(loadSidebar)
   const [monthExpanded, setMonthExpanded] = useState(false) // false = show 7 days only
   const [collapsedGroups, setCollapsedGroups] = useState(() => new Set()) // horizontally-collapsed groups
   const [monthValue, setMonthValue] = useState(() => today().slice(0, 7)) // YYYY-MM
@@ -214,6 +226,27 @@ function App() {
       /* ignore storage errors */
     }
   }, [theme])
+
+  // Auto-collapse the sidebar when the window gets narrow (never auto-expands,
+  // so a manual choice on a wide screen is respected).
+  useEffect(() => {
+    const onResize = () => {
+      if (window.innerWidth < 1100) setSidebarCollapsed(true)
+    }
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
+  const toggleSidebar = () =>
+    setSidebarCollapsed((c) => {
+      const next = !c
+      try {
+        localStorage.setItem(SIDEBAR_KEY, next ? 'collapsed' : 'expanded')
+      } catch {
+        /* ignore */
+      }
+      return next
+    })
 
   function changeBranch(e) {
     const b = e.target.value
@@ -593,10 +626,19 @@ function App() {
   return (
     <>
       <div className="layout no-print">
-        <aside className="sidebar">
+        <aside className={`sidebar${sidebarCollapsed ? ' collapsed' : ''}`}>
           <div className="brand">
+            <button
+              type="button"
+              className="side-collapse"
+              onClick={toggleSidebar}
+              aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            >
+              ☰
+            </button>
             <span className="brand-ico">🛠️</span>
-            <span>TRC Daily</span>
+            <span className="brand-text">TRC Daily</span>
             <button
               type="button"
               className="theme-toggle brand-theme"
@@ -614,9 +656,10 @@ function App() {
                 type="button"
                 className={`side-link${page === n.id ? ' active' : ''}`}
                 onClick={() => setPage(n.id)}
+                title={n.label}
               >
                 <span className="side-ico">{n.icon}</span>
-                <span>{n.label}</span>
+                <span className="side-label">{n.label}</span>
               </button>
             ))}
           </nav>
