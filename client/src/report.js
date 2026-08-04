@@ -600,24 +600,30 @@ export function buildMonthlyMatrix(savedReports, opts = {}) {
         if (iKey && install > 0) counts[iKey] += 1
         const dKey = dismantleByType.get(t)
         if (dKey && dismantle > 0) counts[dKey] += 1
-        const items = (e.faults ?? [])
+        const faultItems = (e.faults ?? [])
           .filter((f) => up(f.issue))
-          .map((f) => {
-            const comp = companyDisplay(f.company)
-            return `${up(f.issue)} (${f.quantity})${comp ? ` ${comp}` : ''}`
-          })
-        if (items.length) {
+          .map((f) => ({ issue: up(f.issue), comp: companyDisplay(f.company), qty: Math.max(0, Number(f.quantity) || 0) }))
+        if (faultItems.length) {
           const tag = mk && mk !== '-' ? `${t}-${modelDisplay(e.model)}` : t
           if (!byDevice.has(tag)) {
             const rank = modelRankMap.get(mk) ?? modelRankMap.get(up(modelDisplay(e.model))) ?? Number.MAX_SAFE_INTEGER
-            byDevice.set(tag, { items: [], rank })
+            byDevice.set(tag, { merged: new Map(), rank })
           }
-          byDevice.get(tag).items.push(...items)
+          // Same issue + same company within a device is one line with summed
+          // quantity; a different company keeps its own line. First-seen order.
+          const merged = byDevice.get(tag).merged
+          for (const it of faultItems) {
+            const key = `${it.issue}||${it.comp}`
+            const prev = merged.get(key)
+            if (prev) prev.qty += it.qty
+            else merged.set(key, { ...it })
+          }
         }
       }
       // One tag per device (no repeats); faults comma-separated + period; devices in column order.
       for (const [tag, dev] of [...byDevice.entries()].sort((a, b) => a[1].rank - b[1].rank)) {
-        parts.push(`(${tag}) ${dev.items.join(', ')}.`)
+        const items = [...dev.merged.values()].map((it) => `${it.issue} (${it.qty})${it.comp ? ` ${it.comp}` : ''}`)
+        parts.push(`(${tag}) ${items.join(', ')}.`)
       }
     }
     const description = man ? String(man.description ?? '') : parts.join(' ')

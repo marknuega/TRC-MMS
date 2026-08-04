@@ -663,7 +663,7 @@ function App() {
               ☰
             </button>
             <span className="brand-ico">🛠️</span>
-            <span className="brand-text">TRC Daily</span>
+            <span className="brand-text">TRC-DAR</span>
             <button
               type="button"
               className="theme-toggle brand-theme"
@@ -696,7 +696,7 @@ function App() {
           {page === 'report' && (
             <>
               <header className="topbar">
-                <h1>TRC Daily Report</h1>
+                <h1>TRC-DAR</h1>
           <div className="topbar-right">
             <label className="date-field">
               Mode
