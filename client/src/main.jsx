@@ -3,14 +3,49 @@
  * © 2026 Muhammad Amir. All rights reserved.
  */
 
-import { StrictMode } from 'react'
+import { StrictMode, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
+import LoginPage from './LoginPage.jsx'
+import { getMe, logout } from './api'
+
+// Gate the whole app behind a session: show the login page until authenticated.
+function Gate() {
+  const [status, setStatus] = useState('loading') // loading | anon | authed
+  const [user, setUser] = useState(null)
+
+  useEffect(() => {
+    getMe()
+      .then(({ user }) => {
+        if (user) {
+          setUser(user)
+          setStatus('authed')
+        } else {
+          setStatus('anon')
+        }
+      })
+      .catch(() => setStatus('anon'))
+  }, [])
+
+  async function handleLogout() {
+    try {
+      await logout()
+    } catch {
+      /* ignore */
+    }
+    setUser(null)
+    setStatus('anon')
+  }
+
+  if (status === 'loading') return <div className="auth-splash">Loading…</div>
+  if (status === 'anon') return <LoginPage onAuthed={(u) => { setUser(u); setStatus('authed') }} />
+  return <App user={user} onLogout={handleLogout} />
+}
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <App />
+    <Gate />
   </StrictMode>,
 )
 

@@ -6,9 +6,13 @@
 import express from 'express'
 import helmet from 'helmet'
 import rateLimit from 'express-rate-limit'
+import cookieParser from 'cookie-parser'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { prisma } from './db.js'
+import { loadUser, authRequired } from './auth.js'
+import authRouter from './routes/auth.js'
+import adminRouter from './routes/admin.js'
 import reportsRouter from './routes/reports.js'
 import optionsRouter from './routes/options.js'
 import savedReportsRouter from './routes/savedReports.js'
@@ -47,6 +51,9 @@ app.use(
 // Bulk imports (inventory, saved reports) send sizeable JSON, so the cap is
 // higher than the 10kb default — still bounded against abuse.
 app.use(express.json({ limit: '2mb' }))
+app.use(cookieParser())
+// Attach req.user from the session cookie (anonymous if absent/invalid).
+app.use(loadUser)
 
 // General API rate limit.
 app.use(
@@ -76,11 +83,17 @@ app.get('/health/db', async (req, res) => {
   }
 })
 
-app.use('/api/reports', reportsRouter)
-app.use('/api/options', optionsRouter)
-app.use('/api/saved-reports', savedReportsRouter)
-app.use('/api/monthly', monthlyRouter)
-app.use('/api/inventory', inventoryRouter)
+// Public auth endpoints (login, logout, me, credential request).
+app.use('/api/auth', authRouter)
+// Admin-only user + request management (guarded inside the router).
+app.use('/api/admin', adminRouter)
+
+// All data endpoints require a signed-in user.
+app.use('/api/reports', authRequired, reportsRouter)
+app.use('/api/options', authRequired, optionsRouter)
+app.use('/api/saved-reports', authRequired, savedReportsRouter)
+app.use('/api/monthly', authRequired, monthlyRouter)
+app.use('/api/inventory', authRequired, inventoryRouter)
 
 // In production the same service also serves the built React app, so the
 // browser sees one origin (no CORS). In dev, Vite serves the client instead.

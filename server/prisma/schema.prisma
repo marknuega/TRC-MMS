@@ -74,6 +74,34 @@ model MonthlySheet {
   @@map("monthly_sheets")
 }
 
+// App user accounts. Admins see everything; users are scoped to their branch.
+model User {
+  id           Int      @id @default(autoincrement())
+  username     String   @unique
+  passwordHash String   @map("password_hash")
+  role         String   @default("user") // admin | user
+  branch       String   @default("")
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+// A prospective user's request for login credentials (created in-app, no auth),
+// reviewed by an admin.
+model CredentialRequest {
+  id        Int      @id @default(autoincrement())
+  name      String
+  branch    String   @default("")
+  contact   String   @default("")
+  note      String   @default("")
+  status    String   @default("pending") // pending | approved | rejected
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("credential_requests")
+}
+
 // Single-row (id=1) store for the user-managed dropdown option lists.
 model AppOptions {
   id        Int      @id @default(1)

@@ -19,12 +19,12 @@ const monthLong = (mk) => {
   return y && m ? `${['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][m - 1]} ${y}` : ''
 }
 
-export default function Dashboard({ saved, branches, embedded = false }) {
+export default function Dashboard({ saved, branches, embedded = false, lockBranch = null }) {
   const [openState, setOpen] = useState(false)
   const open = embedded || openState
   const [monthValue, setMonthValue] = useState(() => new Date().toISOString().slice(0, 7))
   const [branchSel, setBranchSel] = useState(ALL)
-  const branch = branchSel === ALL ? '' : branchSel
+  const branch = lockBranch != null ? lockBranch : branchSel === ALL ? '' : branchSel
 
   const entries = useMemo(() => monthEntries(saved, monthValue, branch), [saved, monthValue, branch])
   const summary = useMemo(() => dashboardSummary(entries), [entries])
@@ -84,12 +84,16 @@ export default function Dashboard({ saved, branches, embedded = false }) {
             </label>
             <label>
               Branch
-              <select value={branchSel} onChange={(e) => setBranchSel(e.target.value)}>
-                <option value={ALL}>All branches</option>
-                {(branches ?? []).map((b) => (
-                  <option key={b}>{b}</option>
-                ))}
-              </select>
+              {lockBranch != null ? (
+                <input value={lockBranch || 'Your branch'} readOnly aria-label="Branch" />
+              ) : (
+                <select value={branchSel} onChange={(e) => setBranchSel(e.target.value)}>
+                  <option value={ALL}>All branches</option>
+                  {(branches ?? []).map((b) => (
+                    <option key={b}>{b}</option>
+                  ))}
+                </select>
+              )}
             </label>
           </div>
 

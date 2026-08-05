@@ -68,5 +68,23 @@ export const deleteInventory = (id) => request(`/api/inventory/${id}`, { method:
 
 export const getInventoryTxns = (id) => request(`/api/inventory/${id}/transactions`)
 
+// ---- Auth ----
+export const getMe = () => request('/api/auth/me')
+export const login = (username, password) =>
+  request('/api/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) })
+export const logout = () => request('/api/auth/logout', { method: 'POST' })
+export const requestCredentials = (data) =>
+  request('/api/auth/request', { method: 'POST', body: JSON.stringify(data) })
+
+// ---- Admin ----
+export const getUsers = () => request('/api/admin/users')
+export const createUser = (data) => request('/api/admin/users', { method: 'POST', body: JSON.stringify(data) })
+export const updateUser = (id, data) => request(`/api/admin/users/${id}`, { method: 'PUT', body: JSON.stringify(data) })
+export const deleteUser = (id) => request(`/api/admin/users/${id}`, { method: 'DELETE' })
+export const getCredentialRequests = () => request('/api/admin/requests')
+export const updateCredentialRequest = (id, data) =>
+  request(`/api/admin/requests/${id}`, { method: 'PUT', body: JSON.stringify(data) })
+export const deleteCredentialRequest = (id) => request(`/api/admin/requests/${id}`, { method: 'DELETE' })
+
 export const importInventory = (items) =>
   request('/api/inventory/import', { method: 'POST', body: JSON.stringify({ items }) })

@@ -26,6 +26,7 @@ import Inventory from './Inventory'
 import AgencyTotals from './AgencyTotals'
 import SparePartsReport from './SparePartsReport'
 import Dashboard from './Dashboard'
+import AdminUsers from './AdminUsers'
 import {
   groupReports,
   buildDateReport,
@@ -55,7 +56,8 @@ const NAV = [
   { id: 'spareparts', icon: '🧰', label: 'Spare Parts' },
   { id: 'agency', icon: '🏢', label: 'Agency Totals' },
   { id: 'inventory', icon: '📦', label: 'Inventory' },
-  { id: 'manage', icon: '⚙️', label: 'Manage Inputs' },
+  { id: 'manage', icon: '⚙️', label: 'Manage Inputs', adminOnly: true },
+  { id: 'admin', icon: '🔐', label: 'Users & Access', adminOnly: true },
 ]
 // Data-heavy pages fill the available width (tables/charts); form-style pages
 // stay centred at a readable measure.
@@ -206,7 +208,10 @@ function downloadText(filename, text) {
   URL.revokeObjectURL(url)
 }
 
-function App() {
+function App({ user, onLogout }) {
+  const isAdmin = user?.role === 'admin'
+  const lockBranch = isAdmin ? null : user?.branch || '' // non-admins are pinned to their branch
+  const navItems = NAV.filter((n) => isAdmin || !n.adminOnly)
   const [entries, setEntries] = useState([])
   const [form, setForm] = useState(emptyForm)
   const [error, setError] = useState(null)
@@ -234,9 +239,21 @@ function App() {
   const [branch, setBranch] = useState(loadBranch)
   const [deviceOpen, setDeviceOpen] = useState(true)
   const [faultsOpen, setFaultsOpen] = useState(true)
-  const isAllBranches = branch === ALL_BRANCHES
+  const isAllBranches = isAdmin && branch === ALL_BRANCHES
   const [theme, setTheme] = useState(loadTheme)
   const [mode, setMode] = useState(loadMode)
+
+  // Non-admins are pinned to their own branch everywhere.
+  useEffect(() => {
+    if (lockBranch) {
+      setBranch(lockBranch)
+      setMonthBranch(lockBranch)
+    }
+  }, [lockBranch])
+  // Keep non-admins off admin-only pages.
+  useEffect(() => {
+    if (!isAdmin && NAV.find((n) => n.id === page)?.adminOnly) setPage('report')
+  }, [isAdmin, page])
   const [transmittedBy, setTransmittedBy] = useState(() => lsGet('trc_tx'))
   const [receivedBy, setReceivedBy] = useState(() => lsGet('trc_rx'))
   const saveTimer = useRef(null)
@@ -803,7 +820,7 @@ function App() {
             </button>
           </div>
           <nav className="side-nav">
-            {NAV.map((n) => (
+            {navItems.map((n) => (
               <button
                 key={n.id}
                 type="button"
@@ -816,6 +833,19 @@ function App() {
               </button>
             ))}
           </nav>
+          <div className="side-user">
+            <span className="side-user-info" title={`${user?.username} · ${isAdmin ? 'admin' : user?.branch || 'user'}`}>
+              <span className="side-ico">{isAdmin ? '👑' : '👤'}</span>
+              <span className="side-label">
+                {user?.username}
+                <small>{isAdmin ? 'Admin · all branches' : user?.branch || 'User'}</small>
+              </span>
+            </span>
+            <button type="button" className="side-logout" onClick={onLogout} title="Sign out">
+              <span className="side-ico">⎋</span>
+              <span className="side-label">Sign out</span>
+            </button>
+          </div>
         </aside>
 
         <main className={`page-main app${WIDE_PAGES.has(page) ? ' wide' : ''}`}>
@@ -835,12 +865,16 @@ function App() {
             </label>
             <label className="date-field">
               Branch
-              <select value={branch} onChange={changeBranch}>
-                {BRANCHES.map((b) => (
-                  <option key={b}>{b}</option>
-                ))}
-                <option value={ALL_BRANCHES}>{ALL_BRANCHES}</option>
-              </select>
+              {isAdmin ? (
+                <select value={branch} onChange={changeBranch}>
+                  {BRANCHES.map((b) => (
+                    <option key={b}>{b}</option>
+                  ))}
+                  <option value={ALL_BRANCHES}>{ALL_BRANCHES}</option>
+                </select>
+              ) : (
+                <input value={branch} readOnly aria-label="Branch" />
+              )}
             </label>
             <label className="date-field">
               Report date
@@ -1185,12 +1219,16 @@ function App() {
                 </label>
                 <label>
                   Branch
-                  <select value={monthBranch} onChange={(e) => setMonthBranch(e.target.value)}>
-                    <option value="">All branches</option>
-                    {BRANCHES.map((b) => (
-                      <option key={b}>{b}</option>
-                    ))}
-                  </select>
+                  {isAdmin ? (
+                    <select value={monthBranch} onChange={(e) => setMonthBranch(e.target.value)}>
+                      <option value="">All branches</option>
+                      {BRANCHES.map((b) => (
+                        <option key={b}>{b}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input value={monthBranch} readOnly aria-label="Branch" />
+                  )}
                 </label>
                 <button type="button" className="btn-pdf" onClick={handleExportMonthlyExcel}>
                   ⭳ Excel
@@ -1338,15 +1376,17 @@ function App() {
             </section>
           )}
 
-          {page === 'dashboard' && <Dashboard saved={saved} branches={BRANCHES} embedded />}
+          {page === 'dashboard' && <Dashboard saved={saved} branches={BRANCHES} embedded lockBranch={lockBranch} />}
 
-          {page === 'spareparts' && <SparePartsReport saved={saved} branches={BRANCHES} embedded />}
+          {page === 'spareparts' && <SparePartsReport saved={saved} branches={BRANCHES} embedded lockBranch={lockBranch} />}
 
-          {page === 'agency' && <AgencyTotals saved={saved} branches={BRANCHES} embedded />}
+          {page === 'agency' && <AgencyTotals saved={saved} branches={BRANCHES} embedded lockBranch={lockBranch} />}
 
           {page === 'inventory' && <Inventory embedded />}
 
-          {page === 'manage' && <ManageInputs options={options} onChange={setCategory} embedded />}
+          {page === 'manage' && isAdmin && <ManageInputs options={options} onChange={setCategory} embedded />}
+
+          {page === 'admin' && isAdmin && <AdminUsers currentUser={user} embedded />}
 
           <footer className="app-footer">
             Software Developed by Muhammad Amir · MT# MT1063 · © 2026 Muhammad Amir. All rights reserved.

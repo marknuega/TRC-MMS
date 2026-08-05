@@ -1,0 +1,227 @@
+/*
+ * Software Developed by Muhammad Amir  MT# MT1063
+ * © 2026 Muhammad Amir. All rights reserved.
+ */
+
+import { useEffect, useMemo, useState } from 'react'
+import {
+  getUsers, createUser, updateUser, deleteUser,
+  getCredentialRequests, updateCredentialRequest, deleteCredentialRequest,
+} from './api'
+import { BRANCHES } from './options'
+
+const BLANK = { username: '', password: '', role: 'user', branch: BRANCHES[0] ?? '' }
+
+export default function AdminUsers({ currentUser, embedded = false }) {
+  const [users, setUsers] = useState([])
+  const [requests, setRequests] = useState([])
+  const [form, setForm] = useState(BLANK)
+  const [editId, setEditId] = useState(null) // user id being edited
+  const [editForm, setEditForm] = useState({})
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+
+  async function refresh() {
+    try {
+      const [u, r] = await Promise.all([getUsers(), getCredentialRequests()])
+      setUsers(u)
+      setRequests(r)
+    } catch (e) {
+      setError(e.message)
+    }
+  }
+  useEffect(() => {
+    refresh()
+  }, [])
+
+  const pendingCount = useMemo(() => requests.filter((r) => r.status === 'pending').length, [requests])
+  const flash = (m) => {
+    setNotice(m)
+    setTimeout(() => setNotice(''), 3000)
+  }
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
+
+  async function addUser(e) {
+    e.preventDefault()
+    setError('')
+    try {
+      await createUser({ ...form, username: form.username.trim() })
+      setForm(BLANK)
+      flash('User created.')
+      refresh()
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  function startEdit(u) {
+    setEditId(u.id)
+    setEditForm({ username: u.username, role: u.role, branch: u.branch, active: u.active, password: '' })
+    setError('')
+  }
+  async function saveEdit(id) {
+    try {
+      const payload = { username: editForm.username.trim(), role: editForm.role, branch: editForm.branch, active: editForm.active }
+      if (editForm.password) payload.password = editForm.password
+      await updateUser(id, payload)
+      setEditId(null)
+      flash('User updated.')
+      refresh()
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+  async function removeUser(u) {
+    if (!window.confirm(`Delete user "${u.username}"?`)) return
+    try {
+      await deleteUser(u.id)
+      refresh()
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  async function setReqStatus(r, status) {
+    try {
+      await updateCredentialRequest(r.id, { status })
+      refresh()
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+  async function removeReq(r) {
+    try {
+      await deleteCredentialRequest(r.id)
+      refresh()
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+  function makeAccountFrom(r) {
+    setForm({ username: r.name.replace(/\s+/g, '').toLowerCase(), password: '', role: 'user', branch: r.branch || BRANCHES[0] || '' })
+    setError('')
+    document.getElementById('admin-new-user')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
+
+  const eset = (k) => (e) => setEditForm((f) => ({ ...f, [k]: k === 'active' ? e.target.value === 'true' : e.target.value }))
+
+  return (
+    <section className="admin">
+      {embedded && <h2 className="page-title">🔐 Users &amp; access {pendingCount > 0 && <span className="hint">· {pendingCount} pending request{pendingCount === 1 ? '' : 's'}</span>}</h2>}
+      {error && <p className="manage-notice">{error}</p>}
+      {notice && <p className="saved-hint">✅ {notice}</p>}
+
+      {/* Credential requests */}
+      <div className="admin-block">
+        <h3 className="sp-brand-h">Access requests</h3>
+        {requests.length === 0 ? (
+          <p className="empty">No requests.</p>
+        ) : (
+          <div className="inv-scroll">
+            <table className="inv-table sp-table">
+              <thead>
+                <tr>
+                  <th>Name</th><th>Branch</th><th>Contact</th><th>Note</th><th>Status</th><th />
+                </tr>
+              </thead>
+              <tbody>
+                {requests.map((r) => (
+                  <tr key={r.id}>
+                    <td className="nowrap">{r.name}</td>
+                    <td>{r.branch}</td>
+                    <td className="nowrap">{r.contact}</td>
+                    <td>{r.note}</td>
+                    <td><span className={`badge badge-${r.status}`}>{r.status}</span></td>
+                    <td className="admin-actions">
+                      <button type="button" onClick={() => makeAccountFrom(r)}>Make account</button>
+                      {r.status !== 'approved' && <button type="button" onClick={() => setReqStatus(r, 'approved')}>Approve</button>}
+                      {r.status !== 'rejected' && <button type="button" className="ghost" onClick={() => setReqStatus(r, 'rejected')}>Reject</button>}
+                      <button type="button" className="danger" onClick={() => removeReq(r)}>Delete</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Create user */}
+      <div className="admin-block" id="admin-new-user">
+        <h3 className="sp-brand-h">Create login</h3>
+        <form className="admin-form" onSubmit={addUser}>
+          <label>Username<input value={form.username} onChange={set('username')} required /></label>
+          <label>Password<input value={form.password} onChange={set('password')} required /></label>
+          <label>Role
+            <select value={form.role} onChange={set('role')}>
+              <option value="user">User</option>
+              <option value="admin">Admin</option>
+            </select>
+          </label>
+          <label>Branch
+            <select value={form.branch} onChange={set('branch')} disabled={form.role === 'admin'}>
+              {BRANCHES.map((b) => <option key={b}>{b}</option>)}
+            </select>
+          </label>
+          <button type="submit" className="submit">Create</button>
+        </form>
+        <p className="saved-hint">Admins see all branches. Users are limited to their branch.</p>
+      </div>
+
+      {/* Users */}
+      <div className="admin-block">
+        <h3 className="sp-brand-h">Accounts ({users.length})</h3>
+        <div className="inv-scroll">
+          <table className="inv-table sp-table">
+            <thead>
+              <tr><th>Username</th><th>Role</th><th>Branch</th><th>Active</th><th /></tr>
+            </thead>
+            <tbody>
+              {users.map((u) => (
+                editId === u.id ? (
+                  <tr key={u.id}>
+                    <td><input value={editForm.username} onChange={eset('username')} /></td>
+                    <td>
+                      <select value={editForm.role} onChange={eset('role')}>
+                        <option value="user">User</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                    </td>
+                    <td>
+                      <select value={editForm.branch} onChange={eset('branch')} disabled={editForm.role === 'admin'}>
+                        <option value=""></option>
+                        {BRANCHES.map((b) => <option key={b}>{b}</option>)}
+                      </select>
+                    </td>
+                    <td>
+                      <select value={String(editForm.active)} onChange={eset('active')}>
+                        <option value="true">Active</option>
+                        <option value="false">Disabled</option>
+                      </select>
+                    </td>
+                    <td className="admin-actions">
+                      <input placeholder="New password (optional)" value={editForm.password} onChange={eset('password')} />
+                      <button type="button" onClick={() => saveEdit(u.id)}>Save</button>
+                      <button type="button" className="ghost" onClick={() => setEditId(null)}>Cancel</button>
+                    </td>
+                  </tr>
+                ) : (
+                  <tr key={u.id}>
+                    <td className="nowrap">{u.username}{u.id === currentUser?.id && <span className="hint"> · you</span>}</td>
+                    <td>{u.role}</td>
+                    <td>{u.branch || (u.role === 'admin' ? 'all' : '—')}</td>
+                    <td>{u.active ? 'Yes' : 'No'}</td>
+                    <td className="admin-actions">
+                      <button type="button" onClick={() => startEdit(u)}>Edit</button>
+                      {u.id !== currentUser?.id && <button type="button" className="danger" onClick={() => removeUser(u)}>Delete</button>}
+                    </td>
+                  </tr>
+                )
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  )
+}

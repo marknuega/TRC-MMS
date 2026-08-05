@@ -46,11 +46,12 @@ function splitByCompany(models) {
     })
 }
 
-export default function SparePartsReport({ saved, branches, embedded = false }) {
+export default function SparePartsReport({ saved, branches, embedded = false, lockBranch = null }) {
   const [openState, setOpen] = useState(false)
   const open = embedded || openState
   const [monthValue, setMonthValue] = useState(() => new Date().toISOString().slice(0, 7))
-  const [branch, setBranch] = useState(branches?.[0] ?? '')
+  const [branchSel, setBranch] = useState(branches?.[0] ?? '')
+  const branch = lockBranch != null ? lockBranch : branchSel
 
   const [collapsed, setCollapsed] = useState(() => new Set()) // collapsed company cards
   const toggleCard = (key) =>
@@ -173,11 +174,15 @@ export default function SparePartsReport({ saved, branches, embedded = false }) 
             </label>
             <label>
               Branch
-              <select value={branch} onChange={(e) => setBranch(e.target.value)}>
-                {(branches ?? []).map((b) => (
-                  <option key={b}>{b}</option>
-                ))}
-              </select>
+              {lockBranch != null ? (
+                <input value={branch} readOnly aria-label="Branch" />
+              ) : (
+                <select value={branchSel} onChange={(e) => setBranch(e.target.value)}>
+                  {(branches ?? []).map((b) => (
+                    <option key={b}>{b}</option>
+                  ))}
+                </select>
+              )}
             </label>
             <button type="button" className="submit" onClick={exportExcel} disabled={!hasData}>
               ⭳ Excel

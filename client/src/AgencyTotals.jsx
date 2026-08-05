@@ -30,12 +30,13 @@ function periodRange(refDate, period) {
 
 const fmt = (d) => d.toLocaleDateString('en-GB')
 
-export default function AgencyTotals({ saved, branches, embedded = false }) {
+export default function AgencyTotals({ saved, branches, embedded = false, lockBranch = null }) {
   const [openState, setOpen] = useState(false)
   const open = embedded || openState
   const [period, setPeriod] = useState('month')
   const [refDate, setRefDate] = useState(today)
-  const [branch, setBranch] = useState('')
+  const [branchSel, setBranch] = useState('')
+  const branch = lockBranch != null ? lockBranch : branchSel
 
   const [start, end] = useMemo(() => periodRange(refDate, period), [refDate, period])
 
@@ -113,12 +114,16 @@ export default function AgencyTotals({ saved, branches, embedded = false }) {
             </label>
             <label>
               Branch
-              <select value={branch} onChange={(e) => setBranch(e.target.value)}>
-                <option value="">All branches</option>
-                {branches.map((b) => (
-                  <option key={b}>{b}</option>
-                ))}
-              </select>
+              {lockBranch != null ? (
+                <input value={branch} readOnly aria-label="Branch" />
+              ) : (
+                <select value={branchSel} onChange={(e) => setBranch(e.target.value)}>
+                  <option value="">All branches</option>
+                  {branches.map((b) => (
+                    <option key={b}>{b}</option>
+                  ))}
+                </select>
+              )}
             </label>
             <button type="button" className="btn-txt" onClick={exportCsv} disabled={!rows.length}>
               ⭳ CSV
