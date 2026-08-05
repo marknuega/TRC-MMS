@@ -228,8 +228,6 @@ function App() {
   const [editSavedId, setEditSavedId] = useState(null) // which saved row shows Load/Delete
   const [nextReportId, setNextReportId] = useState('REP-0001')
   const [nextTransId, setNextTransId] = useState('TRANS-0001')
-  // The next id a Save would mint, per the current document type.
-  const nextDocId = mode === 'transmittal' ? nextTransId : nextReportId
   const [busy, setBusy] = useState(false)
   const [branch, setBranch] = useState(loadBranch)
   const [deviceOpen, setDeviceOpen] = useState(true)
@@ -241,6 +239,8 @@ function App() {
   const [receivedBy, setReceivedBy] = useState(() => lsGet('trc_rx'))
   const saveTimer = useRef(null)
   const isTransmittal = mode === 'transmittal'
+  // The next id a Save would mint, for the current document type.
+  const nextDocId = isTransmittal ? nextTransId : nextReportId
 
   function changeMode(e) {
     const m = e.target.value === 'transmittal' ? 'transmittal' : 'report'
