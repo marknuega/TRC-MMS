@@ -113,6 +113,33 @@ const repLabel = (baseId, branch, mode) => {
   const id = mode === 'transmittal' ? String(baseId ?? '-').replace('REP-', 'TRANS-') : baseId ?? '-'
   return `${branch ? `${branch.toUpperCase()}-` : ''}${id}`
 }
+const isTx = (r) => String(r?.mode ?? '').toUpperCase() === 'TRANSMITTAL'
+
+// Deep search INSIDE a set of saved snapshots -> matching line items.
+function searchInside(list, query) {
+  const q = String(query ?? '').trim().toLowerCase()
+  if (!q) return []
+  const out = []
+  for (const r of list) {
+    const entries = Array.isArray(r.entries) ? r.entries : []
+    for (const e of entries) {
+      const model = e.model && e.model !== '-' ? e.model : ''
+      for (const f of e.faults ?? []) {
+        const hay = `${r.reportId} ${r.branch} ${r.dateLabel} ${e.type} ${e.model} ${f.issue} ${f.company} ${f.status} ${e.comment ?? ''}`
+        if (hay.toLowerCase().includes(q)) {
+          out.push({
+            date: r.dateLabel,
+            branch: r.branch,
+            qty: f.quantity,
+            item: `${model ? `${model} · ` : ''}${f.issue}`,
+            reportId: repLabel(r.reportId, r.branch, r.mode),
+          })
+        }
+      }
+    }
+  }
+  return out.slice(0, 300)
+}
 
 const BRANCH_KEY = 'trc_branch'
 const loadBranch = () => {
@@ -187,6 +214,8 @@ function App() {
   const [saved, setSaved] = useState([])
   const [savedOpen, setSavedOpen] = useState(false)
   const [savedSearch, setSavedSearch] = useState('')
+  const [savedTxOpen, setSavedTxOpen] = useState(false)
+  const [savedTxSearch, setSavedTxSearch] = useState('')
   const [page, setPage] = useState('report')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(loadSidebar)
   const [monthExpanded, setMonthExpanded] = useState(false) // false = show 7 days only
@@ -619,32 +648,11 @@ function App() {
     URL.revokeObjectURL(url)
   }
 
-  // Live search INSIDE saved report data: returns matching line items with
-  // { date, branch, qty, item, reportId }.
-  const searchResults = useMemo(() => {
-    const q = savedSearch.trim().toLowerCase()
-    if (!q) return []
-    const out = []
-    for (const r of saved) {
-      const entries = Array.isArray(r.entries) ? r.entries : []
-      for (const e of entries) {
-        const model = e.model && e.model !== '-' ? e.model : ''
-        for (const f of e.faults ?? []) {
-          const hay = `${r.reportId} ${r.branch} ${r.dateLabel} ${e.type} ${e.model} ${f.issue} ${f.company} ${f.status} ${e.comment ?? ''}`
-          if (hay.toLowerCase().includes(q)) {
-            out.push({
-              date: r.dateLabel,
-              branch: r.branch,
-              qty: f.quantity,
-              item: `${model ? `${model} · ` : ''}${f.issue}`,
-              reportId: repLabel(r.reportId, r.branch, r.mode),
-            })
-          }
-        }
-      }
-    }
-    return out.slice(0, 300)
-  }, [saved, savedSearch])
+  // Keep daily reports and transmittals in separate lists (no mixing).
+  const dailySaved = useMemo(() => saved.filter((r) => !isTx(r)), [saved])
+  const txSaved = useMemo(() => saved.filter((r) => isTx(r)), [saved])
+  const reportResults = useMemo(() => searchInside(dailySaved, savedSearch), [dailySaved, savedSearch])
+  const txResults = useMemo(() => searchInside(txSaved, savedTxSearch), [txSaved, savedTxSearch])
 
   function handleDownloadTxt() {
     if (!reports.length) return
@@ -654,6 +662,95 @@ function App() {
     const stamp = top.dateLabel.replace(/\//g, '')
     downloadText(`REP-Daily-${id}-${stamp}.txt`, combinedTxt)
   }
+
+  // One saved-snapshot row (Edit -> Load / Delete).
+  const savedRow = (r) => (
+    <li key={r.id}>
+      <div>
+        <strong>{repLabel(r.reportId, r.branch, r.mode)}</strong>{' '}
+        <span className="muted small">
+          · {r.dateLabel} · {r.entryCount} {r.entryCount === 1 ? 'entry' : 'entries'} · saved{' '}
+          {new Date(r.savedAt).toLocaleString('en-GB')}
+        </span>
+      </div>
+      <div className="saved-actions">
+        {editSavedId === r.id ? (
+          <>
+            <button type="button" onClick={() => { handleLoadReport(r); setEditSavedId(null) }} disabled={busy}>
+              Load
+            </button>
+            <button type="button" className="danger" onClick={() => { handleDeleteSaved(r); setEditSavedId(null) }}>
+              Delete
+            </button>
+            <button type="button" className="ghost" onClick={() => setEditSavedId(null)}>
+              Close
+            </button>
+          </>
+        ) : (
+          <button type="button" onClick={() => setEditSavedId(r.id)}>
+            Edit
+          </button>
+        )}
+      </div>
+    </li>
+  )
+
+  const searchList = (results, query) =>
+    results.length === 0 ? (
+      <p className="empty">No items match “{query}”.</p>
+    ) : (
+      <ul className="search-results">
+        <li className="search-results-head muted small">
+          <span>Item</span>
+          <span>Date</span>
+          <span>Branch</span>
+          <span>Qty</span>
+          <span>Report</span>
+        </li>
+        {results.map((res, idx) => (
+          <li key={idx}>
+            <span className="res-item">{res.item}</span>
+            <span className="muted small">{res.date}</span>
+            <span className="muted small">{res.branch || '—'}</span>
+            <span className="muted small">{res.qty}</span>
+            <span className="muted small">{res.reportId}</span>
+          </li>
+        ))}
+      </ul>
+    )
+
+  // A collapsible "Saved …" card (used for daily reports and transmittals).
+  const savedCard = ({ icon, title, list, open, setOpen, search, setSearch, results, hint, empty, placeholder }) => (
+    <section className="saved">
+      <button type="button" className="manage-toggle" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+        <span>
+          {icon} {title} {list.length > 0 && <span className="hint">({list.length})</span>}
+        </span>
+        <span className="chev">{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div className="saved-body">
+          <p className="saved-hint">{hint}</p>
+          {list.length > 0 && (
+            <input
+              type="search"
+              className="saved-search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={placeholder}
+            />
+          )}
+          {list.length === 0 ? (
+            <p className="empty">{empty}</p>
+          ) : search.trim() ? (
+            searchList(results, search)
+          ) : (
+            <ul className="saved-list">{list.map(savedRow)}</ul>
+          )}
+        </div>
+      )}
+    </section>
+  )
 
   return (
     <>
@@ -1014,108 +1111,33 @@ function App() {
           )}
         </section>
 
-        <section className="saved">
-          <button
-            type="button"
-            className="manage-toggle"
-            onClick={() => setSavedOpen((o) => !o)}
-            aria-expanded={savedOpen}
-          >
-            <span>☰ Saved reports {saved.length > 0 && <span className="hint">({saved.length})</span>}</span>
-            <span className="chev">{savedOpen ? '▲' : '▼'}</span>
-          </button>
+        {savedCard({
+          icon: '☰',
+          title: 'Saved reports',
+          list: dailySaved,
+          open: savedOpen,
+          setOpen: setSavedOpen,
+          search: savedSearch,
+          setSearch: setSavedSearch,
+          results: reportResults,
+          hint: 'Daily-report snapshots, saved under a unique REP-#### number. Load one back to review or edit it, then Save again to store it as a new report.',
+          empty: 'No saved reports yet — in Report mode, click “Save report” above.',
+          placeholder: '🔎 Search inside reports (item, model, branch, date)…',
+        })}
 
-          {savedOpen && (
-            <div className="saved-body">
-              <p className="saved-hint">
-                Save snapshots the entries below under a unique {`REP-####`} number. Load one back to review or edit
-                it, then Save again to store it as a new report.
-              </p>
-              {saved.length > 0 && (
-                <input
-                  type="search"
-                  className="saved-search"
-                  value={savedSearch}
-                  onChange={(e) => setSavedSearch(e.target.value)}
-                  placeholder="🔎 Search inside all reports (item, model, branch, date)…"
-                />
-              )}
-              {saved.length === 0 ? (
-                <p className="empty">No saved reports yet — click “Save report” above.</p>
-              ) : savedSearch.trim() ? (
-                searchResults.length === 0 ? (
-                  <p className="empty">No items match “{savedSearch}”.</p>
-                ) : (
-                  <ul className="search-results">
-                    <li className="search-results-head muted small">
-                      <span>Item</span>
-                      <span>Date</span>
-                      <span>Branch</span>
-                      <span>Qty</span>
-                      <span>Report</span>
-                    </li>
-                    {searchResults.map((res, idx) => (
-                      <li key={idx}>
-                        <span className="res-item">{res.item}</span>
-                        <span className="muted small">{res.date}</span>
-                        <span className="muted small">{res.branch || '—'}</span>
-                        <span className="muted small">{res.qty}</span>
-                        <span className="muted small">{res.reportId}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )
-              ) : (
-                <ul className="saved-list">
-                  {saved.map((r) => (
-                    <li key={r.id}>
-                      <div>
-                        <strong>{repLabel(r.reportId, r.branch, r.mode)}</strong>{' '}
-                        <span className="muted small">
-                          · {r.dateLabel} · {r.entryCount} {r.entryCount === 1 ? 'entry' : 'entries'} · saved{' '}
-                          {new Date(r.savedAt).toLocaleString('en-GB')}
-                        </span>
-                      </div>
-                      <div className="saved-actions">
-                        {editSavedId === r.id ? (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                handleLoadReport(r)
-                                setEditSavedId(null)
-                              }}
-                              disabled={busy}
-                            >
-                              Load
-                            </button>
-                            <button
-                              type="button"
-                              className="danger"
-                              onClick={() => {
-                                handleDeleteSaved(r)
-                                setEditSavedId(null)
-                              }}
-                            >
-                              Delete
-                            </button>
-                            <button type="button" className="ghost" onClick={() => setEditSavedId(null)}>
-                              Close
-                            </button>
-                          </>
-                        ) : (
-                          <button type="button" onClick={() => setEditSavedId(r.id)}>
-                            Edit
-                          </button>
-                        )}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
-        </section>
+        {savedCard({
+          icon: '📦',
+          title: 'Saved transmittals',
+          list: txSaved,
+          open: savedTxOpen,
+          setOpen: setSavedTxOpen,
+          search: savedTxSearch,
+          setSearch: setSavedTxSearch,
+          results: txResults,
+          hint: 'Transmittal snapshots, saved under a unique TRANS-#### number — kept separate from daily reports.',
+          empty: 'No saved transmittals yet — switch to Transmittal mode and Save.',
+          placeholder: '🔎 Search inside transmittals (item, model, branch, date)…',
+        })}
             </>
           )}
 

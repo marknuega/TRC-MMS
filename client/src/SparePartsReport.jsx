@@ -5,6 +5,7 @@
 
 import { useMemo, useState } from 'react'
 import { monthEntries, buildSparePartsReport } from './report'
+import { Pie } from './Pie'
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 const monthLabel = (mk) => {
@@ -17,8 +18,6 @@ const ACT_COLS = [
   ['install', 'Installation'],
   ['dismantle', 'Dismantle'],
 ]
-const PALETTE = ['#2563eb', '#d97706', '#059669', '#7c3aed', '#db2777', '#0891b2', '#65a30d', '#dc2626']
-
 // Regroup one brand's model blocks (rows carry a company) into per-company
 // groups, each keeping its model sub-blocks. -> [{ company, models, total }].
 function splitByCompany(models) {
@@ -45,40 +44,6 @@ function splitByCompany(models) {
         })
       return { company, models: modelList, total: modelList.reduce((s, x) => s + x.total, 0) }
     })
-}
-
-// Lightweight SVG-free pie via conic-gradient + legend. data: [{label,value}].
-function Pie({ title, data }) {
-  const rows = data.filter((d) => d.value > 0)
-  const total = rows.reduce((s, d) => s + d.value, 0)
-  if (!total) return null
-  let acc = 0
-  const stops = rows
-    .map((d, i) => {
-      const start = (acc / total) * 100
-      acc += d.value
-      const end = (acc / total) * 100
-      return `${PALETTE[i % PALETTE.length]} ${start}% ${end}%`
-    })
-    .join(', ')
-  return (
-    <div className="pie-card">
-      <h3 className="sp-brand-h">{title}</h3>
-      <div className="pie-wrap">
-        <div className="pie" style={{ background: `conic-gradient(${stops})` }} role="img" aria-label={title} />
-        <ul className="pie-legend">
-          {rows.map((d, i) => (
-            <li key={d.label}>
-              <span className="pie-dot" style={{ background: PALETTE[i % PALETTE.length] }} />
-              <span className="pie-name">{d.label}</span>
-              <b>{d.value}</b>
-              <span className="pie-pct">{Math.round((d.value / total) * 100)}%</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </div>
-  )
 }
 
 export default function SparePartsReport({ saved, branches, embedded = false }) {
@@ -229,8 +194,12 @@ export default function SparePartsReport({ saved, branches, embedded = false }) 
             <>
               {(companyPie.length > 0 || brandPie.some((b) => b.value > 0)) && (
                 <div className="pie-row">
-                  <Pie title="Parts by company" data={companyPie} />
-                  <Pie title="Parts by brand" data={brandPie} />
+                  <div className="pie-card">
+                    <Pie title="Parts by company" data={companyPie} />
+                  </div>
+                  <div className="pie-card">
+                    <Pie title="Parts by brand" data={brandPie} />
+                  </div>
                 </div>
               )}
 

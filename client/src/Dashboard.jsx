@@ -5,6 +5,8 @@
 
 import { useMemo, useState } from 'react'
 import { monthEntries, dashboardSummary, technicianTotals, topParts, monthlyTrend, agencyTransactions } from './report'
+import { Pie } from './Pie'
+import { toPie } from './chartUtils'
 
 const ALL = '__all__'
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -15,20 +17,6 @@ const monthShort = (mk) => {
 const monthLong = (mk) => {
   const [y, m] = String(mk || '').split('-').map(Number)
   return y && m ? `${['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][m - 1]} ${y}` : ''
-}
-
-// A compact horizontal bar for ranked lists.
-function Bar({ value, max, label, right }) {
-  const pct = max > 0 ? Math.round((value / max) * 100) : 0
-  return (
-    <div className="dash-bar-row">
-      <span className="dash-bar-label" title={label}>{label}</span>
-      <span className="dash-bar-track">
-        <span className="dash-bar-fill" style={{ width: `${pct}%` }} />
-      </span>
-      <span className="dash-bar-val">{right ?? value}</span>
-    </div>
-  )
 }
 
 export default function Dashboard({ saved, branches, embedded = false }) {
@@ -46,17 +34,17 @@ export default function Dashboard({ saved, branches, embedded = false }) {
   const trend = useMemo(() => monthlyTrend(saved, branch), [saved, branch])
 
   const hasData = summary.devices > 0
-  const activityMix = [
-    ['Maintenance', summary.maintenance, '#2563eb'],
-    ['Programming', summary.programming, '#7c3aed'],
-    ['Installation', summary.install, '#059669'],
-    ['Dismantle', summary.dismantle, '#d97706'],
-  ]
-  const mixMax = Math.max(1, ...activityMix.map(([, v]) => v))
-  const techMax = Math.max(1, ...techs.map((t) => t.total))
-  const partMax = Math.max(1, ...parts.map((p) => p.qty))
   const trendMax = Math.max(1, ...trend.map((t) => t.devices))
-  const agencyMax = Math.max(1, ...agencies.map((a) => a.total))
+  // Pie datasets for the analytics cards.
+  const mixPie = [
+    { label: 'Maintenance', value: summary.maintenance, color: '#2563eb' },
+    { label: 'Programming', value: summary.programming, color: '#7c3aed' },
+    { label: 'Installation', value: summary.install, color: '#059669' },
+    { label: 'Dismantle', value: summary.dismantle, color: '#d97706' },
+  ]
+  const techPie = toPie(techs, (t) => t.technician, (t) => t.total)
+  const agencyPie = toPie(agencies, (a) => a.agency, (a) => a.total)
+  const partsPie = toPie(parts, (p) => `${p.part}${p.company ? ` · ${p.company}` : ''}`, (p) => p.qty)
   const sumBy = (list, keys) =>
     list.reduce((a, r) => {
       keys.forEach((k) => (a[k] = (a[k] || 0) + (r[k] || 0)))
@@ -122,44 +110,22 @@ export default function Dashboard({ saved, branches, embedded = false }) {
               <div className="dash-grid">
                 <div className="dash-card">
                   <h3 className="sp-brand-h">Activity mix</h3>
-                  {activityMix.map(([label, value, color]) => (
-                    <div className="dash-bar-row" key={label}>
-                      <span className="dash-bar-label">{label}</span>
-                      <span className="dash-bar-track">
-                        <span className="dash-bar-fill" style={{ width: `${Math.round((value / mixMax) * 100)}%`, background: color }} />
-                      </span>
-                      <span className="dash-bar-val">{value}</span>
-                    </div>
-                  ))}
+                  <Pie data={mixPie} />
                 </div>
 
                 <div className="dash-card">
                   <h3 className="sp-brand-h">Top technicians <span className="hint">by activity</span></h3>
-                  {techs.slice(0, 8).map((t) => (
-                    <Bar key={t.technician} value={t.total} max={techMax} label={t.technician} right={t.total} />
-                  ))}
+                  <Pie data={techPie} />
                 </div>
 
                 <div className="dash-card">
                   <h3 className="sp-brand-h">Busiest agencies</h3>
-                  {agencies
-                    .slice()
-                    .sort((a, b) => b.total - a.total)
-                    .slice(0, 8)
-                    .map((a) => (
-                      <Bar key={a.agency} value={a.total} max={agencyMax} label={a.agency} right={a.total} />
-                    ))}
+                  <Pie data={agencyPie} />
                 </div>
 
                 <div className="dash-card">
                   <h3 className="sp-brand-h">Top spare parts</h3>
-                  {parts.length === 0 ? (
-                    <p className="empty">No parts recorded.</p>
-                  ) : (
-                    parts.map((p) => (
-                      <Bar key={`${p.part}|${p.company}`} value={p.qty} max={partMax} label={`${p.part}${p.company ? ` · ${p.company}` : ''}`} right={p.qty} />
-                    ))
-                  )}
+                  <Pie data={partsPie} />
                 </div>
 
                 <div className="dash-card dash-wide">
