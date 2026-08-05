@@ -36,11 +36,30 @@ model InventoryItem {
   out       Int      @default(0)
   lowStock  Int      @default(0) @map("low_stock")
   remarks   String   @default("")
+  txns      InventoryTxn[]
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([store])
   @@map("inventory_items")
+}
+
+// A stock movement (ledger entry) for an inventory item.
+model InventoryTxn {
+  id         Int           @id @default(autoincrement())
+  itemId     Int           @map("item_id")
+  item       InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  sku        String        @default("")
+  type       String        @default("usage") // usage | adjustment
+  change     Int           @default(0) // signed change to avail (negative = consumed)
+  availAfter Int           @default(0) @map("avail_after")
+  reference  String        @default("") // REP-#### / TRANS-#### / note
+  branch     String        @default("")
+  material   String        @default("")
+  createdAt  DateTime      @default(now()) @map("created_at")
+
+  @@index([itemId])
+  @@map("inventory_txns")
 }
 
 // Pasted/edited monthly activity matrix, per month + branch.

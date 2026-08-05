@@ -66,5 +66,7 @@ export const updateInventory = (id, item) =>
 
 export const deleteInventory = (id) => request(`/api/inventory/${id}`, { method: 'DELETE' })
 
+export const getInventoryTxns = (id) => request(`/api/inventory/${id}/transactions`)
+
 export const importInventory = (items) =>
   request('/api/inventory/import', { method: 'POST', body: JSON.stringify({ items }) })

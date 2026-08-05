@@ -49,12 +49,50 @@ router.post('/', async (req, res, next) => {
   }
 })
 
-// PUT /api/inventory/:id - update one.
+// GET /api/inventory/:id/transactions - ledger for one item, newest first.
+router.get('/:id/transactions', async (req, res, next) => {
+  try {
+    const txns = await prisma.inventoryTxn.findMany({
+      where: { itemId: Number(req.params.id) },
+      orderBy: { id: 'desc' },
+    })
+    res.json(txns)
+  } catch (err) {
+    next(err)
+  }
+})
+
+// PUT /api/inventory/:id - update one (logs an adjustment if avail changes).
 router.put('/:id', async (req, res, next) => {
   try {
     const { data, error } = parseItem(req.body)
     if (error) return res.status(400).json({ error })
-    const item = await prisma.inventoryItem.update({ where: { id: Number(req.params.id) }, data })
+    const id = Number(req.params.id)
+    const item = await prisma.$transaction(async (tx) => {
+      const before = await tx.inventoryItem.findUnique({ where: { id } })
+      if (!before) {
+        const e = new Error('Item not found')
+        e.code = 'P2025'
+        throw e
+      }
+      const updated = await tx.inventoryItem.update({ where: { id }, data })
+      const oldAvail = before.begin - before.out
+      const newAvail = updated.begin - updated.out
+      if (newAvail !== oldAvail) {
+        await tx.inventoryTxn.create({
+          data: {
+            itemId: id,
+            sku: updated.sku,
+            type: 'adjustment',
+            change: newAvail - oldAvail,
+            availAfter: newAvail,
+            reference: 'Manual edit',
+            material: updated.itemCode,
+          },
+        })
+      }
+      return updated
+    })
     res.json(shape(item))
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'Item not found' })

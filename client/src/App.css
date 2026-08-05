@@ -772,6 +772,89 @@ h2 {
 .inv-edit:hover {
   border-color: var(--primary);
 }
+.inv-row-actions {
+  display: flex;
+  gap: 0.4rem;
+  white-space: nowrap;
+}
+.inv-hist {
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0.25rem 0.7rem;
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+  cursor: pointer;
+}
+.inv-hist:hover {
+  border-color: var(--primary);
+}
+.txn-out {
+  color: #c81e1e;
+}
+.txn-in {
+  color: #157347;
+}
+:root[data-theme='dark'] .txn-out {
+  color: #f98a8a;
+}
+:root[data-theme='dark'] .txn-in {
+  color: #6ee7a8;
+}
+
+/* ---- Modal (transaction history) ---- */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 4vh 1rem;
+  z-index: 100;
+  overflow-y: auto;
+}
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+  width: 100%;
+  max-width: 60rem;
+  padding: 1.2rem 1.3rem 1.4rem;
+}
+.modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.4rem;
+}
+.modal-head h3 {
+  margin: 0;
+  font-size: 1.15rem;
+  color: var(--text-h);
+}
+.modal-close {
+  font-size: 1.1rem;
+  line-height: 1;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  border-radius: var(--radius-sm);
+}
+.modal-close:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+.hist-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0.6rem 0 0.9rem;
+}
 @media (max-width: 720px) {
   .inv-form-grid {
     grid-template-columns: 1fr 1fr;

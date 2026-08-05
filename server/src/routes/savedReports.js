@@ -17,7 +17,7 @@ const dmy = (value) => {
 // case-insensitive). Quantities across the snapshot are summed per item, and
 // `out` is incremented (so `avail` = begin - out drops). Unmatched issues are
 // ignored. Runs inside the save transaction so it's all-or-nothing.
-async function applyInventoryUsage(tx, snapshot) {
+async function applyInventoryUsage(tx, snapshot, reference, branch) {
   const used = new Map() // itemCode(upper) -> total qty
   for (const e of snapshot) {
     for (const f of e.faults ?? []) {
@@ -27,10 +27,24 @@ async function applyInventoryUsage(tx, snapshot) {
     }
   }
   if (used.size === 0) return
-  const items = await tx.inventoryItem.findMany({ select: { id: true, itemCode: true } })
+  const items = await tx.inventoryItem.findMany({ select: { id: true, sku: true, itemCode: true, begin: true, out: true } })
   for (const it of items) {
     const qty = used.get(String(it.itemCode ?? '').trim().toUpperCase())
-    if (qty) await tx.inventoryItem.update({ where: { id: it.id }, data: { out: { increment: qty } } })
+    if (!qty) continue
+    const newOut = it.out + qty
+    await tx.inventoryItem.update({ where: { id: it.id }, data: { out: newOut } })
+    await tx.inventoryTxn.create({
+      data: {
+        itemId: it.id,
+        sku: it.sku,
+        type: 'usage',
+        change: -qty,
+        availAfter: it.begin - newOut,
+        reference: reference ?? '',
+        branch: branch ?? '',
+        material: it.itemCode,
+      },
+    })
   }
 }
 
@@ -127,7 +141,7 @@ router.post('/', async (req, res, next) => {
           dateLabel, entryCount: snapshot.length, entries: snapshot,
         },
       })
-      await applyInventoryUsage(tx, snapshot) // auto stock deduction for matched items
+      await applyInventoryUsage(tx, snapshot, created.reportId, branch) // auto stock deduction + ledger
       return created
     })
     res.status(201).json(saved)
