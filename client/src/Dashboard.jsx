@@ -33,7 +33,24 @@ export default function Dashboard({ saved, branches, embedded = false }) {
   const parts = useMemo(() => topParts(entries, 10), [entries])
   const trend = useMemo(() => monthlyTrend(saved, branch), [saved, branch])
 
-  const hasData = summary.devices > 0
+  // Saved documents this month by type (maintenance report vs transmittal).
+  const docTypePie = useMemo(() => {
+    let maintenance = 0
+    let transmittal = 0
+    for (const r of saved ?? []) {
+      const m = String(r.dateLabel || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+      if (!m || `${m[3]}-${m[2].padStart(2, '0')}` !== monthValue) continue
+      if (branch && String(r.branch ?? '').toUpperCase() !== branch.toUpperCase()) continue
+      if (String(r.mode ?? '').toLowerCase() === 'transmittal') transmittal += 1
+      else maintenance += 1
+    }
+    return [
+      { label: 'Maintenance reports', value: maintenance, color: '#2563eb' },
+      { label: 'Transmittal reports', value: transmittal, color: '#d97706' },
+    ]
+  }, [saved, monthValue, branch])
+
+  const hasData = summary.devices > 0 || docTypePie.some((d) => d.value > 0)
   const trendMax = Math.max(1, ...trend.map((t) => t.devices))
   // Pie datasets for the analytics cards.
   const mixPie = [
@@ -108,6 +125,11 @@ export default function Dashboard({ saved, branches, embedded = false }) {
               </div>
 
               <div className="dash-grid">
+                <div className="dash-card">
+                  <h3 className="sp-brand-h">Reports by type</h3>
+                  <Pie data={docTypePie} />
+                </div>
+
                 <div className="dash-card">
                   <h3 className="sp-brand-h">Activity mix</h3>
                   <Pie data={mixPie} />

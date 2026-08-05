@@ -13,6 +13,27 @@ const dmy = (value) => {
   return `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`
 }
 
+// Deduct stock for materials/faults that match an inventory item (by itemCode,
+// case-insensitive). Quantities across the snapshot are summed per item, and
+// `out` is incremented (so `avail` = begin - out drops). Unmatched issues are
+// ignored. Runs inside the save transaction so it's all-or-nothing.
+async function applyInventoryUsage(tx, snapshot) {
+  const used = new Map() // itemCode(upper) -> total qty
+  for (const e of snapshot) {
+    for (const f of e.faults ?? []) {
+      const key = String(f.issue ?? '').trim().toUpperCase()
+      if (!key) continue
+      used.set(key, (used.get(key) || 0) + Math.max(0, Number(f.quantity) || 0))
+    }
+  }
+  if (used.size === 0) return
+  const items = await tx.inventoryItem.findMany({ select: { id: true, itemCode: true } })
+  for (const it of items) {
+    const qty = used.get(String(it.itemCode ?? '').trim().toUpperCase())
+    if (qty) await tx.inventoryItem.update({ where: { id: it.id }, data: { out: { increment: qty } } })
+  }
+}
+
 // Global insertion counter (ordering + latest-per-date dedup) — never duplicate.
 async function nextSeq() {
   const max = await prisma.savedReport.aggregate({ _max: { seq: true } })
@@ -99,11 +120,15 @@ router.post('/', async (req, res, next) => {
     const receivedBy = String(req.body?.receivedBy ?? '').trim()
     const seq = await nextSeq()
     const docNumber = await nextDocNumber(mode)
-    const saved = await prisma.savedReport.create({
-      data: {
-        seq, docNumber, reportId: docId(mode, docNumber), branch, mode, transmittedBy, receivedBy,
-        dateLabel, entryCount: snapshot.length, entries: snapshot,
-      },
+    const saved = await prisma.$transaction(async (tx) => {
+      const created = await tx.savedReport.create({
+        data: {
+          seq, docNumber, reportId: docId(mode, docNumber), branch, mode, transmittedBy, receivedBy,
+          dateLabel, entryCount: snapshot.length, entries: snapshot,
+        },
+      })
+      await applyInventoryUsage(tx, snapshot) // auto stock deduction for matched items
+      return created
     })
     res.status(201).json(saved)
   } catch (err) {

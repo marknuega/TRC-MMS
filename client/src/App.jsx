@@ -18,6 +18,7 @@ import {
   getMonthly,
   saveMonthly,
   clearMonthly,
+  getInventory,
 } from './api'
 import { DEFAULT_OPTIONS, mergeOptions, MODEL_TYPE, BRANCHES } from './options'
 import ManageInputs from './ManageInputs'
@@ -228,6 +229,7 @@ function App() {
   const [editSavedId, setEditSavedId] = useState(null) // which saved row shows Load/Delete
   const [nextReportId, setNextReportId] = useState('REP-0001')
   const [nextTransId, setNextTransId] = useState('TRANS-0001')
+  const [inventory, setInventory] = useState([]) // for the issue/material suggestions + usage
   const [busy, setBusy] = useState(false)
   const [branch, setBranch] = useState(loadBranch)
   const [deviceOpen, setDeviceOpen] = useState(true)
@@ -241,6 +243,11 @@ function App() {
   const isTransmittal = mode === 'transmittal'
   // The next id a Save would mint, for the current document type.
   const nextDocId = isTransmittal ? nextTransId : nextReportId
+  // Inventory item names, offered as suggestions in the issue/material fields.
+  const inventoryNames = useMemo(
+    () => [...new Set((inventory ?? []).map((i) => String(i.itemCode || '').trim()).filter(Boolean))].sort(),
+    [inventory],
+  )
 
   function changeMode(e) {
     const m = e.target.value === 'transmittal' ? 'transmittal' : 'report'
@@ -348,9 +355,12 @@ function App() {
     }
   }
 
+  const refreshInventory = () => getInventory().then(setInventory).catch(() => {})
+
   useEffect(() => {
     refresh()
     refreshSaved()
+    refreshInventory() // populate the issue/material suggestions
     getOptions()
       .then((stored) => setOptions(mergeOptions(stored)))
       .catch(() => {}) // keep defaults if the options endpoint is unavailable
@@ -362,6 +372,7 @@ function App() {
       const rep = await saveReport({ branch, mode, transmittedBy, receivedBy })
       setError(null)
       await refreshSaved()
+      refreshInventory() // stock was deducted server-side for matched items
       window.alert(`Saved as ${repLabel(rep.reportId, rep.branch, rep.mode)}.`)
     } catch (err) {
       setError(err.message)
@@ -818,8 +829,8 @@ function App() {
             <label className="date-field">
               Mode
               <select value={mode} onChange={changeMode}>
-                <option value="report">Report</option>
-                <option value="transmittal">Transmittal</option>
+                <option value="report">Maintenance Report</option>
+                <option value="transmittal">Transmittal Report</option>
               </select>
             </label>
             <label className="date-field">
@@ -938,7 +949,7 @@ function App() {
               onClick={() => setFaultsOpen((o) => !o)}
               aria-expanded={faultsOpen}
             >
-              <span>{isTransmittal ? 'Transmittal' : 'Faults'}</span>
+              <span>{isTransmittal ? 'Transmittal Report' : 'Faults'}</span>
               <span className="chev">{faultsOpen ? '▲' : '▼'}</span>
             </button>
             {faultsOpen && (
@@ -1011,10 +1022,17 @@ function App() {
               {options.issueTypes.map((it) => (
                 <option key={it} value={it} />
               ))}
+              {/* Inventory items — picking one links it for auto stock deduction. */}
+              {inventoryNames.map((n) => (
+                <option key={`inv-${n}`} value={n} />
+              ))}
             </datalist>
             <datalist id="materials-list">
               {options.materials.map((m) => (
                 <option key={m} value={m} />
+              ))}
+              {inventoryNames.map((n) => (
+                <option key={`inv-${n}`} value={n} />
               ))}
             </datalist>
 
