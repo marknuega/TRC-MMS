@@ -77,6 +77,7 @@ model Report {
 model ReportEntry {
   id         Int      @id @default(autoincrement())
   reportDate DateTime @map("report_date") @db.Date
+  mode       String   @default("report") // report | transmittal — separate working sets
   technician String
   agency     String
   telNumber  String   @map("tel_number")
@@ -89,6 +90,7 @@ model ReportEntry {
   updatedAt  DateTime @updatedAt @map("updated_at")
 
   @@index([reportDate])
+  @@index([mode])
   @@map("report_entries")
 }
 

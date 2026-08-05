@@ -243,6 +243,8 @@ function App() {
     const m = e.target.value === 'transmittal' ? 'transmittal' : 'report'
     setMode(m)
     lsSet(MODE_KEY, m)
+    setEditSavedId(null)
+    refresh(m) // load that document type's own working entries
   }
   const changeTransmittedBy = (e) => {
     setTransmittedBy(e.target.value)
@@ -319,9 +321,11 @@ function App() {
     }
   }
 
-  async function refresh() {
+  // Working entries are per document type; refresh the set for the given mode
+  // (defaults to the current one).
+  async function refresh(m = mode) {
     try {
-      setEntries(await listEntries())
+      setEntries(await listEntries(m))
       setError(null)
     } catch (err) {
       setError(err.message)
@@ -367,15 +371,15 @@ function App() {
     setBusy(true)
     try {
       await loadSavedReport(rep.id)
-      await refresh()
       // Restore the document's mode / branch / handover so it re-generates identically.
+      const m = rep.mode === 'transmittal' ? 'transmittal' : 'report'
+      setMode(m)
+      lsSet(MODE_KEY, m)
+      await refresh(m) // the snapshot replaced only this mode's working set
       if (rep.branch) {
         setBranch(rep.branch)
         lsSet(BRANCH_KEY, rep.branch)
       }
-      const m = rep.mode === 'transmittal' ? 'transmittal' : 'report'
-      setMode(m)
-      lsSet(MODE_KEY, m)
       setTransmittedBy(rep.transmittedBy ?? '')
       setReceivedBy(rep.receivedBy ?? '')
       setError(null)
@@ -438,6 +442,7 @@ function App() {
     try {
       const payload = {
         ...form,
+        mode, // keep report vs transmittal working sets separate
         // Transmittal has no device card: items are "OTHER", no model/agency.
         ...(isTransmittal ? { type: 'OTHER', model: '', agency: '' } : {}),
         // Transmittal lines are Material + Qty + Company + Status (Action hidden, defaults harmlessly).
@@ -475,7 +480,7 @@ function App() {
       return
     }
     try {
-      await clearEntries()
+      await clearEntries(mode)
       setError(null)
       refresh()
     } catch (err) {

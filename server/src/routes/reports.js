@@ -55,10 +55,12 @@ function parseEntry(body) {
   if (missingAction) return { error: 'each fault needs an action' }
 
   const comment = String(body?.comment ?? '').trim()
+  const mode = String(body?.mode ?? 'report').trim().toLowerCase() === 'transmittal' ? 'transmittal' : 'report'
 
   return {
     data: {
       reportDate: new Date(reportDate),
+      mode,
       technician,
       agency,
       telNumber,
@@ -69,6 +71,12 @@ function parseEntry(body) {
       faults: { create: faults },
     },
   }
+}
+
+// report | transmittal working set, from a ?mode= query (unset = all).
+const modeWhere = (req) => {
+  const m = String(req.query?.mode ?? '').trim().toLowerCase()
+  return m === 'report' || m === 'transmittal' ? { mode: m } : {}
 }
 
 // Ensure a Report row (and its REP-#### seq) exists for a date; returns the seq.
@@ -94,6 +102,7 @@ router.get('/', async (req, res, next) => {
   try {
     const [entries, ids] = await Promise.all([
       prisma.reportEntry.findMany({
+        where: modeWhere(req),
         orderBy: [{ reportDate: 'desc' }, { id: 'asc' }],
         take: 500,
         include: withFaults,
@@ -123,10 +132,11 @@ router.post('/', async (req, res, next) => {
   }
 })
 
-// DELETE /api/reports - clear ALL working entries (faults cascade). Returns the count removed.
+// DELETE /api/reports - clear the working entries for a mode (?mode=), or all
+// if no mode is given. Faults cascade. Returns the count removed.
 router.delete('/', async (req, res, next) => {
   try {
-    const { count } = await prisma.reportEntry.deleteMany({})
+    const { count } = await prisma.reportEntry.deleteMany({ where: modeWhere(req) })
     res.json({ cleared: count })
   } catch (err) {
     next(err)

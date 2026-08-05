@@ -51,7 +51,9 @@ router.get('/:id', async (req, res, next) => {
 // POST /api/saved-reports - snapshot the current working entries under the next REP-####.
 router.post('/', async (req, res, next) => {
   try {
+    const mode = String(req.body?.mode ?? 'report').trim().toLowerCase() === 'transmittal' ? 'transmittal' : 'report'
     const entries = await prisma.reportEntry.findMany({
+      where: { mode },
       orderBy: [{ reportDate: 'asc' }, { id: 'asc' }],
       include: withFaults,
     })
@@ -82,7 +84,6 @@ router.post('/', async (req, res, next) => {
     const dateLabel = dates.length === 1 ? dmy(dates[0]) : `${dmy(dates[0])} (+${dates.length - 1} more)`
 
     const branch = String(req.body?.branch ?? '').trim()
-    const mode = String(req.body?.mode ?? 'report').trim() || 'report'
     const transmittedBy = String(req.body?.transmittedBy ?? '').trim()
     const receivedBy = String(req.body?.receivedBy ?? '').trim()
     const seq = await nextSeq()
@@ -105,12 +106,15 @@ router.post('/:id/load', async (req, res, next) => {
     if (!report) return res.status(404).json({ error: 'Saved report not found' })
 
     const snapshot = Array.isArray(report.entries) ? report.entries : []
+    const mode = String(report.mode ?? 'report').toLowerCase() === 'transmittal' ? 'transmittal' : 'report'
     await prisma.$transaction(async (tx) => {
-      await tx.reportEntry.deleteMany({})
+      // Replace only this document type's working set, leaving the other intact.
+      await tx.reportEntry.deleteMany({ where: { mode } })
       for (const e of snapshot) {
         await tx.reportEntry.create({
           data: {
             reportDate: new Date(e.reportDate),
+            mode,
             technician: e.technician ?? '',
             agency: e.agency ?? '',
             telNumber: e.telNumber || '-',

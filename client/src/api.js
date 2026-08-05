@@ -17,7 +17,9 @@ async function request(path, options) {
   return res.status === 204 ? null : res.json()
 }
 
-export const listEntries = () => request('/api/reports')
+const modeQs = (mode) => (mode ? `?mode=${encodeURIComponent(mode)}` : '')
+
+export const listEntries = (mode) => request(`/api/reports${modeQs(mode)}`)
 
 export const createEntry = (entry) =>
   request('/api/reports', { method: 'POST', body: JSON.stringify(entry) })
@@ -25,7 +27,7 @@ export const createEntry = (entry) =>
 export const deleteEntry = (id) =>
   request(`/api/reports/${id}`, { method: 'DELETE' })
 
-export const clearEntries = () => request('/api/reports', { method: 'DELETE' })
+export const clearEntries = (mode) => request(`/api/reports${modeQs(mode)}`, { method: 'DELETE' })
 
 export const getOptions = () => request('/api/options')
 
