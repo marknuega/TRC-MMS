@@ -17,6 +17,69 @@ const ACT_COLS = [
   ['install', 'Installation'],
   ['dismantle', 'Dismantle'],
 ]
+const PALETTE = ['#2563eb', '#d97706', '#059669', '#7c3aed', '#db2777', '#0891b2', '#65a30d', '#dc2626']
+
+// Regroup one brand's model blocks (rows carry a company) into per-company
+// groups, each keeping its model sub-blocks. -> [{ company, models, total }].
+function splitByCompany(models) {
+  const byCompany = new Map()
+  for (const m of models) {
+    for (const r of m.rows) {
+      const c = r.company || '—'
+      if (!byCompany.has(c)) byCompany.set(c, new Map())
+      const mm = byCompany.get(c)
+      if (!mm.has(m.model)) mm.set(m.model, [])
+      mm.get(m.model).push(r)
+    }
+  }
+  const modelOrder = models.map((m) => m.model)
+  return [...byCompany.keys()]
+    .sort((a, b) => a.localeCompare(b))
+    .map((company) => {
+      const mm = byCompany.get(company)
+      const modelList = modelOrder
+        .filter((md) => mm.has(md))
+        .map((md) => {
+          const rows = mm.get(md)
+          return { model: md, rows, total: rows.reduce((s, r) => s + r.qty, 0) }
+        })
+      return { company, models: modelList, total: modelList.reduce((s, x) => s + x.total, 0) }
+    })
+}
+
+// Lightweight SVG-free pie via conic-gradient + legend. data: [{label,value}].
+function Pie({ title, data }) {
+  const rows = data.filter((d) => d.value > 0)
+  const total = rows.reduce((s, d) => s + d.value, 0)
+  if (!total) return null
+  let acc = 0
+  const stops = rows
+    .map((d, i) => {
+      const start = (acc / total) * 100
+      acc += d.value
+      const end = (acc / total) * 100
+      return `${PALETTE[i % PALETTE.length]} ${start}% ${end}%`
+    })
+    .join(', ')
+  return (
+    <div className="pie-card">
+      <h3 className="sp-brand-h">{title}</h3>
+      <div className="pie-wrap">
+        <div className="pie" style={{ background: `conic-gradient(${stops})` }} role="img" aria-label={title} />
+        <ul className="pie-legend">
+          {rows.map((d, i) => (
+            <li key={d.label}>
+              <span className="pie-dot" style={{ background: PALETTE[i % PALETTE.length] }} />
+              <span className="pie-name">{d.label}</span>
+              <b>{d.value}</b>
+              <span className="pie-pct">{Math.round((d.value / total) * 100)}%</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  )
+}
 
 export default function SparePartsReport({ saved, branches, embedded = false }) {
   const [openState, setOpen] = useState(false)
@@ -24,8 +87,27 @@ export default function SparePartsReport({ saved, branches, embedded = false }) 
   const [monthValue, setMonthValue] = useState(() => new Date().toISOString().slice(0, 7))
   const [branch, setBranch] = useState(branches?.[0] ?? '')
 
+  const [collapsed, setCollapsed] = useState(() => new Set()) // collapsed company cards
+  const toggleCard = (key) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+
   const entries = useMemo(() => monthEntries(saved, monthValue, branch), [saved, monthValue, branch])
   const report = useMemo(() => buildSparePartsReport(entries), [entries])
+  // Per-brand, per-company groups for the collapsible cards + Excel export.
+  const grouped = useMemo(
+    () => Object.keys(report.parts).map((type) => ({ type, groups: splitByCompany(report.parts[type]) })),
+    [report],
+  )
+  const brandPie = useMemo(
+    () => Object.keys(report.parts).map((type) => ({ label: type, value: report.parts[type].reduce((s, m) => s + m.total, 0) })),
+    [report],
+  )
+  const companyPie = report.companyTotals.map((c) => ({ label: c.company, value: c.qty }))
   const hasData = report.grandParts > 0 || report.activity.length > 0 || report.agencies.length > 0
 
   const title = `TRC ${branch || 'All'} - Spare Parts`
@@ -61,15 +143,19 @@ export default function SparePartsReport({ saved, branches, embedded = false }) 
     const num = `${b}text-align:center;`
     let h = `<meta charset="utf-8"><table style="border-collapse:collapse;font-family:Arial;font-size:11px;">`
     h += `<tr><td colspan="4" style="${b}background:#2563eb;color:#fff;font-weight:bold;font-size:14px;">${esc(title)} — ${esc(monthLabel(monthValue))}</td></tr>`
-    // Parts by brand -> model
-    for (const type of Object.keys(report.parts)) {
-      for (const m of report.parts[type]) {
-        h += `<tr><td colspan="4" style="${b}background:#eef;font-weight:bold;">${esc(type)} ${esc(m.model)}</td></tr>`
-        h += `<tr><th style="${hb}">#</th><th style="${hb}">Part</th><th style="${hb}">Company</th><th style="${hb}">Qty</th></tr>`
-        m.rows.forEach((r, i) => {
-          h += `<tr><td style="${num}">${i + 1}</td><td style="${b}">${esc(r.part)}</td><td style="${b}">${esc(r.company)}</td><td style="${num}">${r.qty}</td></tr>`
-        })
-        h += `<tr><td style="${tot}" colspan="3">TOTAL ${esc(type)} ${esc(m.model)}</td><td style="${tot}text-align:center;">${m.total}</td></tr>`
+    // Parts by brand -> company -> model
+    for (const { type, groups } of grouped) {
+      for (const grp of groups) {
+        h += `<tr><td colspan="3" style="${b}background:#2563eb;color:#fff;font-weight:bold;">${esc(type)} · ${esc(grp.company)}</td></tr>`
+        for (const m of grp.models) {
+          h += `<tr><td colspan="3" style="${b}background:#eef;font-weight:bold;">${esc(type)} ${esc(m.model)} · ${esc(grp.company)}</td></tr>`
+          h += `<tr><th style="${hb}">#</th><th style="${hb}">Part</th><th style="${hb}">Qty</th></tr>`
+          m.rows.forEach((r, i) => {
+            h += `<tr><td style="${num}">${i + 1}</td><td style="${b}">${esc(r.part)}</td><td style="${num}">${r.qty}</td></tr>`
+          })
+          h += `<tr><td style="${tot}" colspan="2">TOTAL ${esc(type)} ${esc(m.model)}</td><td style="${tot}text-align:center;">${m.total}</td></tr>`
+        }
+        h += `<tr><td style="${tot}" colspan="2">TOTAL ${esc(type)} · ${esc(grp.company)}</td><td style="${tot}text-align:center;">${grp.total}</td></tr>`
       }
     }
     // Company subtotals
@@ -141,45 +227,67 @@ export default function SparePartsReport({ saved, branches, embedded = false }) 
             <p className="empty">No saved reports for this month/branch yet.</p>
           ) : (
             <>
+              {(companyPie.length > 0 || brandPie.some((b) => b.value > 0)) && (
+                <div className="pie-row">
+                  <Pie title="Parts by company" data={companyPie} />
+                  <Pie title="Parts by brand" data={brandPie} />
+                </div>
+              )}
+
               <div className="sp-grid">
-                {Object.keys(report.parts).map((type) => (
-                  <div className="sp-brand" key={type}>
-                    <h3 className="sp-brand-h">{type}</h3>
-                    {report.parts[type].map((m) => (
-                      <div className="sp-model" key={m.model}>
-                        <h4 className="sp-model-h">
-                          {type} {m.model}
-                        </h4>
-                        <div className="inv-scroll">
-                          <table className="inv-table sp-table">
-                            <thead>
-                              <tr>
-                                <th className="num">#</th>
-                                <th>Part</th>
-                                <th>Company</th>
-                                <th className="num">Qty</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {m.rows.map((r, i) => (
-                                <tr key={`${r.part}|${r.company}`}>
-                                  <td className="num idx">{i + 1}</td>
-                                  <td className="nowrap">{r.part}</td>
-                                  <td>{r.company}</td>
-                                  <td className="num">{r.qty}</td>
-                                </tr>
-                              ))}
-                              <tr className="totals">
-                                <td colSpan={3}>TOTAL {type} {m.model}</td>
-                                <td className="num">{m.total}</td>
-                              </tr>
-                            </tbody>
-                          </table>
-                        </div>
+                {grouped.flatMap(({ type, groups }) =>
+                  groups.map((grp) => {
+                    const key = `${type}|${grp.company}`
+                    const cardOpen = !collapsed.has(key)
+                    return (
+                      <div className="sp-brand" key={key}>
+                        <button
+                          type="button"
+                          className="manage-toggle sp-card-toggle"
+                          onClick={() => toggleCard(key)}
+                          aria-expanded={cardOpen}
+                        >
+                          <span>
+                            {type} · {grp.company} <span className="hint">({grp.total})</span>
+                          </span>
+                          <span className="chev">{cardOpen ? '▲' : '▼'}</span>
+                        </button>
+                        {cardOpen &&
+                          grp.models.map((m) => (
+                            <div className="sp-model" key={m.model}>
+                              <h4 className="sp-model-h">
+                                {type} {m.model} · {grp.company}
+                              </h4>
+                              <div className="inv-scroll">
+                                <table className="inv-table sp-table">
+                                  <thead>
+                                    <tr>
+                                      <th className="num">#</th>
+                                      <th>Part</th>
+                                      <th className="num">Qty</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {m.rows.map((r, i) => (
+                                      <tr key={r.part}>
+                                        <td className="num idx">{i + 1}</td>
+                                        <td className="nowrap">{r.part}</td>
+                                        <td className="num">{r.qty}</td>
+                                      </tr>
+                                    ))}
+                                    <tr className="totals">
+                                      <td colSpan={2}>TOTAL {type} {m.model}</td>
+                                      <td className="num">{m.total}</td>
+                                    </tr>
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          ))}
                       </div>
-                    ))}
-                  </div>
-                ))}
+                    )
+                  }),
+                )}
               </div>
 
               {report.companyTotals.length > 0 && (

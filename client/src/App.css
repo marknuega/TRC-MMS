@@ -1538,6 +1538,68 @@ h2 {
 .sp-narrow {
   max-width: 26rem;
 }
+.sp-card-toggle {
+  margin-bottom: 0.7rem;
+}
+
+/* ---- Pie charts ---- */
+.pie-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+.pie-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.9rem 1rem;
+}
+.pie-wrap {
+  display: flex;
+  align-items: center;
+  gap: 1.1rem;
+  flex-wrap: wrap;
+}
+.pie {
+  width: 8rem;
+  height: 8rem;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+.pie-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  min-width: 8rem;
+}
+.pie-legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--text);
+}
+.pie-name {
+  flex: 1;
+  color: var(--text);
+}
+.pie-dot {
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 3px;
+  display: inline-block;
+  flex: 0 0 auto;
+}
+.pie-pct {
+  color: var(--muted);
+  min-width: 2.5rem;
+  text-align: right;
+}
 
 /* ---- Dashboard ---- */
 .kpi-grid {
