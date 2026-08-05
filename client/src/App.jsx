@@ -227,6 +227,9 @@ function App() {
   const [pasteText, setPasteText] = useState('')
   const [editSavedId, setEditSavedId] = useState(null) // which saved row shows Load/Delete
   const [nextReportId, setNextReportId] = useState('REP-0001')
+  const [nextTransId, setNextTransId] = useState('TRANS-0001')
+  // The next id a Save would mint, per the current document type.
+  const nextDocId = mode === 'transmittal' ? nextTransId : nextReportId
   const [busy, setBusy] = useState(false)
   const [branch, setBranch] = useState(loadBranch)
   const [deviceOpen, setDeviceOpen] = useState(true)
@@ -339,6 +342,7 @@ function App() {
       const data = await getSavedReports()
       setSaved(data.reports)
       setNextReportId(data.nextReportId)
+      setNextTransId(data.nextTransmittalId ?? 'TRANS-0001')
     } catch {
       /* leave the saved list as-is if the endpoint is unavailable */
     }
@@ -505,16 +509,20 @@ function App() {
       return [buildDateReport(dl, 'ALL-BRANCHES', merged, { branch: ALL_BRANCHES, mode: 'report' })]
     }
     return groupReports(entries).map((g) =>
-      buildDateReport(g.dateLabel, repLabel(nextReportId, branch, mode), g.entries, {
+      buildDateReport(g.dateLabel, repLabel(nextDocId, branch, mode), g.entries, {
         branch,
         mode,
         transmittedBy,
         receivedBy,
       }),
     )
-  }, [isAllBranches, form.reportDate, saved, entries, nextReportId, branch, mode, transmittedBy, receivedBy])
+  }, [isAllBranches, form.reportDate, saved, entries, nextDocId, branch, mode, transmittedBy, receivedBy])
   const combinedTxt = useMemo(() => reports.map(buildTxt).join('\n\n\n'), [reports])
-  const agencyCmt = useMemo(() => agencyComment(reports.flatMap((r) => r.entries)), [reports])
+  // Agency summary is a daily-report concept only — never on transmittals.
+  const agencyCmt = useMemo(
+    () => (isTransmittal ? '' : agencyComment(reports.flatMap((r) => r.entries))),
+    [reports, isTransmittal],
+  )
 
   // Collapse the Device/Faults cards in All-Branches (read-only merged) mode.
   useEffect(() => {
@@ -1087,7 +1095,7 @@ function App() {
           <div className="breakdown-head">
             <h2>
               Report text{' '}
-              {reports.length > 0 && <span className="hint">(next: {nextReportId} · unsaved)</span>}
+              {reports.length > 0 && <span className="hint">(next: {nextDocId} · unsaved)</span>}
             </h2>
             <div className="breakdown-actions">
               <button

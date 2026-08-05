@@ -10,7 +10,8 @@ datasource db {
 // A saved snapshot of the working entries, with a unique REP-#### series number.
 model SavedReport {
   id            Int      @id @default(autoincrement())
-  seq           Int      @unique // 1-based; renders as REP-0001, REP-0002, ...
+  seq           Int      @unique // global insertion order (sorting + latest-per-date dedup)
+  docNumber     Int      @default(0) @map("doc_number") // per-mode series number (REP-#### / TRANS-####)
   reportId      String   @unique @map("report_id")
   branch        String   @default("") // Makkah | Taif | Jeddah
   mode          String   @default("report") // report | transmittal

@@ -3,7 +3,9 @@ import { prisma } from '../db.js'
 
 const router = Router()
 
-const repId = (seq) => `REP-${String(seq).padStart(4, '0')}`
+// Human id per document type: transmittals get their own TRANS-#### series.
+const normMode = (m) => (String(m ?? 'report').trim().toLowerCase() === 'transmittal' ? 'transmittal' : 'report')
+const docId = (mode, n) => `${normMode(mode) === 'transmittal' ? 'TRANS' : 'REP'}-${String(n).padStart(4, '0')}`
 const withFaults = { faults: { orderBy: { position: 'asc' } } }
 
 const dmy = (value) => {
@@ -11,27 +13,36 @@ const dmy = (value) => {
   return `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`
 }
 
-// Next unused sequence number (max + 1) — guarantees no duplicate REP-####.
+// Global insertion counter (ordering + latest-per-date dedup) — never duplicate.
 async function nextSeq() {
   const max = await prisma.savedReport.aggregate({ _max: { seq: true } })
   return (max._max.seq ?? 0) + 1
 }
 
+// Next series number within a document type (report vs transmittal number
+// independently: REP-0001, REP-0002… and TRANS-0001, TRANS-0002…).
+async function nextDocNumber(mode) {
+  const max = await prisma.savedReport.aggregate({ where: { mode: normMode(mode) }, _max: { docNumber: true } })
+  return (max._max.docNumber ?? 0) + 1
+}
+
 // GET /api/saved-reports - list newest first, plus the next id a Save would mint.
 router.get('/', async (req, res, next) => {
   try {
-    const [reports, seq] = await Promise.all([
+    const [reports, repNo, transNo] = await Promise.all([
       prisma.savedReport.findMany({
         orderBy: { seq: 'desc' },
         select: {
-          id: true, seq: true, reportId: true, branch: true, mode: true,
+          id: true, seq: true, docNumber: true, reportId: true, branch: true, mode: true,
           transmittedBy: true, receivedBy: true, savedAt: true, dateLabel: true, entryCount: true,
           entries: true, // snapshot, so the client can search inside report data
         },
       }),
-      nextSeq(),
+      nextDocNumber('report'),
+      nextDocNumber('transmittal'),
     ])
-    res.json({ nextReportId: repId(seq), reports })
+    // Per-mode "next id" previews so each document type numbers independently.
+    res.json({ nextReportId: docId('report', repNo), nextTransmittalId: docId('transmittal', transNo), reports })
   } catch (err) {
     next(err)
   }
@@ -87,9 +98,10 @@ router.post('/', async (req, res, next) => {
     const transmittedBy = String(req.body?.transmittedBy ?? '').trim()
     const receivedBy = String(req.body?.receivedBy ?? '').trim()
     const seq = await nextSeq()
+    const docNumber = await nextDocNumber(mode)
     const saved = await prisma.savedReport.create({
       data: {
-        seq, reportId: repId(seq), branch, mode, transmittedBy, receivedBy,
+        seq, docNumber, reportId: docId(mode, docNumber), branch, mode, transmittedBy, receivedBy,
         dateLabel, entryCount: snapshot.length, entries: snapshot,
       },
     })
