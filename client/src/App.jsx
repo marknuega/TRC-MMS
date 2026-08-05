@@ -23,6 +23,8 @@ import { DEFAULT_OPTIONS, mergeOptions, MODEL_TYPE, BRANCHES } from './options'
 import ManageInputs from './ManageInputs'
 import Inventory from './Inventory'
 import AgencyTotals from './AgencyTotals'
+import SparePartsReport from './SparePartsReport'
+import Dashboard from './Dashboard'
 import {
   groupReports,
   buildDateReport,
@@ -46,12 +48,17 @@ const faultIsMeaningful = (f) => f.issue.trim() !== '' || DEVICE_LEVEL.has(Strin
 const today = () => new Date().toISOString().slice(0, 10)
 const ALL_BRANCHES = 'All Branches'
 const NAV = [
+  { id: 'dashboard', icon: '📊', label: 'Dashboard' },
   { id: 'report', icon: '📋', label: 'Report' },
   { id: 'monthly', icon: '📅', label: 'Monthly Report' },
+  { id: 'spareparts', icon: '🧰', label: 'Spare Parts' },
   { id: 'agency', icon: '🏢', label: 'Agency Totals' },
   { id: 'inventory', icon: '📦', label: 'Inventory' },
   { id: 'manage', icon: '⚙️', label: 'Manage Inputs' },
 ]
+// Data-heavy pages fill the available width (tables/charts); form-style pages
+// stay centred at a readable measure.
+const WIDE_PAGES = new Set(['dashboard', 'monthly', 'spareparts', 'agency', 'inventory'])
 const SIDEBAR_KEY = 'trc_sidebar'
 const loadSidebar = () => {
   try {
@@ -690,7 +697,7 @@ function App() {
           </nav>
         </aside>
 
-        <main className="page-main app">
+        <main className={`page-main app${WIDE_PAGES.has(page) ? ' wide' : ''}`}>
           {error && <p className="error">{error}</p>}
 
           {page === 'report' && (
@@ -1277,6 +1284,10 @@ function App() {
           )}
             </section>
           )}
+
+          {page === 'dashboard' && <Dashboard saved={saved} branches={BRANCHES} embedded />}
+
+          {page === 'spareparts' && <SparePartsReport saved={saved} branches={BRANCHES} embedded />}
 
           {page === 'agency' && <AgencyTotals saved={saved} branches={BRANCHES} embedded />}
 

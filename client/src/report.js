@@ -328,6 +328,221 @@ export function agencyComment(entries) {
   return ['Agency Summary', DIVIDER, ...body].join('\n')
 }
 
+// ---------------------------------------------------------------------------
+// Spare-parts monthly report (faithful adaptation of the Makkah spare-parts
+// sheet). All aggregations are pure so they can be unit-tested.
+// ---------------------------------------------------------------------------
+
+// Latest saved 'report' per date within monthKey (YYYY-MM) + optional branch,
+// flattened to entries. Mirrors the monthly-matrix / agency-totals selection.
+export function monthEntries(savedReports, monthKey, branch = '') {
+  const byDay = new Map()
+  const wantBranch = up(branch)
+  for (const r of savedReports ?? []) {
+    if (up(r.mode) === 'TRANSMITTAL') continue
+    if (wantBranch && up(r.branch) !== wantBranch) continue
+    const label = String(r.dateLabel || '') // dd/mm/yyyy
+    const m = label.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+    if (!m) continue
+    const mk = `${m[3]}-${m[2].padStart(2, '0')}`
+    if (mk !== monthKey) continue
+    const prev = byDay.get(label)
+    if (!prev || (r.seq ?? 0) > (prev.seq ?? 0)) byDay.set(label, r)
+  }
+  return [...byDay.values()].flatMap((r) => (Array.isArray(r.entries) ? r.entries : []))
+}
+
+// Parts consumed per brand -> device model. A "part" is a maintenance-action
+// fault (CHANGE/REPAIR/NEW/PCB) with a named issue; same part + same company
+// sums, a different company keeps its own row. Rows sorted alphabetically.
+// -> { AIRBUS: [{ model, rows:[{part,company,qty}], total }], SEPURA: [...] }
+export function sparePartsByType(entries) {
+  const byType = {}
+  for (const type of orderedTypes(entries ?? [])) {
+    const typeEntries = (entries ?? []).filter((e) => up(e.type) === type)
+    const byModel = new Map()
+    const rawOf = new Map()
+    const order = []
+    for (const e of typeEntries) {
+      const md = modelDisplay(e.model)
+      if (!byModel.has(md)) {
+        byModel.set(md, new Map())
+        rawOf.set(md, e.model)
+        order.push(md)
+      }
+      const bucket = byModel.get(md)
+      for (const f of e.faults ?? []) {
+        if (classify(f.action) !== 'maintenance') continue // programming/install/dismantle are activities, not parts
+        const part = up(f.issue)
+        if (!part) continue
+        const company = companyDisplay(f.company)
+        const key = `${part}|${company}`
+        if (!bucket.has(key)) bucket.set(key, { part, company, qty: 0 })
+        bucket.get(key).qty += Math.max(0, Number(f.quantity) || 0)
+      }
+    }
+    order.sort((a, b) => modelRank(rawOf.get(a)) - modelRank(rawOf.get(b)))
+    const models = []
+    for (const md of order) {
+      const rows = [...byModel.get(md).values()]
+        .filter((r) => r.qty > 0)
+        .sort((a, b) => a.part.localeCompare(b.part, undefined, { sensitivity: 'base', numeric: true }))
+      if (rows.length) models.push({ model: md, rows, total: rows.reduce((s, r) => s + r.qty, 0) })
+    }
+    if (models.length) byType[type] = models
+  }
+  return byType
+}
+
+// Device-level activity counts per brand -> model: a device contributes 1 to a
+// category if it has at least one fault in that category (a device can be both
+// maintained and programmed). -> [{ type, model, maintenance, programming,
+// install, dismantle, total }] in TYPE + model order.
+export function activityTotals(entries) {
+  const byGroup = new Map()
+  const rawOf = new Map()
+  for (const e of entries ?? []) {
+    const type = up(e.type)
+    const md = modelDisplay(e.model)
+    const key = `${type}|${md}`
+    if (!byGroup.has(key)) {
+      byGroup.set(key, { type, model: md, maintenance: 0, programming: 0, install: 0, dismantle: 0 })
+      rawOf.set(key, e.model)
+    }
+    const g = byGroup.get(key)
+    const cats = new Set((e.faults ?? []).map((f) => classify(f.action)))
+    if (cats.has('maintenance')) g.maintenance += 1
+    if (cats.has('programming')) g.programming += 1
+    if (cats.has('install')) g.install += 1
+    if (cats.has('dismantle')) g.dismantle += 1
+  }
+  return [...byGroup.entries()]
+    .sort((a, b) => {
+      const t = TYPE_ORDER.indexOf(a[1].type) - TYPE_ORDER.indexOf(b[1].type)
+      if (t !== 0) return t
+      return modelRank(rawOf.get(a[0])) - modelRank(rawOf.get(b[0]))
+    })
+    .map(([, g]) => ({ ...g, total: g.maintenance + g.programming + g.install + g.dismantle }))
+    .filter((g) => g.total > 0)
+}
+
+// Full spare-parts report model for a set of entries.
+export function buildSparePartsReport(entries) {
+  const parts = sparePartsByType(entries)
+  const companyTotals = new Map()
+  let grand = 0
+  for (const type of Object.keys(parts))
+    for (const m of parts[type])
+      for (const r of m.rows) {
+        const c = r.company || '—'
+        companyTotals.set(c, (companyTotals.get(c) || 0) + r.qty)
+        grand += r.qty
+      }
+  return {
+    parts,
+    companyTotals: [...companyTotals.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([company, qty]) => ({ company, qty })),
+    grandParts: grand,
+    activity: activityTotals(entries),
+    agencies: agencyBlocks(entries),
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Performance dashboard aggregations (all pure).
+// ---------------------------------------------------------------------------
+
+// Per-technician workload: devices handled + device-level activity counts +
+// spare parts consumed. Sorted by total activity (busiest first).
+export function technicianTotals(entries) {
+  const by = new Map()
+  for (const e of entries ?? []) {
+    const t = up(e.technician) || '-'
+    if (!by.has(t)) by.set(t, { technician: t, devices: 0, maintenance: 0, programming: 0, install: 0, dismantle: 0, parts: 0 })
+    const g = by.get(t)
+    g.devices += 1
+    const cats = new Set()
+    for (const f of e.faults ?? []) {
+      const cat = classify(f.action)
+      cats.add(cat)
+      if (cat === 'maintenance') g.parts += Math.max(0, Number(f.quantity) || 0)
+    }
+    if (cats.has('maintenance')) g.maintenance += 1
+    if (cats.has('programming')) g.programming += 1
+    if (cats.has('install')) g.install += 1
+    if (cats.has('dismantle')) g.dismantle += 1
+  }
+  return [...by.values()]
+    .map((g) => ({ ...g, total: g.maintenance + g.programming + g.install + g.dismantle }))
+    .sort((a, b) => b.total - a.total || b.devices - a.devices || a.technician.localeCompare(b.technician))
+}
+
+// Per-agency service transactions: a device (entry) counts once per category it
+// has a fault in. -> [{ agency, maintenance, programming, install, dismantle,
+// total }] busiest first.
+export function agencyTransactions(entries) {
+  const by = new Map()
+  for (const e of entries ?? []) {
+    const ag = up(e.agency) || '-'
+    if (!by.has(ag)) by.set(ag, { agency: ag, maintenance: 0, programming: 0, install: 0, dismantle: 0 })
+    const g = by.get(ag)
+    const cats = new Set((e.faults ?? []).map((f) => classify(f.action)))
+    if (cats.has('maintenance')) g.maintenance += 1
+    if (cats.has('programming')) g.programming += 1
+    if (cats.has('install')) g.install += 1
+    if (cats.has('dismantle')) g.dismantle += 1
+  }
+  return [...by.values()]
+    .map((g) => ({ ...g, total: g.maintenance + g.programming + g.install + g.dismantle }))
+    .sort((a, b) => b.total - a.total || a.agency.localeCompare(b.agency))
+}
+
+// Headline numbers for a set of entries.
+export function dashboardSummary(entries) {
+  const act = activityTotals(entries)
+  const sum = act.reduce(
+    (a, g) => ({
+      maintenance: a.maintenance + g.maintenance,
+      programming: a.programming + g.programming,
+      install: a.install + g.install,
+      dismantle: a.dismantle + g.dismantle,
+    }),
+    { maintenance: 0, programming: 0, install: 0, dismantle: 0 },
+  )
+  const parts = buildSparePartsReport(entries).grandParts
+  const techs = new Set((entries ?? []).map((e) => up(e.technician)).filter(Boolean))
+  const agencies = new Set((entries ?? []).map((e) => up(e.agency)).filter(Boolean))
+  return { devices: (entries ?? []).length, ...sum, parts, technicians: techs.size, agencies: agencies.size }
+}
+
+// Top spare parts across all brands/models, busiest first.
+export function topParts(entries, limit = 10) {
+  const by = new Map()
+  const parts = sparePartsByType(entries)
+  for (const type of Object.keys(parts))
+    for (const m of parts[type])
+      for (const r of m.rows) {
+        const key = `${r.part}|${r.company}`
+        if (!by.has(key)) by.set(key, { part: r.part, company: r.company, qty: 0 })
+        by.get(key).qty += r.qty
+      }
+  return [...by.values()].sort((a, b) => b.qty - a.qty || a.part.localeCompare(b.part)).slice(0, limit)
+}
+
+// One row per month present in the saved data, for trend charts.
+export function monthlyTrend(savedReports, branch = '') {
+  const months = new Set()
+  const wantBranch = up(branch)
+  for (const r of savedReports ?? []) {
+    if (up(r.mode) === 'TRANSMITTAL') continue
+    if (wantBranch && up(r.branch) !== wantBranch) continue
+    const m = String(r.dateLabel || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+    if (m) months.add(`${m[3]}-${m[2].padStart(2, '0')}`)
+  }
+  return [...months].sort().map((mk) => ({ monthKey: mk, ...dashboardSummary(monthEntries(savedReports, mk, branch)) }))
+}
+
 // Types present, in the canonical AIRBUS/SEPURA/HYTERA order, then any extras.
 function orderedTypes(entries) {
   const present = new Set(entries.map((e) => up(e.type)))

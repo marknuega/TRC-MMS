@@ -135,6 +135,13 @@
   display: flex;
   flex-direction: column;
 }
+/* Data-heavy pages use all the free space (esp. when the sidebar is collapsed);
+   form-style pages keep the 64rem readable measure. */
+.page-main.wide.app {
+  max-width: none;
+  padding-left: 2rem;
+  padding-right: 2rem;
+}
 .page-title {
   font-size: 1.4rem;
   font-weight: 800;
@@ -1454,5 +1461,191 @@ h2 {
     display: block;
     border-top: 1px solid #000;
     margin-bottom: 4px;
+  }
+}
+
+/* ============================================================
+   Spare Parts + Dashboard pages
+   ============================================================ */
+
+/* Highlighted total rows (spare-parts + dashboard tables). */
+.sp-table tr.totals td {
+  background: #fff3bf;
+  color: #4a3b00;
+  font-weight: 800;
+  border-top: 2px solid var(--border-strong);
+}
+:root[data-theme='dark'] .sp-table tr.totals td {
+  background: #4a3b00;
+  color: #ffe58f;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .sp-table tr.totals td {
+    background: #4a3b00;
+    color: #ffe58f;
+  }
+}
+.sp-table td.idx {
+  color: var(--muted);
+  width: 2.4rem;
+}
+.sp-table tr.row-active td {
+  background: var(--primary-soft);
+  color: var(--primary-ink);
+}
+
+/* ---- Spare parts ---- */
+.sp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+.sp-brand,
+.sp-block,
+.dash-card,
+.kpi-tile {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.9rem 1rem;
+}
+.sp-block {
+  margin-bottom: 1.25rem;
+}
+.sp-brand-h {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--text-h);
+  margin: 0 0 0.7rem;
+}
+.sp-brand-h .hint {
+  font-weight: 500;
+  color: var(--muted);
+}
+.sp-model {
+  margin-bottom: 0.9rem;
+}
+.sp-model-h {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--primary-ink);
+  background: var(--primary-soft);
+  padding: 0.3rem 0.5rem;
+  border-radius: var(--radius-sm);
+  margin: 0 0 0.35rem;
+}
+.sp-narrow {
+  max-width: 26rem;
+}
+
+/* ---- Dashboard ---- */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+.kpi-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+.kpi-ico {
+  font-size: 1.25rem;
+}
+.kpi-value {
+  font-size: 1.9rem;
+  font-weight: 800;
+  color: var(--text-h);
+  line-height: 1.1;
+}
+.kpi-label {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.dash-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+.dash-wide {
+  grid-column: 1 / -1;
+}
+.dash-bar-row {
+  display: grid;
+  grid-template-columns: 8rem 1fr 2.75rem;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.35rem 0;
+  font-size: 0.85rem;
+}
+.dash-bar-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+.dash-bar-track {
+  background: var(--surface-3);
+  border-radius: 999px;
+  height: 0.7rem;
+  overflow: hidden;
+}
+.dash-bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--primary);
+  border-radius: 999px;
+  min-width: 2px;
+}
+.dash-bar-val {
+  text-align: right;
+  font-weight: 700;
+  color: var(--text-h);
+}
+.dash-trend {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding-top: 0.5rem;
+}
+.dash-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.25rem;
+  min-width: 2.4rem;
+}
+.dash-col-bar {
+  width: 1.5rem;
+  background: var(--primary);
+  border-radius: 4px 4px 0 0;
+}
+.dash-col-val {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-h);
+}
+.dash-col-x {
+  font-size: 0.7rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  .app {
+    padding: 1.25rem 0.85rem 4rem;
+  }
+  .page-main.wide.app {
+    padding-left: 0.85rem;
+    padding-right: 0.85rem;
+  }
+  .dash-bar-row {
+    grid-template-columns: 6rem 1fr 2.25rem;
+    font-size: 0.8rem;
   }
 }
