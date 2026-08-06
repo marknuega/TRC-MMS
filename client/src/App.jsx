@@ -703,8 +703,12 @@ function App({ user, onLogout }) {
     const title = `Monthly ${matrix.monthName} ${matrix.year}${matrix.branch ? ` · ${matrix.branch}` : ''}`
     w.document.write(
       `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>` +
-        `<style>@page{size:landscape;margin:10mm}body{font-family:Arial,sans-serif;color:#111;margin:12px}` +
-        `h1{font-size:15px;margin:0 0 8px}p.foot{margin-top:10px;font-size:9px;color:#555}</style></head><body>` +
+        `<style>@page{size:A4 landscape;margin:8mm}` +
+        `body{font-family:Arial,sans-serif;color:#111;margin:10px}h1{font-size:14px;margin:0 0 6px}` +
+        // Fill the landscape width; give the activity-description column the most room.
+        `table{width:100%!important;border-collapse:collapse}td,th{font-size:9px;word-break:break-word}` +
+        `th:last-child,td:last-child{width:26%}` +
+        `p.foot{margin-top:8px;font-size:9px;color:#555}</style></head><body>` +
         `<h1>${title}</h1>${monthlyTableHtml()}` +
         `<p class="foot">Software Developed by Muhammad Amir · MT# MT1063 · © 2026 Muhammad Amir. All rights reserved.</p>` +
         `</body></html>`,
