@@ -61,6 +61,19 @@ export function classify(action) {
   return 'maintenance'
 }
 
+// Per-entry service counts: for each category the count is the MAX quantity
+// among that category's faults on the entry (e.g. an entry that repaired 3
+// chargers counts as maintenance 3, not 1). -> { maintenance, programming,
+// install, dismantle }.
+export function entryCounts(entry) {
+  const c = { maintenance: 0, programming: 0, install: 0, dismantle: 0 }
+  for (const f of entry?.faults ?? []) {
+    const cat = classify(f.action)
+    c[cat] = Math.max(c[cat], Math.max(0, Number(f.quantity) || 0))
+  }
+  return c
+}
+
 const modelDisplay = (m) => MODEL_DISPLAY[up(m)] ?? String(m ?? '').trim()
 const lastWord = (s) => String(s ?? '').trim().split(/\s+/).pop() || ''
 const modelShort = (m) => lastWord(modelDisplay(m)) // "SRG CARKIT" -> "CARKIT", "TH1N" -> "TH1N"
@@ -410,11 +423,11 @@ export function activityTotals(entries) {
       rawOf.set(key, e.model)
     }
     const g = byGroup.get(key)
-    const cats = new Set((e.faults ?? []).map((f) => classify(f.action)))
-    if (cats.has('maintenance')) g.maintenance += 1
-    if (cats.has('programming')) g.programming += 1
-    if (cats.has('install')) g.install += 1
-    if (cats.has('dismantle')) g.dismantle += 1
+    const c = entryCounts(e)
+    g.maintenance += c.maintenance
+    g.programming += c.programming
+    g.install += c.install
+    g.dismantle += c.dismantle
   }
   return [...byGroup.entries()]
     .sort((a, b) => {
@@ -462,16 +475,14 @@ export function technicianTotals(entries) {
     if (!by.has(t)) by.set(t, { technician: t, devices: 0, maintenance: 0, programming: 0, install: 0, dismantle: 0, parts: 0 })
     const g = by.get(t)
     g.devices += 1
-    const cats = new Set()
+    const c = entryCounts(e) // max count per category on this entry
+    g.maintenance += c.maintenance
+    g.programming += c.programming
+    g.install += c.install
+    g.dismantle += c.dismantle
     for (const f of e.faults ?? []) {
-      const cat = classify(f.action)
-      cats.add(cat)
-      if (cat === 'maintenance') g.parts += Math.max(0, Number(f.quantity) || 0)
+      if (classify(f.action) === 'maintenance') g.parts += Math.max(0, Number(f.quantity) || 0)
     }
-    if (cats.has('maintenance')) g.maintenance += 1
-    if (cats.has('programming')) g.programming += 1
-    if (cats.has('install')) g.install += 1
-    if (cats.has('dismantle')) g.dismantle += 1
   }
   return [...by.values()]
     .map((g) => ({ ...g, total: g.maintenance + g.programming + g.install + g.dismantle }))
@@ -487,11 +498,11 @@ export function agencyTransactions(entries) {
     const ag = up(e.agency) || '-'
     if (!by.has(ag)) by.set(ag, { agency: ag, maintenance: 0, programming: 0, install: 0, dismantle: 0 })
     const g = by.get(ag)
-    const cats = new Set((e.faults ?? []).map((f) => classify(f.action)))
-    if (cats.has('maintenance')) g.maintenance += 1
-    if (cats.has('programming')) g.programming += 1
-    if (cats.has('install')) g.install += 1
-    if (cats.has('dismantle')) g.dismantle += 1
+    const c = entryCounts(e)
+    g.maintenance += c.maintenance
+    g.programming += c.programming
+    g.install += c.install
+    g.dismantle += c.dismantle
   }
   return [...by.values()]
     .map((g) => ({ ...g, total: g.maintenance + g.programming + g.install + g.dismantle }))
@@ -558,17 +569,12 @@ export function headerTotals(entries) {
   let install = 0
   let dismantle = 0
   for (const e of entries) {
-    // MAINTENANCE per device = max quantity among its maintenance faults (see buildDeviceSummary).
-    let maxMaint = 0
-    for (const f of e.faults) {
-      const cat = classify(f.action)
-      const q = Math.max(0, Number(f.quantity) || 0)
-      if (cat === 'maintenance') maxMaint = Math.max(maxMaint, q)
-      else if (cat === 'programming') programming += q
-      else if (cat === 'install') install += q
-      else if (cat === 'dismantle') dismantle += q
-    }
-    maintenance += maxMaint
+    // Each category counts the MAX quantity among that category's faults on the entry.
+    const c = entryCounts(e)
+    maintenance += c.maintenance
+    programming += c.programming
+    install += c.install
+    dismantle += c.dismantle
   }
   return { totalEntries: entries.length, programming, maintenance, install, dismantle }
 }

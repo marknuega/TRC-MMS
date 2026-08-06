@@ -645,9 +645,9 @@ function App({ user, onLogout }) {
   }
 
   // Excel export that mirrors the on-screen table (grouped headers, green
-  // weekends, red device tags) via an HTML table Excel can open.
-  function handleExportMonthlyExcel() {
-    if (!matrix) return
+  // weekends, red device tags) as an HTML table — shared by the Excel and PDF
+  // exports so both match the desktop file (device labels like (AIRBUS-TH1N) red).
+  function monthlyTableHtml() {
     const esc = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     const descHtml = (text) =>
       String(text ?? '')
@@ -679,7 +679,12 @@ function App({ user, onLogout }) {
     h += `<tr><td colspan="2" style="${b}background:#eee;font-weight:bold;padding:4px;">Total</td>`
     for (const c of matrix.columns) h += `<td style="${b}background:#eee;font-weight:bold;text-align:center;padding:4px;">${matrix.totals[c.key] || 0}</td>`
     h += `<td style="${b}background:#eee;"></td></tr></tbody></table>`
-    const full = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8"></head><body>${h}</body></html>`
+    return h
+  }
+
+  function handleExportMonthlyExcel() {
+    if (!matrix) return
+    const full = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8"></head><body>${monthlyTableHtml()}</body></html>`
     const blob = new Blob(['\ufeff', full], { type: 'application/vnd.ms-excel' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -687,6 +692,26 @@ function App({ user, onLogout }) {
     a.download = `Monthly-${matrix.monthName}-${matrix.year}${matrix.branch ? `-${matrix.branch}` : ''}.xls`
     a.click()
     URL.revokeObjectURL(url)
+  }
+
+  // Formatted PDF (print window) of the monthly matrix — red device labels,
+  // green weekends, grouped headers — matching the desktop exported file.
+  function handleExportMonthlyPdf() {
+    if (!matrix) return
+    const w = window.open('', '_blank')
+    if (!w) return
+    const title = `Monthly ${matrix.monthName} ${matrix.year}${matrix.branch ? ` · ${matrix.branch}` : ''}`
+    w.document.write(
+      `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>` +
+        `<style>@page{size:landscape;margin:10mm}body{font-family:Arial,sans-serif;color:#111;margin:12px}` +
+        `h1{font-size:15px;margin:0 0 8px}p.foot{margin-top:10px;font-size:9px;color:#555}</style></head><body>` +
+        `<h1>${title}</h1>${monthlyTableHtml()}` +
+        `<p class="foot">Software Developed by Muhammad Amir · MT# MT1063 · © 2026 Muhammad Amir. All rights reserved.</p>` +
+        `</body></html>`,
+    )
+    w.document.close()
+    w.focus()
+    w.print()
   }
 
   // Keep daily reports and transmittals in separate lists (no mixing).
@@ -1176,33 +1201,36 @@ function App({ user, onLogout }) {
           )}
         </section>
 
-        {savedCard({
-          icon: '☰',
-          title: 'Saved reports',
-          list: dailySaved,
-          open: savedOpen,
-          setOpen: setSavedOpen,
-          search: savedSearch,
-          setSearch: setSavedSearch,
-          results: reportResults,
-          hint: 'Daily-report snapshots, saved under a unique REP-#### number. Load one back to review or edit it, then Save again to store it as a new report.',
-          empty: 'No saved reports yet — in Report mode, click “Save report” above.',
-          placeholder: '🔎 Search inside reports (item, model, branch, date)…',
-        })}
+        {/* Show only the saved card matching the current mode (no mixing). */}
+        {!isTransmittal &&
+          savedCard({
+            icon: '☰',
+            title: 'Saved reports',
+            list: dailySaved,
+            open: savedOpen,
+            setOpen: setSavedOpen,
+            search: savedSearch,
+            setSearch: setSavedSearch,
+            results: reportResults,
+            hint: 'Daily-report snapshots, saved under a unique REP-#### number. Load one back to review or edit it, then Save again to store it as a new report.',
+            empty: 'No saved reports yet — in Report mode, click “Save report” above.',
+            placeholder: '🔎 Search inside reports (item, model, branch, date)…',
+          })}
 
-        {savedCard({
-          icon: '📦',
-          title: 'Saved transmittals',
-          list: txSaved,
-          open: savedTxOpen,
-          setOpen: setSavedTxOpen,
-          search: savedTxSearch,
-          setSearch: setSavedTxSearch,
-          results: txResults,
-          hint: 'Transmittal snapshots, saved under a unique TRANS-#### number — kept separate from daily reports.',
-          empty: 'No saved transmittals yet — switch to Transmittal mode and Save.',
-          placeholder: '🔎 Search inside transmittals (item, model, branch, date)…',
-        })}
+        {isTransmittal &&
+          savedCard({
+            icon: '📦',
+            title: 'Saved transmittals',
+            list: txSaved,
+            open: savedTxOpen,
+            setOpen: setSavedTxOpen,
+            search: savedTxSearch,
+            setSearch: setSavedTxSearch,
+            results: txResults,
+            hint: 'Transmittal snapshots, saved under a unique TRANS-#### number — kept separate from daily reports.',
+            empty: 'No saved transmittals yet — switch to Transmittal mode and Save.',
+            placeholder: '🔎 Search inside transmittals (item, model, branch, date)…',
+          })}
             </>
           )}
 
@@ -1230,8 +1258,11 @@ function App({ user, onLogout }) {
                     <input value={monthBranch} readOnly aria-label="Branch" />
                   )}
                 </label>
-                <button type="button" className="btn-pdf" onClick={handleExportMonthlyExcel}>
+                <button type="button" className="submit" onClick={handleExportMonthlyExcel}>
                   ⭳ Excel
+                </button>
+                <button type="button" className="btn-pdf" onClick={handleExportMonthlyPdf}>
+                  ⭳ PDF
                 </button>
                 <button type="button" className="btn-txt" onClick={handleExportMonthlyCsv}>
                   ⭳ CSV

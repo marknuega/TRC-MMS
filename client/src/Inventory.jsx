@@ -352,9 +352,6 @@ export default function Inventory({ embedded = false }) {
                       <td className="num avail">{i.avail}</td>
                       <td className="rem">{i.remarks}</td>
                       <td className="inv-row-actions">
-                        <button type="button" className="inv-edit" onClick={() => openEdit(i)}>
-                          Edit
-                        </button>
                         <button type="button" className="inv-hist" onClick={() => openHistory(i)}>
                           History
                         </button>
@@ -390,6 +387,17 @@ export default function Inventory({ embedded = false }) {
               </button>
             </div>
             <div className="hist-actions">
+              <button
+                type="button"
+                className="submit"
+                onClick={() => {
+                  const item = hist.item
+                  setHist(null)
+                  openEdit(item)
+                }}
+              >
+                ✎ Edit item
+              </button>
               <button type="button" className="btn-txt" onClick={() => exportHistExcel(hist)} disabled={!hist.txns?.length}>
                 ⭳ Excel
               </button>
