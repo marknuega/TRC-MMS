@@ -825,15 +825,17 @@ export function buildMonthlyMatrix(savedReports, opts = {}) {
           else if (cat === 'install') install += q
           else if (cat === 'dismantle') dismantle += q
         }
-        // Each entry is one physical device: it counts at most once per
-        // activity column, no matter how many faults or what quantity they
-        // carry (2 devices with a fault each -> 2, never 3).
+        // Repair/programming model columns count the device once (a device with
+        // several faults is still one device). Install & Dismantle are device-
+        // level counts, so they use the quantity — the SAME "max per entry" rule
+        // the Dashboard uses (dismantling 6 devices in one entry counts as 6).
+        const c = entryCounts(e)
         const mKey = modelToKey.get(mk)
         if (mKey && maintSum + program > 0) counts[mKey] += 1
         const iKey = installByType.get(t)
-        if (iKey && install > 0) counts[iKey] += 1
+        if (iKey && c.install > 0) counts[iKey] += c.install
         const dKey = dismantleByType.get(t)
-        if (dKey && dismantle > 0) counts[dKey] += 1
+        if (dKey && c.dismantle > 0) counts[dKey] += c.dismantle
         const faultItems = (e.faults ?? [])
           .filter((f) => up(f.issue))
           .map((f) => ({ issue: up(f.issue), comp: companyDisplay(f.company), qty: Math.max(0, Number(f.quantity) || 0) }))
