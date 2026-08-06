@@ -706,11 +706,11 @@ function App({ user, onLogout }) {
     // columns stay slim (single digits — their names sit on a diagonal header), and
     // the activity description gets the remaining space.
     const n = matrix.columns.length
-    const dev = (33 / Math.max(1, n)).toFixed(3)
+    const dev = (40 / Math.max(1, n)).toFixed(3)
     const colgroup =
       `<colgroup><col style="width:7%"/><col style="width:6%"/>` +
       matrix.columns.map(() => `<col style="width:${dev}%"/>`).join('') +
-      `<col style="width:54%"/></colgroup>`
+      `<col style="width:47%"/></colgroup>`
     w.document.write(
       `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>` +
         `<style>@page{size:A4 landscape;margin:8mm}` +

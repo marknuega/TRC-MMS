@@ -77,6 +77,9 @@ export function entryCounts(entry) {
 const modelDisplay = (m) => MODEL_DISPLAY[up(m)] ?? String(m ?? '').trim()
 const lastWord = (s) => String(s ?? '').trim().split(/\s+/).pop() || ''
 const modelShort = (m) => lastWord(modelDisplay(m)) // "SRG CARKIT" -> "CARKIT", "TH1N" -> "TH1N"
+// Monthly description device tag: drop the leading "SRG " so Sepura car-kit /
+// desktop / bike read as "(SEPURA-CARKIT)", "(SEPURA-DESKTOP)", "(SEPURA-BIKE)".
+const descModel = (m) => modelDisplay(m).replace(/^SRG\s+/i, '')
 const modelRank = (raw) => MODEL_RANK.get(up(raw)) ?? Number.MAX_SAFE_INTEGER // unknown models sort last
 const companyDisplay = (c) => COMPANY_DISPLAY[up(c)] ?? String(c ?? '').trim()
 
@@ -825,7 +828,7 @@ export function buildMonthlyMatrix(savedReports, opts = {}) {
           .filter((f) => up(f.issue))
           .map((f) => ({ issue: up(f.issue), comp: companyDisplay(f.company), qty: Math.max(0, Number(f.quantity) || 0) }))
         if (faultItems.length) {
-          const tag = mk && mk !== '-' ? `${t}-${modelDisplay(e.model)}` : t
+          const tag = mk && mk !== '-' ? `${t}-${descModel(e.model)}` : t
           if (!byDevice.has(tag)) {
             const rank = modelRankMap.get(mk) ?? modelRankMap.get(up(modelDisplay(e.model))) ?? Number.MAX_SAFE_INTEGER
             byDevice.set(tag, { merged: new Map(), rank })
