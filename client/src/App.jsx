@@ -647,7 +647,7 @@ function App({ user, onLogout }) {
   // Excel export that mirrors the on-screen table (grouped headers, green
   // weekends, red device tags) as an HTML table — shared by the Excel and PDF
   // exports so both match the desktop file (device labels like (AIRBUS-TH1N) red).
-  function monthlyTableHtml() {
+  function monthlyTableHtml(colgroupHtml = '') {
     const esc = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     const descHtml = (text) =>
       String(text ?? '')
@@ -657,6 +657,7 @@ function App({ user, onLogout }) {
     const b = 'border:1px solid #999;'
     const hb = `${b}background:#dfe3ee;font-weight:bold;text-align:center;padding:4px;`
     let h = `<table style="border-collapse:collapse;font-family:Arial;font-size:11px;">`
+    h += colgroupHtml
     h += '<thead>'
     h += `<tr><th rowspan="2" colspan="2" style="${b}"></th>`
     for (const g of matrix.groups) h += `<th colspan="${g.span}" style="${hb}">${esc(g.group)}</th>`
@@ -701,15 +702,24 @@ function App({ user, onLogout }) {
     const w = window.open('', '_blank')
     if (!w) return
     const title = `Monthly ${matrix.monthName} ${matrix.year}${matrix.branch ? ` · ${matrix.branch}` : ''}`
+    // Fixed column widths: Date/Day small, the terminal columns share a slim band
+    // (they only hold single digits), and the activity description gets the rest.
+    const n = matrix.columns.length
+    const dev = (44 / Math.max(1, n)).toFixed(3)
+    const colgroup =
+      `<colgroup><col style="width:5%"/><col style="width:6%"/>` +
+      matrix.columns.map(() => `<col style="width:${dev}%"/>`).join('') +
+      `<col style="width:45%"/></colgroup>`
     w.document.write(
       `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>` +
         `<style>@page{size:A4 landscape;margin:8mm}` +
         `body{font-family:Arial,sans-serif;color:#111;margin:10px}h1{font-size:14px;margin:0 0 6px}` +
-        // Fill the landscape width; give the activity-description column the most room.
-        `table{width:100%!important;border-collapse:collapse}td,th{font-size:9px;word-break:break-word}` +
-        `th:last-child,td:last-child{width:26%}` +
+        // Fill the landscape width and honour the colgroup widths exactly.
+        `table{width:100%!important;border-collapse:collapse;table-layout:fixed}` +
+        `td,th{font-size:9px;word-break:break-word;overflow-wrap:anywhere}` +
+        `td:last-child{text-align:left}` +
         `p.foot{margin-top:8px;font-size:9px;color:#555}</style></head><body>` +
-        `<h1>${title}</h1>${monthlyTableHtml()}` +
+        `<h1>${title}</h1>${monthlyTableHtml(colgroup)}` +
         `<p class="foot">Software Developed by Muhammad Amir · MT# MT1063 · © 2026 Muhammad Amir. All rights reserved.</p>` +
         `</body></html>`,
     )
