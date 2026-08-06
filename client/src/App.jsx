@@ -246,6 +246,43 @@ function MultiSelect({ value, options, onChange, placeholder = '— select —' 
   )
 }
 
+// Print an HTML document via a hidden iframe (more reliable than a popup for
+// Chrome's "Save as PDF" — a script-opened window can hang on "Saving…"). The
+// iframe is kept alive until the print dialog closes so the PDF has its source.
+function printDocument(html) {
+  const iframe = document.createElement('iframe')
+  iframe.setAttribute('aria-hidden', 'true')
+  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden'
+  document.body.appendChild(iframe)
+  const cw = iframe.contentWindow
+  let printed = false
+  let cleaned = false
+  const cleanup = () => {
+    if (cleaned) return
+    cleaned = true
+    // Delay so we never yank the source while Chrome is still writing the file.
+    setTimeout(() => iframe.remove(), 1500)
+  }
+  const doPrint = () => {
+    if (printed) return
+    printed = true
+    try {
+      cw.focus()
+      cw.print()
+    } catch {
+      /* ignore */
+    }
+  }
+  cw.onafterprint = cleanup
+  const doc = cw.document
+  doc.open()
+  doc.write(html)
+  doc.close()
+  if (doc.readyState === 'complete') setTimeout(doPrint, 200)
+  else cw.onload = () => setTimeout(doPrint, 200)
+  setTimeout(doPrint, 800) // fallback if load never fires
+}
+
 function downloadText(filename, text) {
   const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
   const url = URL.createObjectURL(blob)
@@ -752,8 +789,6 @@ function App({ user, onLogout }) {
   // green weekends, grouped headers — matching the desktop exported file.
   function handleExportMonthlyPdf() {
     if (!matrix) return
-    const w = window.open('', '_blank')
-    if (!w) return
     const title = `Monthly ${matrix.monthName} ${matrix.year}${matrix.branch ? ` · ${matrix.branch}` : ''}`
     // Fixed column widths: Date/Day wide enough to read on one line, the terminal
     // columns stay slim (single digits — their names sit on a diagonal header), and
@@ -764,7 +799,7 @@ function App({ user, onLogout }) {
       `<colgroup><col style="width:7%"/><col style="width:6%"/>` +
       matrix.columns.map(() => `<col style="width:${dev}%"/>`).join('') +
       `<col style="width:47%"/></colgroup>`
-    w.document.write(
+    const html =
       `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>` +
         // Tight margins + compact rows so a full month fits on ONE landscape page.
         `<style>@page{size:A4 landscape;margin:4mm}` +
@@ -786,11 +821,8 @@ function App({ user, onLogout }) {
         `p.foot{margin-top:4px;font-size:7.5px;color:#555}</style></head><body>` +
         `<h1>${title}</h1>${monthlyTableHtml(colgroup)}` +
         `<p class="foot">Software Developed by Muhammad Amir · MT# MT1063 · © 2026 Muhammad Amir. All rights reserved.</p>` +
-        `</body></html>`,
-    )
-    w.document.close()
-    w.focus()
-    w.print()
+        `</body></html>`
+    printDocument(html)
   }
 
   // Keep daily reports and transmittals in separate lists (no mixing).
