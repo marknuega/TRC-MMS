@@ -964,8 +964,8 @@ function App({ user, onLogout }) {
             </button>
           </>
         ) : (
-          <button type="button" onClick={() => setEditSavedId(r.id)}>
-            Edit
+          <button type="button" className="icon-edit" onClick={() => setEditSavedId(r.id)} aria-label="Edit" title="Edit">
+            ✎
           </button>
         )}
       </div>

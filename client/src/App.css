@@ -1584,6 +1584,11 @@ h2 {
   top: 0.45rem;
   right: 0.45rem;
 }
+.icon-edit {
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0.35rem 0.55rem;
+}
 .entry-num {
   flex: 0 0 auto;
   min-width: 1.9rem;
