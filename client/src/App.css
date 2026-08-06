@@ -933,9 +933,9 @@ h2 {
 }
 .entry-update {
   white-space: nowrap;
-  font-weight: 600;
-  font-size: 0.85rem;
-  padding: 0.35rem 0.7rem;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0.35rem 0.55rem;
 }
 .edit-modal {
   max-width: 46rem;

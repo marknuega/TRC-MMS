@@ -1384,8 +1384,8 @@ function App({ user, onLogout }) {
                     )}
                     {e.comment && <p className="entry-comment muted small">💬 {e.comment}</p>}
                   </div>
-                  <button type="button" className="entry-update" onClick={() => openEdit(e)} aria-label="Update entry">
-                    ✎ Update
+                  <button type="button" className="entry-update" onClick={() => openEdit(e)} aria-label="Update entry" title="Update entry">
+                    ✎
                   </button>
                 </li>
               ))}
