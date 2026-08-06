@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   listEntries,
   createEntry,
+  updateEntry,
   deleteEntry,
   clearEntries,
   getOptions,
@@ -332,6 +333,8 @@ function App({ user, onLogout }) {
   const [theme, setTheme] = useState(loadTheme)
   const [mode, setMode] = useState(loadMode)
   const [sync, setSync] = useState({ online: true, pending: 0 })
+  const [editId, setEditId] = useState(null) // entry id being edited in the modal
+  const [editForm, setEditForm] = useState(null)
 
   // Non-admins are pinned to their own branch everywhere.
   useEffect(() => {
@@ -614,6 +617,83 @@ function App({ user, onLogout }) {
       refresh()
     } catch (err) {
       setError(err.message)
+    }
+  }
+
+  // ---- Edit an existing entry (modal) ----
+  function openEdit(e) {
+    setEditForm({
+      reportDate: String(e.reportDate).slice(0, 10),
+      technician: e.technician || '',
+      agency: e.agency && e.agency !== '-' ? e.agency : '',
+      telNumber: e.telNumber && e.telNumber !== '-' ? e.telNumber : '',
+      issiNumber: e.issiNumber && e.issiNumber !== '*' ? e.issiNumber : '',
+      type: e.type || '',
+      model: e.model && e.model !== '-' ? e.model : '',
+      comment: e.comment || '',
+      faults: (e.faults ?? []).map((f) => ({
+        issue: f.issue || '',
+        quantity: f.quantity || 1,
+        action: f.action || 'CHANGE',
+        company: f.company || '',
+        status: f.status || 'New',
+      })),
+    })
+    setEditId(e.id)
+  }
+  const closeEdit = () => {
+    setEditId(null)
+    setEditForm(null)
+  }
+  const eSet = (field) => (ev) => setEditForm((f) => ({ ...f, [field]: ev.target.value }))
+  const eSetModel = (ev) => {
+    const model = ev.target.value
+    setEditForm((f) => ({ ...f, model, type: MODEL_TYPE[model.toUpperCase()] ?? f.type }))
+  }
+  const eSetFault = (i, field) => (ev) => {
+    if (field === 'company') saveLast({ company: ev.target.value })
+    setEditForm((f) => ({
+      ...f,
+      faults: f.faults.map((fault, idx) => {
+        if (idx !== i) return fault
+        const next = { ...fault, [field]: field === 'quantity' ? Number(ev.target.value) : ev.target.value }
+        if (field === 'issue') {
+          const matched = options.actions.find((a) => a.toUpperCase() === String(ev.target.value).trim().toUpperCase())
+          if (matched) next.action = matched
+        }
+        return next
+      }),
+    }))
+  }
+  const eAddFault = () => setEditForm((f) => ({ ...f, faults: [...f.faults, emptyFault()] }))
+  const eRemoveFault = (i) =>
+    setEditForm((f) => ({ ...f, faults: f.faults.length === 1 ? f.faults : f.faults.filter((_, idx) => idx !== i) }))
+
+  async function handleUpdateEntry(ev) {
+    ev.preventDefault()
+    setBusy(true)
+    try {
+      const payload = {
+        ...editForm,
+        mode,
+        ...(isTransmittal ? { type: 'OTHER', model: '', agency: '' } : {}),
+        faults: editForm.faults
+          .filter(faultIsMeaningful)
+          .map((f) => ({ ...f, quantity: Math.max(1, Number(f.quantity) || 1) })),
+      }
+      if (payload.faults.length === 0) {
+        setError('Add at least one fault — pick an issue, or an action like PROGRAM/INSTALL/DISMANTLE.')
+        setBusy(false)
+        return
+      }
+      await updateEntry(editId, payload)
+      closeEdit()
+      setError(null)
+      refresh()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -1304,14 +1384,162 @@ function App({ user, onLogout }) {
                     )}
                     {e.comment && <p className="entry-comment muted small">💬 {e.comment}</p>}
                   </div>
-                  <button onClick={() => handleDelete(e.id)} aria-label="Delete entry">
-                    ✕
+                  <button type="button" className="entry-update" onClick={() => openEdit(e)} aria-label="Update entry">
+                    ✎ Update
                   </button>
                 </li>
               ))}
             </ul>
           )}
         </section>
+
+        {editForm && (
+          <div className="modal-backdrop" onClick={closeEdit}>
+            <div className="modal edit-modal" onClick={(ev) => ev.stopPropagation()}>
+              <div className="modal-head">
+                <h3>Update entry</h3>
+                <button type="button" className="ghost" onClick={closeEdit} aria-label="Close">
+                  ✕
+                </button>
+              </div>
+              <form onSubmit={handleUpdateEntry} className="entry-form modal-body">
+                {!isTransmittal && (
+                  <div className="grid">
+                    <label>
+                      Model {editForm.type === 'OTHER' && <span className="opt">(optional)</span>}
+                      <select value={editForm.model} onChange={eSetModel} required={editForm.type !== 'OTHER'}>
+                        <option value="">— select —</option>
+                        {options.models.map((m) => (
+                          <option key={m}>{m}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Type
+                      <select value={editForm.type} onChange={eSet('type')} required>
+                        <option value="">— select —</option>
+                        {options.types.map((t) => (
+                          <option key={t}>{t}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Agency
+                      <select value={editForm.agency} onChange={eSet('agency')} required>
+                        <option value="">— select —</option>
+                        {options.agencies.map((a) => (
+                          <option key={a}>{a}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      <span className="cap">Tel number <span className="opt">(optional)</span></span>
+                      <input value={editForm.telNumber} onChange={eSet('telNumber')} placeholder="e.g. 0462260" />
+                    </label>
+                    <label>
+                      <span className="cap">ISSI number <span className="opt">(optional)</span></span>
+                      <input value={editForm.issiNumber} onChange={eSet('issiNumber')} placeholder="e.g. 1839517" />
+                    </label>
+                    <label>
+                      <span className="cap">Technician <span className="opt">(optional · multiple)</span></span>
+                      <MultiSelect
+                        value={editForm.technician}
+                        options={options.technicians}
+                        onChange={(v) => setEditForm((f) => ({ ...f, technician: v }))}
+                      />
+                    </label>
+                    <label>
+                      Report date
+                      <input type="date" value={editForm.reportDate} onChange={eSet('reportDate')} required />
+                    </label>
+                  </div>
+                )}
+
+                <div className="faults">
+                  <div className={`fault-row fault-head${isTransmittal ? ' fault-row--tx' : ''}`}>
+                    <span>{isTransmittal ? 'Material' : 'Issue'}</span>
+                    <span>Qty</span>
+                    {!isTransmittal && <span>Action</span>}
+                    <span>Company</span>
+                    {isTransmittal && <span>Status</span>}
+                    <span />
+                  </div>
+                  {editForm.faults.map((fault, i) => (
+                    <div className={`fault-row${isTransmittal ? ' fault-row--tx' : ''}`} key={i}>
+                      <input
+                        list={isTransmittal ? 'materials-list' : 'issue-types'}
+                        value={fault.issue}
+                        onChange={eSetFault(i, 'issue')}
+                        placeholder="e.g. A COVER"
+                        aria-label={isTransmittal ? 'Material' : 'Issue'}
+                      />
+                      <input type="number" min="1" step="1" value={fault.quantity} onChange={eSetFault(i, 'quantity')} aria-label="Quantity" />
+                      {!isTransmittal && (
+                        <select value={fault.action} onChange={eSetFault(i, 'action')} aria-label="Action">
+                          {options.actions.map((a) => (
+                            <option key={a}>{a}</option>
+                          ))}
+                        </select>
+                      )}
+                      <select value={fault.company} onChange={eSetFault(i, 'company')} aria-label="Company">
+                        <option value="">— none —</option>
+                        {options.companies.map((c) => (
+                          <option key={c}>{c}</option>
+                        ))}
+                      </select>
+                      {isTransmittal && (
+                        <select value={fault.status} onChange={eSetFault(i, 'status')} aria-label="Item status">
+                          {options.statuses.map((s) => (
+                            <option key={s}>{s}</option>
+                          ))}
+                        </select>
+                      )}
+                      <button
+                        type="button"
+                        className="fault-remove"
+                        onClick={() => eRemoveFault(i)}
+                        disabled={editForm.faults.length === 1}
+                        aria-label="Remove fault"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                <label className="comment-field">
+                  <span className="cap">Comment <span className="opt">(optional)</span></span>
+                  <textarea value={editForm.comment} onChange={eSet('comment')} rows={2} placeholder="Note for this entry…" />
+                </label>
+
+                <div className="modal-actions">
+                  <button type="button" className="add-fault" onClick={eAddFault}>
+                    {isTransmittal ? '+ Add material' : '+ Add fault'}
+                  </button>
+                  <span className="modal-actions-right">
+                    <button
+                      type="button"
+                      className="danger"
+                      onClick={() => {
+                        const id = editId
+                        closeEdit()
+                        handleDelete(id)
+                      }}
+                    >
+                      🗑 Delete
+                    </button>
+                    <button type="button" className="ghost" onClick={closeEdit}>
+                      Cancel
+                    </button>
+                    <button type="submit" className="submit" disabled={busy}>
+                      Save changes
+                    </button>
+                  </span>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
 
         <section className="breakdown">
           <div className="breakdown-head">

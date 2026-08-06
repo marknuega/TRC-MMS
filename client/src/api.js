@@ -79,6 +79,9 @@ export const listEntries = (mode) => request(`/api/reports${modeQs(mode)}`)
 export const createEntry = (entry) =>
   request('/api/reports', { method: 'POST', body: JSON.stringify(entry) })
 
+export const updateEntry = (id, entry) =>
+  request(`/api/reports/${id}`, { method: 'PUT', body: JSON.stringify(entry) })
+
 export const deleteEntry = (id) =>
   request(`/api/reports/${id}`, { method: 'DELETE' })
 

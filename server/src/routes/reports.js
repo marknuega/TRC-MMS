@@ -143,6 +143,29 @@ router.delete('/', async (req, res, next) => {
   }
 })
 
+// PUT /api/reports/:id - replace an entry's fields + faults in place.
+router.put('/:id', async (req, res, next) => {
+  try {
+    const { data, error } = parseEntry(req.body)
+    if (error) return res.status(400).json({ error })
+    const id = Number(req.params.id)
+    const { faults, ...scalar } = data
+    const result = await prisma.$transaction(async (tx) => {
+      const seq = await ensureReportSeq(tx, data.reportDate)
+      const entry = await tx.reportEntry.update({
+        where: { id },
+        data: { ...scalar, faults: { deleteMany: {}, create: faults.create } },
+        include: withFaults,
+      })
+      return { ...entry, reportId: repId(seq) }
+    })
+    res.json(result)
+  } catch (err) {
+    if (err.code === 'P2025') return res.status(404).json({ error: 'Entry not found' })
+    next(err)
+  }
+})
+
 // DELETE /api/reports/:id - faults cascade via the schema relation
 router.delete('/:id', async (req, res, next) => {
   try {

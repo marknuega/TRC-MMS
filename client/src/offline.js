@@ -122,6 +122,26 @@ async function applyOptimistic(op) {
     op.tmpId = entry.id // so a later delete of this temp entry can cancel the create
     return entry
   }
+  if (base === '/api/reports' && method === 'PUT' && /\/api\/reports\/[^/]+$/.test(path)) {
+    const id = decodeURIComponent(path.split('/').pop())
+    const updated = { ...optimisticEntry(body), id }
+    for (const mode of ['report', 'transmittal']) {
+      await patch(reportsKey(mode), (list) =>
+        Array.isArray(list) ? list.map((e) => (String(e.id) === String(id) ? { ...updated, mode: e.mode } : e)) : list,
+      )
+    }
+    if (isTempId(id)) {
+      // Not yet on the server — fold the edit into the queued create instead.
+      const q = await listQueue()
+      const create = q.find((o) => o.tmpId === id)
+      if (create) {
+        create.body = { ...body, mode: modeOf(create.body) }
+        await putQueue(create)
+        op._skip = true
+      }
+    }
+    return { ...updated, _pending: true }
+  }
   if (base === '/api/reports' && method === 'DELETE' && /\/api\/reports\/[^/]+$/.test(path)) {
     const id = decodeURIComponent(path.split('/').pop())
     for (const mode of ['report', 'transmittal']) {

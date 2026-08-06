@@ -931,6 +931,33 @@ h2 {
   background: var(--surface-3);
   color: var(--text);
 }
+.entry-update {
+  white-space: nowrap;
+  font-weight: 600;
+  font-size: 0.85rem;
+  padding: 0.35rem 0.7rem;
+}
+.edit-modal {
+  max-width: 46rem;
+}
+.modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+.modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-top: 0.4rem;
+}
+.modal-actions-right {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
 .hist-actions {
   display: flex;
   gap: 0.5rem;
