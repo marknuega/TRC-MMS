@@ -125,17 +125,20 @@ function searchInside(list, query) {
   const out = []
   for (const r of list) {
     const entries = Array.isArray(r.entries) ? r.entries : []
+    const label = repLabel(r.reportId, r.branch, r.mode) // e.g. "MAKKAH-REP-0004"
     for (const e of entries) {
       const model = e.model && e.model !== '-' ? e.model : ''
       for (const f of e.faults ?? []) {
-        const hay = `${r.reportId} ${r.branch} ${r.dateLabel} ${e.type} ${e.model} ${f.issue} ${f.company} ${f.status} ${e.comment ?? ''}`
+        const hay = `${label} ${r.reportId} ${r.branch} ${r.dateLabel} ${e.technician ?? ''} ${e.type} ${e.model} ${f.issue} ${f.company} ${f.status} ${e.comment ?? ''}`
         if (hay.toLowerCase().includes(q)) {
           out.push({
             date: r.dateLabel,
             branch: r.branch,
             qty: f.quantity,
+            technician: e.technician ?? '',
             item: `${model ? `${model} · ` : ''}${f.issue}`,
-            reportId: repLabel(r.reportId, r.branch, r.mode),
+            reportId: label,
+            rep: r,
           })
         }
       }
@@ -790,18 +793,24 @@ function App({ user, onLogout }) {
       <ul className="search-results">
         <li className="search-results-head muted small">
           <span>Item</span>
+          <span>Technician</span>
           <span>Date</span>
           <span>Branch</span>
           <span>Qty</span>
           <span>Report</span>
+          <span></span>
         </li>
         {results.map((res, idx) => (
           <li key={idx}>
             <span className="res-item">{res.item}</span>
+            <span className="muted small">{res.technician || '—'}</span>
             <span className="muted small">{res.date}</span>
             <span className="muted small">{res.branch || '—'}</span>
             <span className="muted small">{res.qty}</span>
             <span className="muted small">{res.reportId}</span>
+            <button type="button" className="res-load" onClick={() => handleLoadReport(res.rep)} disabled={busy}>
+              Load
+            </button>
           </li>
         ))}
       </ul>
