@@ -91,7 +91,8 @@ function renderDesc(text) {
       ),
     )
 }
-const emptyFault = () => ({ issue: '', quantity: 1, action: 'CHANGE', company: 'PROJECT 2', status: 'New' })
+// New fault rows default the Company to the last one the user picked.
+const emptyFault = () => ({ issue: '', quantity: 1, action: 'CHANGE', company: loadLast().company ?? 'PROJECT 2', status: 'New' })
 
 // Remember the last Model/Type/Agency so the next entry (and next visit) pre-selects them.
 const LAST_KEY = 'trc_last_selection'
@@ -104,7 +105,8 @@ const loadLast = () => {
 }
 const saveLast = (v) => {
   try {
-    localStorage.setItem(LAST_KEY, JSON.stringify(v))
+    // Merge so a partial update (e.g. just the company) keeps the other fields.
+    localStorage.setItem(LAST_KEY, JSON.stringify({ ...loadLast(), ...v }))
   } catch {
     /* ignore storage errors */
   }
@@ -499,7 +501,9 @@ function App({ user, onLogout }) {
     const model = e.target.value
     setForm((f) => ({ ...f, model, type: MODEL_TYPE[model.toUpperCase()] ?? f.type }))
   }
-  const setFault = (i, field) => (e) =>
+  const setFault = (i, field) => (e) => {
+    // Remember the last Company so new fault rows (and the next entry) pre-select it.
+    if (field === 'company') saveLast({ company: e.target.value })
     setForm((f) => ({
       ...f,
       faults: f.faults.map((fault, idx) => {
@@ -513,6 +517,7 @@ function App({ user, onLogout }) {
         return next
       }),
     }))
+  }
   const addFault = () => setForm((f) => ({ ...f, faults: [...f.faults, emptyFault()] }))
   const removeFault = (i) =>
     setForm((f) => ({ ...f, faults: f.faults.length === 1 ? f.faults : f.faults.filter((_, idx) => idx !== i) }))
@@ -761,20 +766,24 @@ function App({ user, onLogout }) {
       `<col style="width:47%"/></colgroup>`
     w.document.write(
       `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>` +
-        `<style>@page{size:A4 landscape;margin:8mm}` +
-        `body{font-family:Arial,sans-serif;color:#111;margin:10px}h1{font-size:14px;margin:0 0 6px}` +
+        // Tight margins + compact rows so a full month fits on ONE landscape page.
+        `<style>@page{size:A4 landscape;margin:4mm}` +
+        `body{font-family:Arial,sans-serif;color:#111;margin:4px}h1{font-size:12px;margin:0 0 3px}` +
         // Fill the landscape width and honour the colgroup widths exactly.
         `table{width:100%!important;border-collapse:collapse;table-layout:fixed}` +
-        `td,th{font-size:9px}` +
+        // Small font + thin padding shrink every row to fit 31 days on one page.
+        `td,th{font-size:8px!important;line-height:1.05!important}` +
+        `td{padding:1px 3px!important;word-break:break-word;overflow-wrap:anywhere}` +
+        `thead th{padding:1px 2px!important}` +
         // Date & Day: read on a single line, never wrap.
         `td:nth-child(1),td:nth-child(2){white-space:nowrap;text-align:center}` +
-        // Diagonal (135°) device-name headers so the slim columns stay readable.
-        `th.dev{height:96px;padding:0;vertical-align:bottom}` +
-        `th.dev>div{width:16px;margin:0 auto;transform:translateX(3px) rotate(-45deg)}` +
-        `th.dev>div>span{display:inline-block;white-space:nowrap;font-size:8.5px;font-weight:bold}` +
+        // Diagonal device-name headers so the slim columns stay readable.
+        `th.dev{height:54px;padding:0!important;vertical-align:bottom}` +
+        `th.dev>div{width:13px;margin:0 auto;transform:translateX(3px) rotate(-45deg)}` +
+        `th.dev>div>span{display:inline-block;white-space:nowrap;font-size:7.5px;font-weight:bold}` +
         // Description keeps wrapping so long activity text fits.
         `td:last-child{text-align:left;word-break:break-word;overflow-wrap:anywhere}` +
-        `p.foot{margin-top:8px;font-size:9px;color:#555}</style></head><body>` +
+        `p.foot{margin-top:4px;font-size:7.5px;color:#555}</style></head><body>` +
         `<h1>${title}</h1>${monthlyTableHtml(colgroup)}` +
         `<p class="foot">Software Developed by Muhammad Amir · MT# MT1063 · © 2026 Muhammad Amir. All rights reserved.</p>` +
         `</body></html>`,
