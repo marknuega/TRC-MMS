@@ -21,7 +21,9 @@ async function netRequest(path, options = {}) {
   }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
-    throw new Error(body.error || `Request failed: ${res.status}`)
+    const e = new Error(body.error || `Request failed: ${res.status}`)
+    e.status = res.status
+    throw e
   }
   return res.status === 204 ? null : res.json()
 }
@@ -37,10 +39,11 @@ async function request(path, options = {}) {
     try {
       const data = await netRequest(path, options)
       putCache(path, data) // keep a fresh copy for offline reads
-      syncNow() // opportunistically drain the queue while we have a connection
       return data
     } catch (err) {
-      if (err.offline) {
+      // Offline OR briefly rate-limited (429): serve the last-known data instead
+      // of a hard error so the UI keeps working.
+      if (err.offline || err.status === 429) {
         const cached = await getCache(path)
         if (cached !== undefined) return cached
       }

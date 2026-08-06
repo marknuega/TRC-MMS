@@ -55,15 +55,33 @@ app.use(cookieParser())
 // Attach req.user from the session cookie (anonymous if absent/invalid).
 app.use(loadUser)
 
-// General API rate limit.
+// General API rate limit. Branch users often share one office IP (one NAT), so
+// the cap is generous and — crucially — SKIPS the auth endpoints, so a burst of
+// data reads can never lock anyone out of signing in or checking their session.
 app.use(
   '/api/',
   rateLimit({
     windowMs: 60 * 1000,
-    max: 300,
+    max: 1200,
     standardHeaders: true,
     legacyHeaders: false,
+    skip: (req) => req.originalUrl.startsWith('/api/auth'),
     message: { error: 'Too many requests. Slow down.' },
+  }),
+)
+
+// Login-only limiter: guards against password brute-forcing without penalising a
+// shared office IP — only FAILED logins count (skipSuccessfulRequests), so real
+// sign-ins never trip it.
+app.use(
+  '/api/auth/login',
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 50,
+    skipSuccessfulRequests: true,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many failed login attempts. Try again in a few minutes.' },
   }),
 )
 
