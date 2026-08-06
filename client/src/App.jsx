@@ -663,7 +663,7 @@ function App({ user, onLogout }) {
     for (const g of matrix.groups) h += `<th colspan="${g.span}" style="${hb}">${esc(g.group)}</th>`
     h += `<th rowspan="3" style="${hb}">Activity description and spare parts was used</th></tr>`
     h += '<tr>'
-    for (const c of matrix.columns) h += `<th style="${hb}">${esc(c.label)}</th>`
+    for (const c of matrix.columns) h += `<th class="dev" style="${hb}"><div><span>${esc(c.label)}</span></div></th>`
     h += '</tr><tr>'
     h += `<th style="${hb}">Date</th><th style="${hb}">Day</th>`
     for (const _c of matrix.columns) h += `<th style="${b}background:#dfe3ee;"></th>`
@@ -702,22 +702,30 @@ function App({ user, onLogout }) {
     const w = window.open('', '_blank')
     if (!w) return
     const title = `Monthly ${matrix.monthName} ${matrix.year}${matrix.branch ? ` · ${matrix.branch}` : ''}`
-    // Fixed column widths: Date/Day small, the terminal columns share a slim band
-    // (they only hold single digits), and the activity description gets the rest.
+    // Fixed column widths: Date/Day wide enough to read on one line, the terminal
+    // columns stay slim (single digits — their names sit on a diagonal header), and
+    // the activity description gets the remaining space.
     const n = matrix.columns.length
-    const dev = (44 / Math.max(1, n)).toFixed(3)
+    const dev = (33 / Math.max(1, n)).toFixed(3)
     const colgroup =
-      `<colgroup><col style="width:5%"/><col style="width:6%"/>` +
+      `<colgroup><col style="width:7%"/><col style="width:6%"/>` +
       matrix.columns.map(() => `<col style="width:${dev}%"/>`).join('') +
-      `<col style="width:45%"/></colgroup>`
+      `<col style="width:54%"/></colgroup>`
     w.document.write(
       `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>` +
         `<style>@page{size:A4 landscape;margin:8mm}` +
         `body{font-family:Arial,sans-serif;color:#111;margin:10px}h1{font-size:14px;margin:0 0 6px}` +
         // Fill the landscape width and honour the colgroup widths exactly.
         `table{width:100%!important;border-collapse:collapse;table-layout:fixed}` +
-        `td,th{font-size:9px;word-break:break-word;overflow-wrap:anywhere}` +
-        `td:last-child{text-align:left}` +
+        `td,th{font-size:9px}` +
+        // Date & Day: read on a single line, never wrap.
+        `td:nth-child(1),td:nth-child(2){white-space:nowrap;text-align:center}` +
+        // Diagonal (135°) device-name headers so the slim columns stay readable.
+        `th.dev{height:96px;padding:0;vertical-align:bottom}` +
+        `th.dev>div{width:16px;margin:0 auto;transform:translateX(3px) rotate(-45deg)}` +
+        `th.dev>div>span{display:inline-block;white-space:nowrap;font-size:8.5px;font-weight:bold}` +
+        // Description keeps wrapping so long activity text fits.
+        `td:last-child{text-align:left;word-break:break-word;overflow-wrap:anywhere}` +
         `p.foot{margin-top:8px;font-size:9px;color:#555}</style></head><body>` +
         `<h1>${title}</h1>${monthlyTableHtml(colgroup)}` +
         `<p class="foot">Software Developed by Muhammad Amir · MT# MT1063 · © 2026 Muhammad Amir. All rights reserved.</p>` +
