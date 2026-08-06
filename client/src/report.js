@@ -51,6 +51,12 @@ const DIVIDER = '------------------------------' // 30 dashes
 const INDENT = '       ' // 7 spaces — continuation / total lines
 
 const up = (v) => String(v ?? '').trim().toUpperCase()
+// A technician field may hold several comma-separated names -> ['IMRAN','AMIR'].
+// Empty -> ['-'] so unassigned entries still bucket together.
+const techNames = (v) => {
+  const list = up(v).split(',').map((s) => s.trim()).filter(Boolean)
+  return list.length ? list : ['-']
+}
 
 export function classify(action) {
   const a = up(action)
@@ -474,17 +480,21 @@ export function buildSparePartsReport(entries) {
 export function technicianTotals(entries) {
   const by = new Map()
   for (const e of entries ?? []) {
-    const t = up(e.technician) || '-'
-    if (!by.has(t)) by.set(t, { technician: t, devices: 0, maintenance: 0, programming: 0, install: 0, dismantle: 0, parts: 0 })
-    const g = by.get(t)
-    g.devices += 1
+    const names = techNames(e.technician) // one entry may credit several technicians
     const c = entryCounts(e) // max count per category on this entry
-    g.maintenance += c.maintenance
-    g.programming += c.programming
-    g.install += c.install
-    g.dismantle += c.dismantle
+    let parts = 0
     for (const f of e.faults ?? []) {
-      if (classify(f.action) === 'maintenance') g.parts += Math.max(0, Number(f.quantity) || 0)
+      if (classify(f.action) === 'maintenance') parts += Math.max(0, Number(f.quantity) || 0)
+    }
+    for (const t of names) {
+      if (!by.has(t)) by.set(t, { technician: t, devices: 0, maintenance: 0, programming: 0, install: 0, dismantle: 0, parts: 0 })
+      const g = by.get(t)
+      g.devices += 1
+      g.maintenance += c.maintenance
+      g.programming += c.programming
+      g.install += c.install
+      g.dismantle += c.dismantle
+      g.parts += parts
     }
   }
   return [...by.values()]
@@ -525,7 +535,7 @@ export function dashboardSummary(entries) {
     { maintenance: 0, programming: 0, install: 0, dismantle: 0 },
   )
   const parts = buildSparePartsReport(entries).grandParts
-  const techs = new Set((entries ?? []).map((e) => up(e.technician)).filter(Boolean))
+  const techs = new Set((entries ?? []).flatMap((e) => techNames(e.technician)).filter((t) => t !== '-'))
   const agencies = new Set((entries ?? []).map((e) => up(e.agency)).filter(Boolean))
   return { devices: (entries ?? []).length, ...sum, parts, technicians: techs.size, agencies: agencies.size }
 }

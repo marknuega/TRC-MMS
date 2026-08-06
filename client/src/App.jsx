@@ -199,6 +199,51 @@ const emptyForm = () => {
   }
 }
 
+// Comma-separated multi-select dropdown (checkboxes). Value/onChange use a
+// single comma-joined string so the rest of the app keeps treating it as text.
+function MultiSelect({ value, options, onChange, placeholder = '— select —' }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  const selected = String(value ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+  useEffect(() => {
+    if (!open) return
+    const onDoc = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [open])
+  const toggle = (opt) => {
+    const set = new Set(selected)
+    if (set.has(opt)) set.delete(opt)
+    else set.add(opt)
+    // Preserve the option list order for a stable, readable label.
+    onChange(options.filter((o) => set.has(o)).join(', '))
+  }
+  return (
+    <div className="multi" ref={ref}>
+      <button type="button" className="multi-toggle" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+        <span className={selected.length ? '' : 'multi-ph'}>{selected.length ? selected.join(', ') : placeholder}</span>
+        <span className="chev">{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div className="multi-menu">
+          {options.length === 0 && <div className="multi-empty">No technicians</div>}
+          {options.map((opt) => (
+            <label key={opt} className="multi-opt">
+              <input type="checkbox" checked={selected.includes(opt)} onChange={() => toggle(opt)} />
+              <span>{opt}</span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function downloadText(filename, text) {
   const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
   const url = URL.createObjectURL(blob)
@@ -1019,13 +1064,12 @@ function App({ user, onLogout }) {
                 </>
               )}
               <label>
-                <span className="cap">Technician <span className="opt">(optional)</span></span>
-                <select value={form.technician} onChange={set('technician')}>
-                  <option value="">— select —</option>
-                  {options.technicians.map((t) => (
-                    <option key={t}>{t}</option>
-                  ))}
-                </select>
+                <span className="cap">Technician <span className="opt">(optional · multiple)</span></span>
+                <MultiSelect
+                  value={form.technician}
+                  options={options.technicians}
+                  onChange={(v) => setForm((f) => ({ ...f, technician: v }))}
+                />
               </label>
             </div>
             )}
