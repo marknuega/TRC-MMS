@@ -19,7 +19,9 @@ import {
   saveMonthly,
   clearMonthly,
   getInventory,
+  syncNow,
 } from './api'
+import { onSyncChange } from './offline'
 import { DEFAULT_OPTIONS, mergeOptions, MODEL_TYPE, BRANCHES } from './options'
 import ManageInputs from './ManageInputs'
 import Inventory from './Inventory'
@@ -329,6 +331,7 @@ function App({ user, onLogout }) {
   const isAllBranches = isAdmin && branch === ALL_BRANCHES
   const [theme, setTheme] = useState(loadTheme)
   const [mode, setMode] = useState(loadMode)
+  const [sync, setSync] = useState({ online: true, pending: 0 })
 
   // Non-admins are pinned to their own branch everywhere.
   useEffect(() => {
@@ -461,13 +464,30 @@ function App({ user, onLogout }) {
 
   const refreshInventory = () => getInventory().then(setInventory).catch(() => {})
 
-  useEffect(() => {
+  function reloadAll() {
     refresh()
     refreshSaved()
-    refreshInventory() // populate the issue/material suggestions
+    refreshInventory()
     getOptions()
       .then((stored) => setOptions(mergeOptions(stored)))
-      .catch(() => {}) // keep defaults if the options endpoint is unavailable
+      .catch(() => {})
+  }
+
+  useEffect(() => {
+    reloadAll() // populate entries, saved, inventory + option suggestions
+  }, [])
+
+  // Offline status pill + refetch fresh data once queued writes have synced.
+  useEffect(() => {
+    const off = onSyncChange(setSync)
+    const onSynced = () => reloadAll()
+    window.addEventListener('offline-synced', onSynced)
+    syncNow() // drain anything left from a previous offline session
+    return () => {
+      off()
+      window.removeEventListener('offline-synced', onSynced)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   async function handleSaveReport() {
@@ -975,6 +995,15 @@ function App({ user, onLogout }) {
               </button>
             ))}
           </nav>
+          {(!sync.online || sync.pending > 0) && (
+            <div className={`sync-pill${sync.online ? ' syncing' : ' offline'}`} title={sync.online ? 'Syncing queued changes to the server' : 'Working offline — changes are saved on this device and will sync when you reconnect'}>
+              <span className="side-ico">{sync.online ? '⟳' : '📴'}</span>
+              <span className="side-label">
+                {sync.online ? 'Syncing…' : 'Offline'}
+                {sync.pending > 0 && <small>{sync.pending} change{sync.pending === 1 ? '' : 's'} pending</small>}
+              </span>
+            </div>
+          )}
           <div className="side-user">
             <span className="side-user-info" title={`${user?.username} · ${isAdmin ? 'admin' : user?.branch || 'user'}`}>
               <span className="side-ico">{isAdmin ? '👑' : '👤'}</span>

@@ -2,19 +2,71 @@
 // Set to the deployed API origin on Railway.
 const BASE = import.meta.env.VITE_API_URL ?? ''
 
-async function request(path, options) {
-  const res = await fetch(`${BASE}${path}`, {
-    // Never serve API responses from the browser cache — the app must always
-    // read the current data (otherwise a saved change looks stale until reload).
-    cache: 'no-store',
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  })
+import { getCache, putCache, queueMutation, flushQueue, notify } from './offline.js'
+
+// Raw network call. Throws a tagged { offline:true } error when the network is
+// unreachable, and a normal Error for an HTTP failure the server returned.
+async function netRequest(path, options = {}) {
+  let res
+  try {
+    res = await fetch(`${BASE}${path}`, {
+      cache: 'no-store',
+      headers: { 'Content-Type': 'application/json' },
+      ...options,
+    })
+  } catch {
+    const e = new Error('offline')
+    e.offline = true
+    throw e
+  }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
     throw new Error(body.error || `Request failed: ${res.status}`)
   }
   return res.status === 204 ? null : res.json()
+}
+
+// Replay any queued writes to the server (used on reconnect / after a call).
+export const syncNow = () => flushQueue((op) => netRequest(op.path, { method: op.method, body: op.body != null ? JSON.stringify(op.body) : undefined }))
+
+async function request(path, options = {}) {
+  const method = (options.method || 'GET').toUpperCase()
+  const body = options.body ? JSON.parse(options.body) : undefined
+
+  if (method === 'GET') {
+    try {
+      const data = await netRequest(path, options)
+      putCache(path, data) // keep a fresh copy for offline reads
+      syncNow() // opportunistically drain the queue while we have a connection
+      return data
+    } catch (err) {
+      if (err.offline) {
+        const cached = await getCache(path)
+        if (cached !== undefined) return cached
+      }
+      throw err
+    }
+  }
+
+  // Mutation: try the network; if it's a real HTTP error, surface it. If the
+  // network is down, apply the change optimistically and queue it for sync.
+  try {
+    const data = await netRequest(path, options)
+    syncNow()
+    return data
+  } catch (err) {
+    if (err.offline) return queueMutation(method, path, body)
+    throw err
+  }
+}
+
+// Sync whenever the connection returns.
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => {
+    notify()
+    syncNow()
+  })
+  window.addEventListener('offline', () => notify())
 }
 
 const modeQs = (mode) => (mode ? `?mode=${encodeURIComponent(mode)}` : '')
