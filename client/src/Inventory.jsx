@@ -83,6 +83,7 @@ export default function Inventory({ embedded = false }) {
     const head = ['#', 'Date', 'Type', 'Change', 'Avail', 'Reference', 'Branch', 'Material']
     let html = `<meta charset="utf-8"><table style="border-collapse:collapse;font-family:Arial;font-size:11px;">`
     html += `<tr><td colspan="8" style="${b}background:#2563eb;color:#fff;font-weight:bold;font-size:14px;">Transaction history — ${esc(h.item.sku)} · ${esc(h.item.itemCode)}</td></tr>`
+    if (h.item.remarks) html += `<tr><td colspan="8" style="${b}background:#eef2ff;"><b>Remarks:</b> ${esc(h.item.remarks)}</td></tr>`
     html += `<tr>${head.map((x) => `<th style="${hb}">${esc(x)}</th>`).join('')}</tr>`
     for (const r of histRows(h)) html += `<tr>${r.map((c, i) => `<td style="${b}${i === 0 || (i >= 3 && i <= 4) ? 'text-align:center;' : ''}">${esc(c)}</td>`).join('')}</tr>`
     html += '</table>'
@@ -107,6 +108,7 @@ export default function Inventory({ embedded = false }) {
         `table{border-collapse:collapse;width:100%;font-size:11px}th,td{border:1px solid #999;padding:5px 7px;text-align:left}` +
         `th{background:#dfe3ee}td.c{text-align:center}tfoot{color:#777}</style></head><body>` +
         `<h1>Transaction history — ${esc(h.item.sku)}</h1><p>${esc(h.item.itemCode)} · printed ${esc(stamp(Date.now()))}</p>` +
+        (h.item.remarks ? `<p style="margin:-8px 0 14px;color:#111"><b>Remarks:</b> ${esc(h.item.remarks)}</p>` : '') +
         `<table><thead><tr>${head.map((x) => `<th>${esc(x)}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table>` +
         `<p style="margin-top:14px">Software Developed by Muhammad Amir · MT# MT1063 · © 2026 Muhammad Amir. All rights reserved.</p>` +
         `</body></html>`,
