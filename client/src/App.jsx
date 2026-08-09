@@ -366,7 +366,7 @@ function App({ user, onLogout }) {
   // The browser's "Save as PDF" dialog seeds its filename from document.title,
   // so name it after the current document type.
   useEffect(() => {
-    document.title = isTransmittal ? 'TRC Transmittal Report' : 'TRC Daily Report'
+    document.title = isTransmittal ? 'TRC Transmittal Report' : 'TRC Maintenance Report'
   }, [isTransmittal])
   // The next id a Save would mint, for the current document type.
   const nextDocId = isTransmittal ? nextTransId : nextReportId
@@ -989,7 +989,7 @@ function App({ user, onLogout }) {
     const top = reports[0]
     const id = top.reportId ?? 'REP'
     const stamp = top.dateLabel.replace(/\//g, '')
-    const label = isTransmittal ? 'Transmittal' : 'Daily'
+    const label = isTransmittal ? 'Transmittal' : 'Maintenance'
     downloadText(`TRC-${label}-Report-${id}-${stamp}.txt`, combinedTxt)
   }
 
