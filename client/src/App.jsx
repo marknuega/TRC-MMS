@@ -136,13 +136,14 @@ function searchInside(list, query) {
     for (const e of entries) {
       const model = e.model && e.model !== '-' ? e.model : ''
       for (const f of e.faults ?? []) {
-        const hay = `${label} ${r.reportId} ${r.branch} ${r.dateLabel} ${e.technician ?? ''} ${e.type} ${e.model} ${f.issue} ${f.company} ${f.status} ${e.comment ?? ''}`
+        const hay = `${label} ${r.reportId} ${r.branch} ${r.dateLabel} ${e.technician ?? ''} ${r.receivedBy ?? ''} ${e.type} ${e.model} ${f.issue} ${f.company} ${f.status} ${e.comment ?? ''}`
         if (hay.toLowerCase().includes(q)) {
           out.push({
             date: r.dateLabel,
             branch: r.branch,
             qty: f.quantity,
             technician: e.technician ?? '',
+            receivedBy: r.receivedBy ?? '',
             item: `${model ? `${model} · ` : ''}${f.issue}`,
             reportId: label,
             rep: r,
@@ -1025,14 +1026,14 @@ function App({ user, onLogout }) {
     </li>
   )
 
-  const searchList = (results, query) =>
+  const searchList = (results, query, tx = false) =>
     results.length === 0 ? (
       <p className="empty">No items match “{query}”.</p>
     ) : (
       <ul className="search-results">
         <li className="search-results-head muted small">
           <span>Item</span>
-          <span>Technician</span>
+          <span>{tx ? 'Received by' : 'Technician'}</span>
           <span>Date</span>
           <span>Branch</span>
           <span>Qty</span>
@@ -1042,7 +1043,7 @@ function App({ user, onLogout }) {
         {results.map((res, idx) => (
           <li key={idx}>
             <span className="res-item">{res.item}</span>
-            <span className="muted small">{res.technician || '—'}</span>
+            <span className="muted small">{(tx ? res.receivedBy : res.technician) || '—'}</span>
             <span className="muted small">{res.date}</span>
             <span className="muted small">{res.branch || '—'}</span>
             <span className="muted small">{res.qty}</span>
@@ -1056,7 +1057,7 @@ function App({ user, onLogout }) {
     )
 
   // A collapsible "Saved …" card (used for daily reports and transmittals).
-  const savedCard = ({ icon, title, list, open, setOpen, search, setSearch, results, hint, empty, placeholder }) => (
+  const savedCard = ({ icon, title, list, open, setOpen, search, setSearch, results, hint, empty, placeholder, tx = false }) => (
     <section className="saved">
       <button type="button" className="manage-toggle" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
         <span>
@@ -1079,7 +1080,7 @@ function App({ user, onLogout }) {
           {list.length === 0 ? (
             <p className="empty">{empty}</p>
           ) : search.trim() ? (
-            searchList(results, search)
+            searchList(results, search, tx)
           ) : (
             <ul className="saved-list">{list.map(savedRow)}</ul>
           )}
@@ -1656,6 +1657,7 @@ function App({ user, onLogout }) {
             hint: 'Transmittal snapshots, saved under a unique TRANS-#### number — kept separate from daily reports.',
             empty: 'No saved transmittals yet — switch to Transmittal mode and Save.',
             placeholder: '🔎 Search inside transmittals (item, model, branch, date)…',
+            tx: true,
           })}
             </>
           )}
