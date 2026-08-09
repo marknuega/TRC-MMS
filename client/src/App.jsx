@@ -471,7 +471,7 @@ function App({ user, onLogout }) {
   // (defaults to the current one).
   async function refresh(m = mode) {
     try {
-      const list = await listEntries(m)
+      const list = await listEntries(m, isAllBranches ? '' : branch)
       setEntries(list)
       lastEntriesSig.current = entriesSig(list) // keep the live-poll baseline current
       setError(null)
@@ -516,7 +516,7 @@ function App({ user, onLogout }) {
     const poll = async () => {
       if (document.hidden || busy) return // don't fight an in-flight save/edit
       try {
-        const list = await listEntries(mode)
+        const list = await listEntries(mode, isAllBranches ? '' : branch)
         if (cancelled) return
         const sig = entriesSig(list)
         if (lastEntriesSig.current && sig !== lastEntriesSig.current) {
@@ -539,7 +539,7 @@ function App({ user, onLogout }) {
       document.removeEventListener('visibilitychange', onVisible)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, busy])
+  }, [mode, busy, branch, isAllBranches])
 
   // Offline status pill + refetch fresh data once queued writes have synced.
   useEffect(() => {
@@ -661,6 +661,7 @@ function App({ user, onLogout }) {
       const payload = {
         ...form,
         mode, // keep report vs transmittal working sets separate
+        branch: isAllBranches ? '' : branch, // owning branch (admins pick; non-admins forced server-side)
         // Transmittal carries a Type (no agency/model); Type falls back to OTHER.
         // The DESCRIPTION column is derived per material from the Materials list.
         ...(isTransmittal ? { type: form.type || 'OTHER', model: '', agency: '' } : {}),
@@ -776,7 +777,7 @@ function App({ user, onLogout }) {
       return
     }
     try {
-      await clearEntries(mode)
+      await clearEntries(mode, isAllBranches ? '' : branch)
       setError(null)
       refresh()
     } catch (err) {

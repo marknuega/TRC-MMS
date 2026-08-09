@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { prisma } from '../db.js'
+import { branchWhere, writeBranch, canAccessBranch } from '../scope.js'
 
 const router = Router()
 
@@ -102,7 +103,7 @@ router.get('/', async (req, res, next) => {
   try {
     const [entries, ids] = await Promise.all([
       prisma.reportEntry.findMany({
-        where: modeWhere(req),
+        where: { ...modeWhere(req), ...branchWhere(req, req.query.branch) },
         orderBy: [{ reportDate: 'desc' }, { id: 'asc' }],
         take: 500,
         include: withFaults,
@@ -120,6 +121,7 @@ router.post('/', async (req, res, next) => {
   try {
     const { data, error } = parseEntry(req.body)
     if (error) return res.status(400).json({ error })
+    data.branch = writeBranch(req, req.body?.branch) // tag with the owning branch
 
     const result = await prisma.$transaction(async (tx) => {
       const seq = await ensureReportSeq(tx, data.reportDate)
@@ -136,7 +138,9 @@ router.post('/', async (req, res, next) => {
 // if no mode is given. Faults cascade. Returns the count removed.
 router.delete('/', async (req, res, next) => {
   try {
-    const { count } = await prisma.reportEntry.deleteMany({ where: modeWhere(req) })
+    const { count } = await prisma.reportEntry.deleteMany({
+      where: { ...modeWhere(req), ...branchWhere(req, req.query.branch) },
+    })
     res.json({ cleared: count })
   } catch (err) {
     next(err)
@@ -150,6 +154,10 @@ router.put('/:id', async (req, res, next) => {
     if (error) return res.status(400).json({ error })
     const id = Number(req.params.id)
     const { faults, ...scalar } = data
+    // Non-admins may only edit entries in their own branch.
+    const existing = await prisma.reportEntry.findUnique({ where: { id }, select: { branch: true } })
+    if (!existing) return res.status(404).json({ error: 'Entry not found' })
+    if (!canAccessBranch(req, existing.branch)) return res.status(404).json({ error: 'Entry not found' })
     const result = await prisma.$transaction(async (tx) => {
       const seq = await ensureReportSeq(tx, data.reportDate)
       const entry = await tx.reportEntry.update({
@@ -169,7 +177,12 @@ router.put('/:id', async (req, res, next) => {
 // DELETE /api/reports/:id - faults cascade via the schema relation
 router.delete('/:id', async (req, res, next) => {
   try {
-    await prisma.reportEntry.delete({ where: { id: Number(req.params.id) } })
+    const id = Number(req.params.id)
+    const existing = await prisma.reportEntry.findUnique({ where: { id }, select: { branch: true } })
+    if (!existing || !canAccessBranch(req, existing.branch)) {
+      return res.status(404).json({ error: 'Entry not found' })
+    }
+    await prisma.reportEntry.delete({ where: { id } })
     res.status(204).end()
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'Entry not found' })

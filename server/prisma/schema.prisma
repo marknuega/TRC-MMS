@@ -126,6 +126,7 @@ model ReportEntry {
   id         Int      @id @default(autoincrement())
   reportDate DateTime @map("report_date") @db.Date
   mode       String   @default("report") // report | transmittal — separate working sets
+  branch     String   @default("") // owning branch; non-admins are scoped to their own
   technician String
   agency     String
   telNumber  String   @map("tel_number")
@@ -139,6 +140,7 @@ model ReportEntry {
 
   @@index([reportDate])
   @@index([mode])
+  @@index([branch])
   @@map("report_entries")
 }
 

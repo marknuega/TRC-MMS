@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { prisma } from '../db.js'
+import { branchWhere, writeBranch, canAccessBranch } from '../scope.js'
 
 const router = Router()
 
@@ -66,6 +67,7 @@ router.get('/', async (req, res, next) => {
   try {
     const [reports, repNo, transNo] = await Promise.all([
       prisma.savedReport.findMany({
+        where: branchWhere(req, req.query.branch),
         orderBy: { seq: 'desc' },
         select: {
           id: true, seq: true, docNumber: true, reportId: true, branch: true, mode: true,
@@ -87,7 +89,7 @@ router.get('/', async (req, res, next) => {
 router.get('/:id', async (req, res, next) => {
   try {
     const report = await prisma.savedReport.findUnique({ where: { id: Number(req.params.id) } })
-    if (!report) return res.status(404).json({ error: 'Saved report not found' })
+    if (!report || !canAccessBranch(req, report.branch)) return res.status(404).json({ error: 'Saved report not found' })
     res.json(report)
   } catch (err) {
     next(err)
@@ -98,8 +100,11 @@ router.get('/:id', async (req, res, next) => {
 router.post('/', async (req, res, next) => {
   try {
     const mode = String(req.body?.mode ?? 'report').trim().toLowerCase() === 'transmittal' ? 'transmittal' : 'report'
+    // Only snapshot the working entries for the branch being saved, so a
+    // non-admin never sweeps up another branch's entries.
+    const branch = writeBranch(req, req.body?.branch)
     const entries = await prisma.reportEntry.findMany({
-      where: { mode },
+      where: { mode, branch },
       orderBy: [{ reportDate: 'asc' }, { id: 'asc' }],
       include: withFaults,
     })
@@ -129,7 +134,6 @@ router.post('/', async (req, res, next) => {
     const dates = [...new Set(snapshot.map((e) => e.reportDate))].sort()
     const dateLabel = dates.length === 1 ? dmy(dates[0]) : `${dmy(dates[0])} (+${dates.length - 1} more)`
 
-    const branch = String(req.body?.branch ?? '').trim()
     const transmittedBy = String(req.body?.transmittedBy ?? '').trim()
     const receivedBy = String(req.body?.receivedBy ?? '').trim()
     const seq = await nextSeq()
@@ -154,18 +158,21 @@ router.post('/', async (req, res, next) => {
 router.post('/:id/load', async (req, res, next) => {
   try {
     const report = await prisma.savedReport.findUnique({ where: { id: Number(req.params.id) } })
-    if (!report) return res.status(404).json({ error: 'Saved report not found' })
+    if (!report || !canAccessBranch(req, report.branch)) return res.status(404).json({ error: 'Saved report not found' })
 
     const snapshot = Array.isArray(report.entries) ? report.entries : []
     const mode = String(report.mode ?? 'report').toLowerCase() === 'transmittal' ? 'transmittal' : 'report'
+    const branch = report.branch || '' // load into this report's branch workspace
     await prisma.$transaction(async (tx) => {
-      // Replace only this document type's working set, leaving the other intact.
-      await tx.reportEntry.deleteMany({ where: { mode } })
+      // Replace only this document type's working set for this branch, leaving
+      // the other mode and other branches intact.
+      await tx.reportEntry.deleteMany({ where: { mode, branch } })
       for (const e of snapshot) {
         await tx.reportEntry.create({
           data: {
             reportDate: new Date(e.reportDate),
             mode,
+            branch,
             technician: e.technician ?? '',
             agency: e.agency ?? '',
             telNumber: e.telNumber || '-',
@@ -196,7 +203,12 @@ router.post('/:id/load', async (req, res, next) => {
 // DELETE /api/saved-reports/:id
 router.delete('/:id', async (req, res, next) => {
   try {
-    await prisma.savedReport.delete({ where: { id: Number(req.params.id) } })
+    const id = Number(req.params.id)
+    const report = await prisma.savedReport.findUnique({ where: { id }, select: { branch: true } })
+    if (!report || !canAccessBranch(req, report.branch)) {
+      return res.status(404).json({ error: 'Saved report not found' })
+    }
+    await prisma.savedReport.delete({ where: { id } })
     res.status(204).end()
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'Saved report not found' })

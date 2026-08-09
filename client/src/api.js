@@ -72,9 +72,17 @@ if (typeof window !== 'undefined') {
   window.addEventListener('offline', () => notify())
 }
 
-const modeQs = (mode) => (mode ? `?mode=${encodeURIComponent(mode)}` : '')
+// Build ?mode=&branch= — branch lets admins target one branch (non-admins are
+// scoped to their own branch server-side regardless).
+const scopeQs = (mode, branch) => {
+  const p = new URLSearchParams()
+  if (mode) p.set('mode', mode)
+  if (branch) p.set('branch', branch)
+  const s = p.toString()
+  return s ? `?${s}` : ''
+}
 
-export const listEntries = (mode) => request(`/api/reports${modeQs(mode)}`)
+export const listEntries = (mode, branch) => request(`/api/reports${scopeQs(mode, branch)}`)
 
 export const createEntry = (entry) =>
   request('/api/reports', { method: 'POST', body: JSON.stringify(entry) })
@@ -85,7 +93,7 @@ export const updateEntry = (id, entry) =>
 export const deleteEntry = (id) =>
   request(`/api/reports/${id}`, { method: 'DELETE' })
 
-export const clearEntries = (mode) => request(`/api/reports${modeQs(mode)}`, { method: 'DELETE' })
+export const clearEntries = (mode, branch) => request(`/api/reports${scopeQs(mode, branch)}`, { method: 'DELETE' })
 
 export const getOptions = () => request('/api/options')
 
