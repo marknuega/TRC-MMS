@@ -20,7 +20,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 
 // Public, read-only mirror of the whatsapp code map (no PIN, CORS-open).
 const CODEMAP_URL = 'https://trcmmswhatsapp-production.up.railway.app/codemap'
-const POLL_MS = 30000
+// Poll briskly so admin.html edits show up here almost immediately; a refetch
+// also fires whenever this tab regains focus.
+const POLL_MS = 4000
 
 // ---- Fallback data (used only until the live map loads / if it fails) ----
 const FALLBACK = {
@@ -180,6 +182,7 @@ export default function ReferenceCard() {
   const [status, setStatus] = useState('loading') // 'loading' | 'live' | 'offline'
   const [updatedAt, setUpdatedAt] = useState(null)
   const timer = useRef(null)
+  const sig = useRef('') // last payload seen, so we only re-render on real changes
 
   useEffect(() => {
     let alive = true
@@ -189,9 +192,13 @@ export default function ReferenceCard() {
         if (!res.ok) throw new Error(String(res.status))
         const data = await res.json()
         if (!alive) return
-        setMap(data)
+        const next = JSON.stringify(data)
         setStatus('live')
-        setUpdatedAt(new Date())
+        if (next !== sig.current) {
+          sig.current = next
+          setMap(data)
+          setUpdatedAt(new Date())
+        }
       } catch {
         if (!alive) return
         setStatus((s) => (s === 'live' ? 'live' : 'offline')) // keep last good data if we had it

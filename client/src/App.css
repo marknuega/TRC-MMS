@@ -1747,6 +1747,25 @@ h2 {
   border-style: dashed;
   justify-content: center;
 }
+/* Materials carry a name + description: stack them in the label and edit rows. */
+.manage-item-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+.manage-list li span.manage-item-desc {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+.edit-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  flex: 1;
+  min-width: 0;
+}
 
 /* ---- Footer ---- */
 /* Copyright footer — AMIR DEV STANDARD: bottom of page, theme-aware colours. */

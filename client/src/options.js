@@ -39,11 +39,10 @@ export const DEFAULT_OPTIONS = {
   // The report engine knows the display codes for these (MOT (P2), MOI, ...).
   companies: ['MOTECO', 'MOI', 'PROJECT 2', 'PROJECT X', 'ONLINE', 'MOTECO LOCAL', 'FREE'],
 
-  // Materials — a managed list you can add to via Manage inputs.
+  // Materials — a managed list you can add to via Manage inputs. Each item is
+  // { name, description }; a description auto-fills the transmittal DESCRIPTION
+  // column when that material is picked. (Legacy plain strings are still read.)
   materials: [],
-
-  // Transmittal item Description — a managed list you can add to via Manage inputs.
-  descriptions: [],
 
   // Transmittal item condition.
   statuses: ['New', 'Refurbish'],
@@ -75,9 +74,22 @@ export const CATEGORIES = [
   { key: 'actions', label: 'Actions' },
   { key: 'companies', label: 'Companies' },
   { key: 'materials', label: 'Materials' },
-  { key: 'descriptions', label: 'Descriptions' },
   { key: 'statuses', label: 'Item status' },
 ]
+
+// A materials item may be a plain string (legacy) or { name, description }.
+export const materialName = (v) => (typeof v === 'string' ? v : String(v?.name ?? ''))
+export const materialDesc = (v) => (typeof v === 'string' ? '' : String(v?.description ?? ''))
+// Map of UPPERCASE material name -> description, for auto-filling the transmittal
+// DESCRIPTION column from the picked material.
+export function materialDescMap(materials) {
+  const map = {}
+  for (const it of materials ?? []) {
+    const name = materialName(it).trim()
+    if (name) map[name.toUpperCase()] = materialDesc(it)
+  }
+  return map
+}
 
 // Merge stored lists over the defaults (a saved category fully replaces its default).
 export function mergeOptions(stored) {

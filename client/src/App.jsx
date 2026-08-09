@@ -23,7 +23,7 @@ import {
   syncNow,
 } from './api'
 import { onSyncChange } from './offline'
-import { DEFAULT_OPTIONS, mergeOptions, MODEL_TYPE, BRANCHES } from './options'
+import { DEFAULT_OPTIONS, mergeOptions, MODEL_TYPE, BRANCHES, materialName, materialDescMap } from './options'
 import ManageInputs from './ManageInputs'
 import Inventory from './Inventory'
 import AgencyTotals from './AgencyTotals'
@@ -382,6 +382,8 @@ function App({ user, onLogout }) {
     () => [...new Set((inventory ?? []).map((i) => String(i.itemCode || '').trim()).filter(Boolean))].sort(),
     [inventory],
   )
+  // Material name (UPPER) -> Description, for the transmittal DESCRIPTION column.
+  const descByMaterial = useMemo(() => materialDescMap(options.materials), [options.materials])
 
   function changeMode(e) {
     const m = e.target.value === 'transmittal' ? 'transmittal' : 'report'
@@ -647,8 +649,9 @@ function App({ user, onLogout }) {
       const payload = {
         ...form,
         mode, // keep report vs transmittal working sets separate
-        // Transmittal carries a free Type + Description (no agency); Type falls back to OTHER.
-        ...(isTransmittal ? { type: form.type || 'OTHER', model: form.model ?? '', agency: '' } : {}),
+        // Transmittal carries a Type (no agency/model); Type falls back to OTHER.
+        // The DESCRIPTION column is derived per material from the Materials list.
+        ...(isTransmittal ? { type: form.type || 'OTHER', model: '', agency: '' } : {}),
         // Transmittal lines are Material + Qty + Company + Status (Action hidden, defaults harmlessly).
         faults: form.faults
           .filter(faultIsMeaningful)
@@ -735,7 +738,7 @@ function App({ user, onLogout }) {
       const payload = {
         ...editForm,
         mode,
-        ...(isTransmittal ? { type: editForm.type || 'OTHER', model: editForm.model ?? '', agency: '' } : {}),
+        ...(isTransmittal ? { type: editForm.type || 'OTHER', model: '', agency: '' } : {}),
         faults: editForm.faults
           .filter(faultIsMeaningful)
           .map((f) => ({ ...f, quantity: Math.max(1, Number(f.quantity) || 1) })),
@@ -1308,15 +1311,6 @@ function App({ user, onLogout }) {
                     ))}
                   </select>
                 </label>
-                <label>
-                  <span className="cap">Description <span className="opt">(optional)</span></span>
-                  <select value={form.model} onChange={set('model')}>
-                    <option value="">— select —</option>
-                    {options.descriptions.map((d) => (
-                      <option key={d}>{d}</option>
-                    ))}
-                  </select>
-                </label>
               </div>
             )}
             <div className="faults">
@@ -1393,9 +1387,10 @@ function App({ user, onLogout }) {
               ))}
             </datalist>
             <datalist id="materials-list">
-              {options.materials.map((m) => (
-                <option key={m} value={m} />
-              ))}
+              {options.materials.map((m, i) => {
+                const name = materialName(m)
+                return <option key={`mat-${i}-${name}`} value={name} />
+              })}
               {inventoryNames.map((n) => (
                 <option key={`inv-${n}`} value={n} />
               ))}
@@ -1445,17 +1440,16 @@ function App({ user, onLogout }) {
                   <div>
                     {isTransmittal ? (
                       <>
-                        {(e.model || (e.type && e.type.toUpperCase() !== 'OTHER')) && (
-                          <p className="muted small">
-                            {[e.type && e.type.toUpperCase() !== 'OTHER' ? e.type : null, e.model]
-                              .filter(Boolean)
-                              .join(' · ')}
-                          </p>
+                        {e.type && e.type.toUpperCase() !== 'OTHER' && (
+                          <p className="muted small">{e.type}</p>
                         )}
                         <p>
                           <strong>
                             {e.faults
-                              .map((f) => `${f.issue} (${f.quantity})${f.status ? ` · ${f.status}` : ''}`)
+                              .map((f) => {
+                                const d = descByMaterial[String(f.issue).toUpperCase()]
+                                return `${f.issue}${d ? ` — ${d}` : ''} (${f.quantity})${f.status ? ` · ${f.status}` : ''}`
+                              })
                               .join(', ')}
                           </strong>
                         </p>
@@ -1552,15 +1546,6 @@ function App({ user, onLogout }) {
                       <select value={editForm.type || 'OTHER'} onChange={eSet('type')}>
                         {options.types.map((t) => (
                           <option key={t}>{t}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      <span className="cap">Description <span className="opt">(optional)</span></span>
-                      <select value={editForm.model} onChange={eSet('model')}>
-                        <option value="">— select —</option>
-                        {options.descriptions.map((d) => (
-                          <option key={d}>{d}</option>
                         ))}
                       </select>
                     </label>
@@ -1920,7 +1905,7 @@ function App({ user, onLogout }) {
       {/* Printable view — hidden on screen, shown only when printing (Save as PDF). */}
       <div className="print-only print-report">
         {reports.map((r) => (
-          <PrintDate key={r.reportId ?? r.dateLabel} report={r} />
+          <PrintDate key={r.reportId ?? r.dateLabel} report={r} descByMaterial={descByMaterial} />
         ))}
       </div>
     </>
@@ -1928,12 +1913,16 @@ function App({ user, onLogout }) {
 }
 
 // Route each printed page to the right layout for its mode.
-function PrintDate({ report }) {
-  return report.mode === 'transmittal' ? <TransmittalPrint report={report} /> : <ReportPrint report={report} />
+function PrintDate({ report, descByMaterial }) {
+  return report.mode === 'transmittal' ? (
+    <TransmittalPrint report={report} descByMaterial={descByMaterial} />
+  ) : (
+    <ReportPrint report={report} />
+  )
 }
 
 // Transmittal manifest: material lines + handover signatures.
-function TransmittalPrint({ report }) {
+function TransmittalPrint({ report, descByMaterial = {} }) {
   const rows = transmittalRows(report.entries)
   const notes = reportNotes(report.entries)
   const totalQty = rows.reduce((s, r) => s + r.qty, 0)
@@ -1962,7 +1951,7 @@ function TransmittalPrint({ report }) {
               <td>{i + 1}</td>
               <td>{r.type}</td>
               <td className="ia">{r.material}</td>
-              <td>{r.model}</td>
+              <td>{descByMaterial[String(r.material).toUpperCase()] || ''}</td>
               <td>{r.qty}</td>
               <td>{r.company}</td>
               <td>{r.status}</td>
