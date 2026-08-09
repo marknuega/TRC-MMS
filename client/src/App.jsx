@@ -465,13 +465,16 @@ function App({ user, onLogout }) {
     } catch {
       /* ignore storage errors */
     }
+    // Re-fetch the working entries for the newly selected branch right away
+    // (All Branches = '' = every branch, admin only).
+    refresh(mode, isAdmin && b === ALL_BRANCHES ? '' : b)
   }
 
   // Working entries are per document type; refresh the set for the given mode
   // (defaults to the current one).
-  async function refresh(m = mode) {
+  async function refresh(m = mode, b = isAllBranches ? '' : branch) {
     try {
-      const list = await listEntries(m, isAllBranches ? '' : branch)
+      const list = await listEntries(m, b)
       setEntries(list)
       lastEntriesSig.current = entriesSig(list) // keep the live-poll baseline current
       setError(null)
@@ -1001,8 +1004,11 @@ function App({ user, onLogout }) {
   }
 
   // Keep daily reports and transmittals in separate lists (no mixing).
-  const dailySaved = useMemo(() => saved.filter((r) => !isTx(r)), [saved])
-  const txSaved = useMemo(() => saved.filter((r) => isTx(r)), [saved])
+  // Admin sees all branches' saved reports; scope the list to the selected
+  // branch unless "All Branches" is chosen. (Non-admins are already server-scoped.)
+  const inBranch = (r) => isAllBranches || String(r.branch ?? '') === String(branch)
+  const dailySaved = useMemo(() => saved.filter((r) => !isTx(r) && inBranch(r)), [saved, branch, isAllBranches])
+  const txSaved = useMemo(() => saved.filter((r) => isTx(r) && inBranch(r)), [saved, branch, isAllBranches])
   const reportResults = useMemo(() => searchInside(dailySaved, savedSearch), [dailySaved, savedSearch])
   const txResults = useMemo(() => searchInside(txSaved, savedTxSearch), [txSaved, savedTxSearch])
 
