@@ -365,10 +365,16 @@ function App({ user, onLogout }) {
   const saveTimer = useRef(null)
   const isTransmittal = mode === 'transmittal'
   // The browser's "Save as PDF" dialog seeds its filename from document.title,
-  // so name it after the current document type.
+  // so name it after the current document type. Transmittals also carry their
+  // number (e.g. "TRC Transmittal Report-0004") to match the printed doc.
   useEffect(() => {
-    document.title = isTransmittal ? 'TRC Transmittal Report' : 'TRC Maintenance Report'
-  }, [isTransmittal])
+    if (isTransmittal) {
+      const seq = String(nextTransId).replace(/^TRANS[-_]?/i, '')
+      document.title = `TRC Transmittal Report-${seq}`
+    } else {
+      document.title = 'TRC Maintenance Report'
+    }
+  }, [isTransmittal, nextTransId])
   // The next id a Save would mint, for the current document type.
   const nextDocId = isTransmittal ? nextTransId : nextReportId
   // Inventory item names, offered as suggestions in the issue/material fields.
