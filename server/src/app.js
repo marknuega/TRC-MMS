@@ -39,7 +39,9 @@ app.use(
         scriptSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", 'data:', 'https:'],
-        connectSrc: ["'self'"],
+        // Allow the Code Reference page to read the whatsapp app's public
+        // /codemap so it mirrors the admin edits live.
+        connectSrc: ["'self'", 'https://trcmmswhatsapp-production.up.railway.app'],
         fontSrc: ["'self'", 'data:'],
         objectSrc: ["'none'"],
       },
