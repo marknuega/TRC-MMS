@@ -42,6 +42,9 @@ export const DEFAULT_OPTIONS = {
   // Materials — a managed list you can add to via Manage inputs.
   materials: [],
 
+  // Transmittal item Description — a managed list you can add to via Manage inputs.
+  descriptions: [],
+
   // Transmittal item condition.
   statuses: ['New', 'Refurbish'],
 }
@@ -72,6 +75,7 @@ export const CATEGORIES = [
   { key: 'actions', label: 'Actions' },
   { key: 'companies', label: 'Companies' },
   { key: 'materials', label: 'Materials' },
+  { key: 'descriptions', label: 'Descriptions' },
   { key: 'statuses', label: 'Item status' },
 ]
 

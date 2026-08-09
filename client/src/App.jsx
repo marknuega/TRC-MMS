@@ -54,8 +54,8 @@ const faultIsMeaningful = (f) => f.issue.trim() !== '' || DEVICE_LEVEL.has(Strin
 const today = () => new Date().toISOString().slice(0, 10)
 const ALL_BRANCHES = 'All Branches'
 const NAV = [
-  { id: 'dashboard', icon: '📊', label: 'Dashboard' },
   { id: 'report', icon: '📋', label: 'Report' },
+  { id: 'dashboard', icon: '📊', label: 'Dashboard' },
   { id: 'monthly', icon: '📅', label: 'Monthly Report' },
   { id: 'spareparts', icon: '🧰', label: 'Spare Parts' },
   { id: 'agency', icon: '🏢', label: 'Agency Totals' },
@@ -1310,12 +1310,12 @@ function App({ user, onLogout }) {
                 </label>
                 <label>
                   <span className="cap">Description <span className="opt">(optional)</span></span>
-                  <input
-                    list="models-list"
-                    value={form.model}
-                    onChange={set('model')}
-                    placeholder="e.g. Hand-Micro Loud Speaker"
-                  />
+                  <select value={form.model} onChange={set('model')}>
+                    <option value="">— select —</option>
+                    {options.descriptions.map((d) => (
+                      <option key={d}>{d}</option>
+                    ))}
+                  </select>
                 </label>
               </div>
             )}
@@ -1398,11 +1398,6 @@ function App({ user, onLogout }) {
               ))}
               {inventoryNames.map((n) => (
                 <option key={`inv-${n}`} value={n} />
-              ))}
-            </datalist>
-            <datalist id="models-list">
-              {options.models.map((m) => (
-                <option key={m} value={m} />
               ))}
             </datalist>
 
@@ -1562,12 +1557,12 @@ function App({ user, onLogout }) {
                     </label>
                     <label>
                       <span className="cap">Description <span className="opt">(optional)</span></span>
-                      <input
-                        list="models-list"
-                        value={editForm.model}
-                        onChange={eSet('model')}
-                        placeholder="e.g. Hand-Micro Loud Speaker"
-                      />
+                      <select value={editForm.model} onChange={eSet('model')}>
+                        <option value="">— select —</option>
+                        {options.descriptions.map((d) => (
+                          <option key={d}>{d}</option>
+                        ))}
+                      </select>
                     </label>
                     <label>
                       Report date
@@ -1958,7 +1953,7 @@ function TransmittalPrint({ report }) {
       <table className="print-main">
         <thead>
           <tr>
-            <th>#</th><th>TYPE</th><th>DESCRIPTION</th><th>MATERIAL</th><th>QTY</th><th>COMPANY</th><th>STATUS</th>
+            <th>#</th><th>TYPE</th><th>MATERIAL</th><th>DESCRIPTION</th><th>QTY</th><th>COMPANY</th><th>STATUS</th>
           </tr>
         </thead>
         <tbody>
@@ -1966,8 +1961,8 @@ function TransmittalPrint({ report }) {
             <tr key={i}>
               <td>{i + 1}</td>
               <td>{r.type}</td>
-              <td>{r.model}</td>
               <td className="ia">{r.material}</td>
+              <td>{r.model}</td>
               <td>{r.qty}</td>
               <td>{r.company}</td>
               <td>{r.status}</td>

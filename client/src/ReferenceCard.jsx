@@ -10,109 +10,80 @@
 // "26HC1MT" = component 26 (LCD Display) on device H (Airbus TH1n), action C
 // (Change), qty 1, company MT (MOTECO). The component NUMBER and the DEVICE
 // LETTER are looked up independently — one device letter is reused across every
-// component. Keep this in sync with the whatsapp app's codeMap / admin page.
+// component.
+//
+// The lists below are pulled LIVE from the whatsapp app's public code map
+// (/codemap) so this page stays in sync with edits made on its admin.html.
+// The bundled constants are only a fallback for when that fetch fails (offline).
 
-// Device letters — one per radio model, reused across every component number.
-const DEVICES = [
-  ['H', 'Airbus TH1n'],
-  ['R', 'Airbus THR9'],
-  ['M', 'Airbus TMR880i'],
-  ['P', 'Sepura STP9000'],
-  ['C', 'Sepura SRG Carkit'],
-  ['D', 'Sepura SRG Desktop'],
-  ['K', 'Sepura SRG Bike'],
-  ['T', 'Hytera MT680'],
-  ['E', 'Hytera PT580H'],
-  ['N', 'Hytera PT590'],
-]
+import { useEffect, useMemo, useRef, useState } from 'react'
 
-// Base component numbers (device-agnostic), grouped for readability.
-const COMPONENT_GROUPS = [
-  {
-    title: 'Housing & Antenna',
-    items: [
-      ['10', 'Antenna Short (/S)'],
-      ['11', 'Antenna Big (/B)'],
-      ['12', 'Front Cover A'],
-      ['13', 'Rear Cover B'],
-      ['14', 'Belt Clip'],
-      ['15', 'UI Frame'],
-    ],
+// Public, read-only mirror of the whatsapp code map (no PIN, CORS-open).
+const CODEMAP_URL = 'https://trcmmswhatsapp-production.up.railway.app/codemap'
+const POLL_MS = 30000
+
+// ---- Fallback data (used only until the live map loads / if it fails) ----
+const FALLBACK = {
+  equipmentCodes: {
+    H: 'Airbus TH1n', R: 'Airbus THR9', M: 'Airbus TMR880i', P: 'Sepura STP9000',
+    C: 'Sepura SRG Carkit', D: 'Sepura SRG Desktop', K: 'Sepura SRG Bike',
+    T: 'Hytera MT680', E: 'Hytera PT580H', N: 'Hytera PT590',
   },
-  {
-    title: 'Electronics & UI',
-    items: [
-      ['20', 'Main Board PCB'],
-      ['25', 'Keypad'],
-      ['26', 'LCD Display'],
-      ['27', 'Keypad / Keymate'],
-    ],
+  components: {
+    10: 'Antenna Short (/S)', 11: 'Antenna Big (/B)', 12: 'Front Cover A', 13: 'Rear Cover B',
+    14: 'Belt Clip', 15: 'UI Frame', 20: 'Main Board PCB', 25: 'Keypad', 26: 'LCD Display',
+    27: 'Keypad / Keymate', 41: 'Rotary Knob', 42: 'Rotary Switch', 43: 'PTT Button',
+    44: 'Microphone', 45: 'Speaker Low', 46: 'Speaker Mid', 95: 'Battery Pack',
+    97: 'Charging Pin', 98: 'Charger', 99: 'Power Supply Unit',
   },
-  {
-    title: 'Audio & Controls',
-    items: [
-      ['41', 'Rotary Knob'],
-      ['42', 'Rotary Switch'],
-      ['43', 'PTT Button'],
-      ['44', 'Microphone'],
-      ['45', 'Speaker Low'],
-      ['46', 'Speaker Mid'],
-    ],
-  },
-  {
-    title: 'Power & Charging',
-    items: [
-      ['95', 'Battery Pack'],
-      ['97', 'Charging Pin'],
-      ['98', 'Charger'],
-      ['99', 'Power Supply Unit'],
-    ],
-  },
+  actions: { C: 'Change', N: 'New', R: 'Repair', I: 'Install', P: 'Program / Reprogram', D: 'Dismantle' },
+  companies: { MI: 'MOI', MT: 'MOTECO' },
+  agencies: { PSD: 'PSD', CD: 'CD', PRI: 'PRI', MEWA: 'MEWA', KINGDOM: 'KINGDOM' },
+  technicians: { 1: 'Amir', 2: 'Muhammad Rashid', 3: 'Imran', 4: 'Rasheedullah', 5: 'Maroof', 6: 'Baghdad', 7: 'Engr. Khalid', 8: 'Engr. Hamed' },
+}
+
+// Component-number buckets, so the numbers still read in tidy groups.
+const COMPONENT_BUCKETS = [
+  { title: 'Housing & Antenna', min: 10, max: 19 },
+  { title: 'Electronics & UI', min: 20, max: 39 },
+  { title: 'Audio & Controls', min: 40, max: 49 },
+  { title: 'Power & Charging', min: 90, max: 99 },
 ]
 
-const ACTIONS = [
-  ['C', 'Change'],
-  ['N', 'New'],
-  ['R', 'Repair'],
-  ['I', 'Install'],
-  ['P', 'Program / Reprogram'],
-  ['D', 'Dismantle'],
-]
+const numericSort = ([a], [b]) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
+// Preserve the curated brand grouping from the source map (insertion order).
+const asPairs = (obj) => Object.entries(obj || {}).map(([k, v]) => [String(k), String(v)])
+const sortedPairs = (obj) => asPairs(obj).sort(numericSort)
 
-const COMPANIES = [
-  ['MI', 'MOI'],
-  ['MT', 'MOTECO'],
-]
-
-const AGENCIES = ['PSD', 'CD', 'PRI', 'MEWA', 'KINGDOM']
-
-const TECHNICIANS = [
-  ['1', 'Amir'],
-  ['2', 'Muhammad Rashid'],
-  ['3', 'Imran'],
-  ['4', 'Rasheedullah'],
-  ['5', 'Maroof'],
-  ['6', 'Baghdad'],
-  ['7', 'Engr. Khalid'],
-  ['8', 'Engr. Hamed'],
-]
+function groupComponents(components) {
+  const pairs = sortedPairs(components)
+  const buckets = COMPONENT_BUCKETS.map((b) => ({ title: b.title, items: [] }))
+  const other = { title: 'Other', items: [] }
+  for (const [code, name] of pairs) {
+    const n = parseInt(code, 10)
+    const idx = Number.isFinite(n) ? COMPONENT_BUCKETS.findIndex((b) => n >= b.min && n <= b.max) : -1
+    if (idx >= 0) buckets[idx].items.push([code, name])
+    else other.items.push([code, name])
+  }
+  const groups = buckets.filter((g) => g.items.length)
+  if (other.items.length) groups.push(other)
+  return groups
+}
 
 const esc = (s) =>
   String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 
 // Build a clean, standalone printable document (independent of the app layout)
 // and print it through a hidden iframe — reliable for Chrome "Save as PDF".
-function printReference() {
+function printReference(data) {
+  const { devices, componentGroups, actions, companies, agencies, technicians } = data
   const codeRows = (pairs) =>
     pairs.map(([c, n]) => `<tr><td class="c">${esc(c)}</td><td>${esc(n)}</td></tr>`).join('')
+  const half = Math.ceil(devices.length / 2)
 
-  const componentTables = COMPONENT_GROUPS.map(
-    (g) => `
-      <div class="grp">
-        <h3>${esc(g.title)}</h3>
-        <table>${codeRows(g.items)}</table>
-      </div>`
-  ).join('')
+  const componentTables = componentGroups
+    .map((g) => `<div class="grp"><h3>${esc(g.title)}</h3><table>${codeRows(g.items)}</table></div>`)
+    .join('')
 
   const html = `<!doctype html><html><head><meta charset="utf-8" />
 <title>TRC-MMS Short-Code Reference</title>
@@ -145,8 +116,8 @@ function printReference() {
 
   <h2>Device Letters</h2>
   <div class="cols">
-    <table>${codeRows(DEVICES.slice(0, 5))}</table>
-    <table>${codeRows(DEVICES.slice(5))}</table>
+    <table>${codeRows(devices.slice(0, half))}</table>
+    <table>${codeRows(devices.slice(half))}</table>
   </div>
 
   <h2>Component Numbers</h2>
@@ -154,16 +125,16 @@ function printReference() {
 
   <h2>Actions</h2>
   <div class="cols">
-    <table>${codeRows(ACTIONS.slice(0, 3))}</table>
-    <table>${codeRows(ACTIONS.slice(3))}</table>
+    <table>${codeRows(actions.slice(0, Math.ceil(actions.length / 2)))}</table>
+    <table>${codeRows(actions.slice(Math.ceil(actions.length / 2)))}</table>
   </div>
 
   <h2>Companies · Agencies · Technicians</h2>
   <div class="cols">
-    <div class="grp"><h3>Company</h3><table>${codeRows(COMPANIES)}</table></div>
-    <div class="grp"><h3>Agency (confirmation)</h3><table>${AGENCIES.map((a) => `<tr><td class="c">${esc(a)}</td><td>${esc(a)}</td></tr>`).join('')}</table></div>
+    <div class="grp"><h3>Company</h3><table>${codeRows(companies)}</table></div>
+    <div class="grp"><h3>Agency (confirmation)</h3><table>${codeRows(agencies)}</table></div>
   </div>
-  <div class="grp" style="margin-top:8px"><h3>Technician ID</h3><table>${codeRows(TECHNICIANS)}</table></div>
+  <div class="grp" style="margin-top:8px"><h3>Technician ID</h3><table>${codeRows(technicians)}</table></div>
 
   <div class="foot">Software Developed by Muhammad Amir · MT# MT1063 · © 2026 Muhammad Amir. All rights reserved.</div>
 </body></html>`
@@ -205,11 +176,68 @@ function CodeTable({ rows }) {
 }
 
 export default function ReferenceCard() {
+  const [map, setMap] = useState(null) // live code map, or null until first load
+  const [status, setStatus] = useState('loading') // 'loading' | 'live' | 'offline'
+  const [updatedAt, setUpdatedAt] = useState(null)
+  const timer = useRef(null)
+
+  useEffect(() => {
+    let alive = true
+    const load = async () => {
+      try {
+        const res = await fetch(CODEMAP_URL, { cache: 'no-store' })
+        if (!res.ok) throw new Error(String(res.status))
+        const data = await res.json()
+        if (!alive) return
+        setMap(data)
+        setStatus('live')
+        setUpdatedAt(new Date())
+      } catch {
+        if (!alive) return
+        setStatus((s) => (s === 'live' ? 'live' : 'offline')) // keep last good data if we had it
+      }
+    }
+    load()
+    timer.current = setInterval(load, POLL_MS)
+    const onFocus = () => load()
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onFocus)
+    return () => {
+      alive = false
+      clearInterval(timer.current)
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onFocus)
+    }
+  }, [])
+
+  // Derive display lists from the live map, falling back to bundled data.
+  const data = useMemo(() => {
+    const src = map || FALLBACK
+    return {
+      devices: asPairs(src.equipmentCodes || FALLBACK.equipmentCodes),
+      componentGroups: groupComponents(src.components || FALLBACK.components),
+      actions: asPairs(src.actions || FALLBACK.actions),
+      companies: asPairs(src.companies || FALLBACK.companies),
+      agencies: sortedPairs(src.agencies || FALLBACK.agencies),
+      technicians: sortedPairs(src.technicians || FALLBACK.technicians),
+    }
+  }, [map])
+
+  const half = Math.ceil(data.devices.length / 2)
+  const actHalf = Math.ceil(data.actions.length / 2)
+
+  const statusLabel =
+    status === 'live'
+      ? `Live from admin${updatedAt ? ` · updated ${updatedAt.toLocaleTimeString('en-GB')}` : ''}`
+      : status === 'loading'
+        ? 'Loading live codes…'
+        : 'Showing built-in defaults (couldn’t reach the code map)'
+
   return (
     <section className="ref-card">
       <div className="ref-head">
         <h2 className="page-title">🔤 Code Reference</h2>
-        <button type="button" className="btn-pdf" onClick={printReference}>
+        <button type="button" className="btn-pdf" onClick={() => printReference(data)}>
           🖨️ Print / Save PDF
         </button>
       </div>
@@ -219,6 +247,10 @@ export default function ReferenceCard() {
         <strong>[Component#][Device][Action][Qty][Company]</strong> — the component number and the
         device letter are looked up separately, so one device letter is reused across every
         component.
+      </p>
+
+      <p className={`ref-status ${status}`}>
+        <span className="ref-dot" aria-hidden="true" /> {statusLabel}
       </p>
 
       <div className="ref-example">
@@ -235,16 +267,16 @@ export default function ReferenceCard() {
       <h3 className="ref-section">Device Letters</h3>
       <div className="ref-grid">
         <div className="ref-block">
-          <CodeTable rows={DEVICES.slice(0, 5)} />
+          <CodeTable rows={data.devices.slice(0, half)} />
         </div>
         <div className="ref-block">
-          <CodeTable rows={DEVICES.slice(5)} />
+          <CodeTable rows={data.devices.slice(half)} />
         </div>
       </div>
 
       <h3 className="ref-section">Component Numbers</h3>
       <div className="ref-grid">
-        {COMPONENT_GROUPS.map((g) => (
+        {data.componentGroups.map((g) => (
           <div className="ref-block" key={g.title}>
             <h4 className="ref-grp-title">{g.title}</h4>
             <CodeTable rows={g.items} />
@@ -255,10 +287,10 @@ export default function ReferenceCard() {
       <h3 className="ref-section">Actions</h3>
       <div className="ref-grid">
         <div className="ref-block">
-          <CodeTable rows={ACTIONS.slice(0, 3)} />
+          <CodeTable rows={data.actions.slice(0, actHalf)} />
         </div>
         <div className="ref-block">
-          <CodeTable rows={ACTIONS.slice(3)} />
+          <CodeTable rows={data.actions.slice(actHalf)} />
         </div>
       </div>
 
@@ -266,15 +298,15 @@ export default function ReferenceCard() {
       <div className="ref-grid">
         <div className="ref-block">
           <h4 className="ref-grp-title">Company</h4>
-          <CodeTable rows={COMPANIES} />
+          <CodeTable rows={data.companies} />
         </div>
         <div className="ref-block">
           <h4 className="ref-grp-title">Agency (confirmation)</h4>
-          <CodeTable rows={AGENCIES.map((a) => [a, a])} />
+          <CodeTable rows={data.agencies} />
         </div>
         <div className="ref-block">
           <h4 className="ref-grp-title">Technician ID</h4>
-          <CodeTable rows={TECHNICIANS} />
+          <CodeTable rows={data.technicians} />
         </div>
       </div>
     </section>
