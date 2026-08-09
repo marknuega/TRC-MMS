@@ -67,16 +67,39 @@ export function classify(action) {
   return 'maintenance'
 }
 
-// Per-entry service counts: for each category the count is the MAX quantity
-// among that category's faults on the entry (e.g. an entry that repaired 3
-// chargers counts as maintenance 3, not 1). -> { maintenance, programming,
-// install, dismantle }.
+// Charger and Power Supply Unit are STANDALONE items: each unit is counted on
+// its own (its full quantity), on top of the single "device" the rest of the
+// entry's maintenance faults represent. So an entry with 10 chargers + another
+// (non-charger) part counts as 11, not the max (10). Both items share this rule.
+const STANDALONE_ITEM = /\bCHARGER\b|\bPOWER\s*SUPPLY\b/
+const isStandaloneItem = (issue) => STANDALONE_ITEM.test(up(issue))
+
+// Maintenance units on an entry = (sum of charger / power-supply-unit quantities)
+// + (max quantity among the remaining maintenance faults). A multi-component
+// repair still counts once; each charger/PSU adds on top.
+function maintenanceCount(faults) {
+  let standalone = 0
+  let otherMax = 0
+  for (const f of faults ?? []) {
+    if (classify(f.action) !== 'maintenance') continue
+    const q = Math.max(0, Number(f.quantity) || 0)
+    if (isStandaloneItem(f.issue)) standalone += q
+    else otherMax = Math.max(otherMax, q)
+  }
+  return standalone + otherMax
+}
+
+// Per-entry service counts. Maintenance follows the standalone-item rule above;
+// programming/install/dismantle count the MAX quantity among that category's
+// faults on the entry. -> { maintenance, programming, install, dismantle }.
 export function entryCounts(entry) {
   const c = { maintenance: 0, programming: 0, install: 0, dismantle: 0 }
   for (const f of entry?.faults ?? []) {
     const cat = classify(f.action)
+    if (cat === 'maintenance') continue // handled by maintenanceCount (standalone rule)
     c[cat] = Math.max(c[cat], Math.max(0, Number(f.quantity) || 0))
   }
+  c.maintenance = maintenanceCount(entry?.faults)
   return c
 }
 
@@ -251,19 +274,17 @@ export function deviceBlocksByType(entries) {
         order.push(dev)
       }
       const agg = byDevice.get(dev)
-      // MAINTENANCE per device = the largest quantity among its maintenance faults
-      // (a multi-component repair counts once; a bulk fault like BATTERY x15 counts 15).
-      // The others sum their quantities.
-      let maxMaint = 0
+      // MAINTENANCE per device: the rest of the maintenance faults count once
+      // (their max quantity), plus each charger / power-supply-unit on its own.
+      // The other categories sum their quantities.
       for (const f of e.faults) {
         const cat = classify(f.action)
         const q = Math.max(0, Number(f.quantity) || 0)
-        if (cat === 'maintenance') maxMaint = Math.max(maxMaint, q)
-        else if (cat === 'programming') agg.program += q
+        if (cat === 'programming') agg.program += q
         else if (cat === 'install') agg.install += q
         else if (cat === 'dismantle') agg.dismantle += q
       }
-      agg.maintenance += maxMaint
+      agg.maintenance += maintenanceCount(e.faults)
     }
     order.sort((a, b) => modelRank(rawOf.get(a)) - modelRank(rawOf.get(b)))
     const blocks = []
@@ -309,16 +330,14 @@ export function agencyBlocks(entries) {
     const ag = up(e.agency) || '-'
     if (!byAgency.has(ag)) byAgency.set(ag, { maintenance: 0, program: 0, install: 0, dismantle: 0 })
     const a = byAgency.get(ag)
-    let maxMaint = 0
     for (const f of e.faults ?? []) {
       const cat = classify(f.action)
       const q = Math.max(0, Number(f.quantity) || 0)
-      if (cat === 'maintenance') maxMaint = Math.max(maxMaint, q)
-      else if (cat === 'programming') a.program += q
+      if (cat === 'programming') a.program += q
       else if (cat === 'install') a.install += q
       else if (cat === 'dismantle') a.dismantle += q
     }
-    a.maintenance += maxMaint
+    a.maintenance += maintenanceCount(e.faults)
   }
   return [...byAgency.keys()]
     .sort((x, y) => x.localeCompare(y))
