@@ -615,6 +615,18 @@ function App({ user, onLogout }) {
     })
   }
 
+  // Toggle one chart's visibility (persisted alongside the option lists).
+  function setChart(key, value) {
+    setOptions((prev) => {
+      const next = { ...prev, charts: { ...(prev.charts || {}), [key]: value } }
+      clearTimeout(saveTimer.current)
+      saveTimer.current = setTimeout(() => {
+        saveOptions(next).catch((err) => setError(`Could not save inputs: ${err.message}`))
+      }, 400)
+      return next
+    })
+  }
+
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }))
 
   // Choosing a model auto-fills Type from the model→type map (if the model is mapped).
@@ -1881,9 +1893,9 @@ function App({ user, onLogout }) {
             </section>
           )}
 
-          {page === 'dashboard' && <Dashboard saved={saved} branches={BRANCHES} embedded lockBranch={lockBranch} />}
+          {page === 'dashboard' && <Dashboard saved={saved} branches={BRANCHES} embedded lockBranch={lockBranch} charts={options.charts} />}
 
-          {page === 'spareparts' && <SparePartsReport saved={saved} branches={BRANCHES} embedded lockBranch={lockBranch} />}
+          {page === 'spareparts' && <SparePartsReport saved={saved} branches={BRANCHES} embedded lockBranch={lockBranch} charts={options.charts} />}
 
           {page === 'agency' && <AgencyTotals saved={saved} branches={BRANCHES} embedded lockBranch={lockBranch} />}
 
@@ -1891,7 +1903,7 @@ function App({ user, onLogout }) {
 
           {page === 'reference' && <ReferenceCard />}
 
-          {page === 'manage' && isAdmin && <ManageInputs options={options} onChange={setCategory} embedded />}
+          {page === 'manage' && isAdmin && <ManageInputs options={options} onChange={setCategory} onToggleChart={setChart} embedded />}
 
           {page === 'admin' && isAdmin && <AdminUsers currentUser={user} embedded />}
 

@@ -46,7 +46,7 @@ function splitByCompany(models) {
     })
 }
 
-export default function SparePartsReport({ saved, branches, embedded = false, lockBranch = null }) {
+export default function SparePartsReport({ saved, branches, embedded = false, lockBranch = null, charts = {} }) {
   const [openState, setOpen] = useState(false)
   const open = embedded || openState
   const [monthValue, setMonthValue] = useState(() => new Date().toISOString().slice(0, 7))
@@ -197,7 +197,7 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
             <p className="empty">No saved reports for this month/branch yet.</p>
           ) : (
             <>
-              {(companyPie.length > 0 || brandPie.some((b) => b.value > 0)) && (
+              {charts.sparePartsPie !== false && (companyPie.length > 0 || brandPie.some((b) => b.value > 0)) && (
                 <div className="pie-row">
                   <div className="pie-card">
                     <Pie title="Parts by company" data={companyPie} />

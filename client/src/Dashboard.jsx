@@ -4,7 +4,7 @@
  */
 
 import { useMemo, useState } from 'react'
-import { monthEntries, dashboardSummary, technicianTotals, topParts, monthlyTrend, agencyTransactions } from './report'
+import { monthEntries, dashboardSummary, technicianTotals, topParts, monthlyTrend, agencyTransactions, buildSparePartsReport } from './report'
 import { Pie } from './Pie'
 import { toPie } from './chartUtils'
 
@@ -19,7 +19,7 @@ const monthLong = (mk) => {
   return y && m ? `${['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][m - 1]} ${y}` : ''
 }
 
-export default function Dashboard({ saved, branches, embedded = false, lockBranch = null }) {
+export default function Dashboard({ saved, branches, embedded = false, lockBranch = null, charts = {} }) {
   const [openState, setOpen] = useState(false)
   const open = embedded || openState
   const [monthValue, setMonthValue] = useState(() => new Date().toISOString().slice(0, 7))
@@ -45,6 +45,16 @@ export default function Dashboard({ saved, branches, embedded = false, lockBranc
   const techPie = toPie(techs, (t) => t.technician, (t) => t.total)
   const agencyPie = toPie(agencies, (a) => a.agency, (a) => a.total)
   const partsPie = toPie(parts, (p) => `${p.part}${p.company ? ` · ${p.company}` : ''}`, (p) => p.qty)
+  // Spare-parts breakdowns, duplicated from the Spare Parts page.
+  const spReport = useMemo(() => buildSparePartsReport(entries), [entries])
+  const companyPie = useMemo(() => spReport.companyTotals.map((c) => ({ label: c.company, value: c.qty })), [spReport])
+  const brandPie = useMemo(
+    () => Object.keys(spReport.parts).map((type) => ({ label: type, value: spReport.parts[type].reduce((s, m) => s + m.total, 0) })),
+    [spReport],
+  )
+  const showTopTech = charts.dashTopTech !== false
+  const showPartsPie = charts.dashPartsPie !== false
+  const hasPartsPie = companyPie.length > 0 || brandPie.some((b) => b.value > 0)
   const sumBy = (list, keys) =>
     list.reduce((a, r) => {
       keys.forEach((k) => (a[k] = (a[k] || 0) + (r[k] || 0)))
@@ -117,10 +127,12 @@ export default function Dashboard({ saved, branches, embedded = false, lockBranc
                   <Pie data={mixPie} />
                 </div>
 
-                <div className="dash-card">
-                  <h3 className="sp-brand-h">Top technicians <span className="hint">by activity</span></h3>
-                  <Pie data={techPie} />
-                </div>
+                {showTopTech && (
+                  <div className="dash-card">
+                    <h3 className="sp-brand-h">Top technicians <span className="hint">by activity</span></h3>
+                    <Pie data={techPie} />
+                  </div>
+                )}
 
                 <div className="dash-card">
                   <h3 className="sp-brand-h">Busiest agencies</h3>
@@ -131,6 +143,19 @@ export default function Dashboard({ saved, branches, embedded = false, lockBranc
                   <h3 className="sp-brand-h">Top spare parts</h3>
                   <Pie data={partsPie} />
                 </div>
+
+                {showPartsPie && hasPartsPie && (
+                  <>
+                    <div className="dash-card">
+                      <h3 className="sp-brand-h">Parts by company</h3>
+                      <Pie data={companyPie} />
+                    </div>
+                    <div className="dash-card">
+                      <h3 className="sp-brand-h">Parts by brand</h3>
+                      <Pie data={brandPie} />
+                    </div>
+                  </>
+                )}
 
                 <div className="dash-card dash-wide">
                   <h3 className="sp-brand-h">Monthly trend <span className="hint">· devices serviced</span></h3>

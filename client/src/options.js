@@ -46,7 +46,20 @@ export const DEFAULT_OPTIONS = {
 
   // Transmittal item condition.
   statuses: ['New', 'Refurbish'],
+
+  // Chart visibility toggles (admin-managed in Manage Inputs). See DEFAULT_CHARTS.
+  charts: { dashTopTech: true, dashPartsPie: true, sparePartsPie: true },
 }
+
+// Default visibility for the pie charts; true = shown. Missing key = shown.
+export const DEFAULT_CHARTS = { dashTopTech: true, dashPartsPie: true, sparePartsPie: true }
+
+// Chart on/off switches shown in Manage Inputs.
+export const CHART_TOGGLES = [
+  { key: 'dashTopTech', label: 'Dashboard · Top technicians (pie)' },
+  { key: 'dashPartsPie', label: 'Dashboard · Parts by company & brand (pie)' },
+  { key: 'sparePartsPie', label: 'Spare Parts · Parts pie charts' },
+]
 
 // Branches shown in the header selector; the choice appears in the report header/number.
 export const BRANCHES = ['Makkah', 'Taif', 'Jeddah']
@@ -98,5 +111,8 @@ export function mergeOptions(stored) {
     const list = Array.isArray(stored?.[key]) ? stored[key] : DEFAULT_OPTIONS[key]
     out[key] = [...list]
   }
+  // Chart toggles are a plain object, not a category list.
+  const storedCharts = stored?.charts && typeof stored.charts === 'object' ? stored.charts : {}
+  out.charts = { ...DEFAULT_CHARTS, ...storedCharts }
   return out
 }

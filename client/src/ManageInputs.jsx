@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { CATEGORIES, materialName, materialDesc } from './options'
+import { CATEGORIES, CHART_TOGGLES, materialName, materialDesc } from './options'
 
 // Add / edit / delete the dropdown option lists. Changes are pushed up via
 // onChange(categoryKey, newList); the parent persists them to the backend.
-export default function ManageInputs({ options, onChange, embedded = false }) {
+// onToggleChart(key, bool) flips a pie-chart's visibility.
+export default function ManageInputs({ options, onChange, onToggleChart, embedded = false }) {
   const [openState, setOpen] = useState(false)
   const open = embedded || openState
   const [cat, setCat] = useState(CATEGORIES[0].key)
@@ -184,6 +185,27 @@ export default function ManageInputs({ options, onChange, embedded = false }) {
               </li>
             ))}
           </ul>
+
+          {onToggleChart && (
+            <div className="manage-charts">
+              <h3 className="manage-charts-h">Charts</h3>
+              <p className="manage-hint">Show or hide the pie charts on the Dashboard and Spare Parts pages.</p>
+              <ul className="chart-toggle-list">
+                {CHART_TOGGLES.map(({ key, label }) => {
+                  const on = (options.charts ?? {})[key] !== false
+                  return (
+                    <li key={key}>
+                      <label className="chart-toggle">
+                        <input type="checkbox" checked={on} onChange={(e) => onToggleChart(key, e.target.checked)} />
+                        <span>{label}</span>
+                      </label>
+                      <span className={`chart-toggle-state ${on ? 'on' : 'off'}`}>{on ? 'Shown' : 'Hidden'}</span>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
+          )}
         </div>
       )}
     </section>

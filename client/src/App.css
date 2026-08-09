@@ -1773,6 +1773,65 @@ h2 {
   flex: 1;
   min-width: 0;
 }
+/* Chart visibility toggles in Manage inputs. */
+.manage-charts {
+  margin-top: 1.6rem;
+  padding-top: 1.2rem;
+  border-top: 1px solid var(--border);
+}
+.manage-charts-h {
+  margin: 0 0 0.35rem;
+  font-size: 1.05rem;
+  color: var(--text-h);
+}
+.chart-toggle-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.8rem 0 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+  gap: 0.5rem;
+}
+.chart-toggle-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.9rem;
+  background: var(--surface-2);
+}
+.chart-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  min-width: 0;
+}
+.chart-toggle input {
+  width: 1.1rem;
+  height: 1.1rem;
+  flex: none;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+.chart-toggle-state {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  flex: none;
+}
+.chart-toggle-state.on {
+  color: var(--success);
+}
+.chart-toggle-state.off {
+  color: var(--muted);
+}
 
 /* ---- Footer ---- */
 /* Copyright footer — AMIR DEV STANDARD: bottom of page, theme-aware colours. */
