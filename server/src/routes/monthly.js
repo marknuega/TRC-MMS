@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { prisma } from '../db.js'
+import { writeBranch } from '../scope.js'
 
 const router = Router()
 
@@ -7,7 +8,7 @@ const router = Router()
 router.get('/', async (req, res, next) => {
   try {
     const monthKey = String(req.query.month ?? '')
-    const branch = String(req.query.branch ?? '')
+    const branch = writeBranch(req, req.query.branch) // non-admins forced to their own branch
     if (!/^\d{4}-\d{2}$/.test(monthKey)) return res.status(400).json({ error: 'month must be YYYY-MM' })
     const row = await prisma.monthlySheet.findUnique({ where: { monthKey_branch: { monthKey, branch } } })
     res.json({ data: row?.data ?? null, updatedAt: row?.updatedAt ?? null })
@@ -20,7 +21,7 @@ router.get('/', async (req, res, next) => {
 router.put('/', async (req, res, next) => {
   try {
     const monthKey = String(req.body?.month ?? '')
-    const branch = String(req.body?.branch ?? '')
+    const branch = writeBranch(req, req.body?.branch)
     const data = req.body?.data
     if (!/^\d{4}-\d{2}$/.test(monthKey)) return res.status(400).json({ error: 'month must be YYYY-MM' })
     if (!data || typeof data !== 'object' || Array.isArray(data)) {
@@ -41,7 +42,7 @@ router.put('/', async (req, res, next) => {
 router.delete('/', async (req, res, next) => {
   try {
     const monthKey = String(req.query.month ?? '')
-    const branch = String(req.query.branch ?? '')
+    const branch = writeBranch(req, req.query.branch)
     await prisma.monthlySheet.deleteMany({ where: { monthKey, branch } })
     res.status(204).end()
   } catch (err) {

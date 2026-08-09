@@ -48,7 +48,7 @@ function downloadCsv(filename, items) {
 
 const isLow = (i) => i.lowStock > 0 && i.avail <= i.lowStock
 
-export default function Inventory({ embedded = false }) {
+export default function Inventory({ embedded = false, branch = '' }) {
   const [items, setItems] = useState([])
   const [openState, setOpen] = useState(false)
   const open = embedded || openState
@@ -120,7 +120,7 @@ export default function Inventory({ embedded = false }) {
 
   async function refresh() {
     try {
-      setItems(await getInventory())
+      setItems(await getInventory(branch))
       setLoaded(true)
     } catch (e) {
       setError(e.message)
@@ -129,6 +129,11 @@ export default function Inventory({ embedded = false }) {
   useEffect(() => {
     if (open && !loaded) refresh()
   }, [open, loaded])
+  // Admin switching the branch selector re-scopes the inventory list.
+  useEffect(() => {
+    if (open) refresh()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branch])
 
   const stores = useMemo(() => [...new Set(items.map((i) => i.store).filter(Boolean))].sort(), [items])
   const filtered = useMemo(() => {
@@ -157,7 +162,7 @@ export default function Inventory({ embedded = false }) {
   async function save(e) {
     e.preventDefault()
     try {
-      if (edit === 'new') await createInventory(form)
+      if (edit === 'new') await createInventory({ ...form, branch })
       else await updateInventory(edit, form)
       setEdit(null)
       setError(null)
@@ -183,7 +188,7 @@ export default function Inventory({ embedded = false }) {
       return
     }
     try {
-      const r = await importInventory(rows)
+      const r = await importInventory(rows, branch)
       setNotice(`Imported: ${r.created} new, ${r.updated} updated${r.skipped ? `, ${r.skipped} skipped` : ''}.`)
       setPasteText('')
       setPasteOpen(false)

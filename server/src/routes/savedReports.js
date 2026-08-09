@@ -28,7 +28,11 @@ async function applyInventoryUsage(tx, snapshot, reference, branch) {
     }
   }
   if (used.size === 0) return
-  const items = await tx.inventoryItem.findMany({ select: { id: true, sku: true, itemCode: true, begin: true, out: true } })
+  // Only deduct from the saving branch's own stock (each branch has separate inventory).
+  const items = await tx.inventoryItem.findMany({
+    where: { branch: branch ?? '' },
+    select: { id: true, sku: true, itemCode: true, begin: true, out: true },
+  })
   for (const it of items) {
     const qty = used.get(String(it.itemCode ?? '').trim().toUpperCase())
     if (!qty) continue

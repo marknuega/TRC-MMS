@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { prisma } from '../db.js'
+import { branchWhere, writeBranch, canAccessBranch } from '../scope.js'
 
 const router = Router()
 
@@ -26,10 +27,13 @@ function parseItem(body) {
   }
 }
 
-// GET /api/inventory - all items (client filters/searches).
+// GET /api/inventory - items for the user's branch (non-admin) or all/one (admin).
 router.get('/', async (req, res, next) => {
   try {
-    const items = await prisma.inventoryItem.findMany({ orderBy: [{ store: 'asc' }, { sku: 'asc' }] })
+    const items = await prisma.inventoryItem.findMany({
+      where: branchWhere(req, req.query.branch),
+      orderBy: [{ store: 'asc' }, { sku: 'asc' }],
+    })
     res.json(items.map(shape))
   } catch (err) {
     next(err)
@@ -41,6 +45,7 @@ router.post('/', async (req, res, next) => {
   try {
     const { data, error } = parseItem(req.body)
     if (error) return res.status(400).json({ error })
+    data.branch = writeBranch(req, req.body?.branch)
     const item = await prisma.inventoryItem.create({ data })
     res.status(201).json(shape(item))
   } catch (err) {
@@ -52,8 +57,12 @@ router.post('/', async (req, res, next) => {
 // GET /api/inventory/:id/transactions - ledger for one item, newest first.
 router.get('/:id/transactions', async (req, res, next) => {
   try {
+    const id = Number(req.params.id)
+    const item = await prisma.inventoryItem.findUnique({ where: { id } })
+    if (!item) return res.status(404).json({ error: 'Item not found' })
+    if (!canAccessBranch(req, item.branch)) return res.status(404).json({ error: 'Item not found' })
     const txns = await prisma.inventoryTxn.findMany({
-      where: { itemId: Number(req.params.id) },
+      where: { itemId: id },
       orderBy: { id: 'desc' },
     })
     res.json(txns)
@@ -70,7 +79,7 @@ router.put('/:id', async (req, res, next) => {
     const id = Number(req.params.id)
     const item = await prisma.$transaction(async (tx) => {
       const before = await tx.inventoryItem.findUnique({ where: { id } })
-      if (!before) {
+      if (!before || !canAccessBranch(req, before.branch)) {
         const e = new Error('Item not found')
         e.code = 'P2025'
         throw e
@@ -104,7 +113,10 @@ router.put('/:id', async (req, res, next) => {
 // DELETE /api/inventory/:id
 router.delete('/:id', async (req, res, next) => {
   try {
-    await prisma.inventoryItem.delete({ where: { id: Number(req.params.id) } })
+    const id = Number(req.params.id)
+    const item = await prisma.inventoryItem.findUnique({ where: { id } })
+    if (!item || !canAccessBranch(req, item.branch)) return res.status(404).json({ error: 'Item not found' })
+    await prisma.inventoryItem.delete({ where: { id } })
     res.status(204).end()
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'Item not found' })
@@ -116,6 +128,7 @@ router.delete('/:id', async (req, res, next) => {
 router.post('/import', async (req, res, next) => {
   try {
     const rows = Array.isArray(req.body?.items) ? req.body.items : []
+    const branch = writeBranch(req, req.body?.branch)
     let created = 0
     let updated = 0
     let skipped = 0
@@ -127,10 +140,15 @@ router.post('/import', async (req, res, next) => {
       }
       const existing = await prisma.inventoryItem.findUnique({ where: { sku: data.sku } })
       if (existing) {
+        // Can't touch another branch's item (SKU is global-unique).
+        if (!canAccessBranch(req, existing.branch)) {
+          skipped += 1
+          continue
+        }
         await prisma.inventoryItem.update({ where: { sku: data.sku }, data })
         updated += 1
       } else {
-        await prisma.inventoryItem.create({ data })
+        await prisma.inventoryItem.create({ data: { ...data, branch } })
         created += 1
       }
     }

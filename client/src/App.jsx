@@ -468,6 +468,7 @@ function App({ user, onLogout }) {
     // Re-fetch the working entries for the newly selected branch right away
     // (All Branches = '' = every branch, admin only).
     refresh(mode, isAdmin && b === ALL_BRANCHES ? '' : b)
+    getInventory(isAdmin && b === ALL_BRANCHES ? '' : b).then(setInventory).catch(() => {})
   }
 
   // Working entries are per document type; refresh the set for the given mode
@@ -496,7 +497,7 @@ function App({ user, onLogout }) {
     }
   }
 
-  const refreshInventory = () => getInventory().then(setInventory).catch(() => {})
+  const refreshInventory = () => getInventory(isAllBranches ? '' : branch).then(setInventory).catch(() => {})
 
   function reloadAll() {
     refresh()
@@ -1906,7 +1907,7 @@ function App({ user, onLogout }) {
 
           {page === 'agency' && <AgencyTotals saved={saved} branches={BRANCHES} embedded lockBranch={lockBranch} />}
 
-          {page === 'inventory' && <Inventory embedded />}
+          {page === 'inventory' && <Inventory embedded branch={isAllBranches ? '' : branch} />}
 
           {page === 'reference' && <ReferenceCard />}
 

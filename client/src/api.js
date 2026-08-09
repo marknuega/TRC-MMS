@@ -122,7 +122,9 @@ export const saveMonthly = (month, branch, data) =>
 export const clearMonthly = (month, branch) =>
   request(`/api/monthly${monthlyQs(month, branch)}`, { method: 'DELETE' })
 
-export const getInventory = () => request('/api/inventory')
+const branchQs = (branch) => (branch ? `?branch=${encodeURIComponent(branch)}` : '')
+
+export const getInventory = (branch) => request(`/api/inventory${branchQs(branch)}`)
 
 export const createInventory = (item) =>
   request('/api/inventory', { method: 'POST', body: JSON.stringify(item) })
@@ -152,5 +154,5 @@ export const updateCredentialRequest = (id, data) =>
   request(`/api/admin/requests/${id}`, { method: 'PUT', body: JSON.stringify(data) })
 export const deleteCredentialRequest = (id) => request(`/api/admin/requests/${id}`, { method: 'DELETE' })
 
-export const importInventory = (items) =>
-  request('/api/inventory/import', { method: 'POST', body: JSON.stringify({ items }) })
+export const importInventory = (items, branch) =>
+  request('/api/inventory/import', { method: 'POST', body: JSON.stringify({ items, branch }) })
