@@ -519,6 +519,16 @@ h2 {
   gap: 1rem 1.1rem;
   align-items: end;
 }
+/* Transmittal Type + Description row: keep Type compact, give Description room. */
+.entry-form .grid.tx-fields {
+  grid-template-columns: minmax(7rem, 0.55fr) minmax(0, 1.9fr) minmax(7rem, 0.75fr);
+  margin-bottom: 0.2rem;
+}
+@media (max-width: 560px) {
+  .entry-form .grid.tx-fields {
+    grid-template-columns: 1fr;
+  }
+}
 /* Let grid/flex cells shrink below their content so nothing overflows the card. */
 .entry-form .grid > label,
 .fault-row > * {

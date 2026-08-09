@@ -647,8 +647,8 @@ function App({ user, onLogout }) {
       const payload = {
         ...form,
         mode, // keep report vs transmittal working sets separate
-        // Transmittal has no device card: items are "OTHER", no model/agency.
-        ...(isTransmittal ? { type: 'OTHER', model: '', agency: '' } : {}),
+        // Transmittal carries a free Type + Description (no agency); Type falls back to OTHER.
+        ...(isTransmittal ? { type: form.type || 'OTHER', model: form.model ?? '', agency: '' } : {}),
         // Transmittal lines are Material + Qty + Company + Status (Action hidden, defaults harmlessly).
         faults: form.faults
           .filter(faultIsMeaningful)
@@ -735,7 +735,7 @@ function App({ user, onLogout }) {
       const payload = {
         ...editForm,
         mode,
-        ...(isTransmittal ? { type: 'OTHER', model: '', agency: '' } : {}),
+        ...(isTransmittal ? { type: editForm.type || 'OTHER', model: editForm.model ?? '', agency: '' } : {}),
         faults: editForm.faults
           .filter(faultIsMeaningful)
           .map((f) => ({ ...f, quantity: Math.max(1, Number(f.quantity) || 1) })),
@@ -1298,6 +1298,27 @@ function App({ user, onLogout }) {
             </button>
             {faultsOpen && (
             <>
+            {isTransmittal && (
+              <div className="grid tx-fields">
+                <label>
+                  Type
+                  <select value={form.type || 'OTHER'} onChange={set('type')}>
+                    {options.types.map((t) => (
+                      <option key={t}>{t}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span className="cap">Description <span className="opt">(optional)</span></span>
+                  <input
+                    list="models-list"
+                    value={form.model}
+                    onChange={set('model')}
+                    placeholder="e.g. Hand-Micro Loud Speaker"
+                  />
+                </label>
+              </div>
+            )}
             <div className="faults">
               <div className={`fault-row fault-head${isTransmittal ? ' fault-row--tx' : ''}`}>
                 <span>{isTransmittal ? 'Material' : 'Issue'}</span>
@@ -1379,6 +1400,11 @@ function App({ user, onLogout }) {
                 <option key={`inv-${n}`} value={n} />
               ))}
             </datalist>
+            <datalist id="models-list">
+              {options.models.map((m) => (
+                <option key={m} value={m} />
+              ))}
+            </datalist>
 
             <label className="comment-field">
               <span className="cap">Comment <span className="opt">(optional)</span></span>
@@ -1423,13 +1449,22 @@ function App({ user, onLogout }) {
                   <span className="entry-num">{i + 1}</span>
                   <div>
                     {isTransmittal ? (
-                      <p>
-                        <strong>
-                          {e.faults
-                            .map((f) => `${f.issue} (${f.quantity})${f.status ? ` · ${f.status}` : ''}`)
-                            .join(', ')}
-                        </strong>
-                      </p>
+                      <>
+                        {(e.model || (e.type && e.type.toUpperCase() !== 'OTHER')) && (
+                          <p className="muted small">
+                            {[e.type && e.type.toUpperCase() !== 'OTHER' ? e.type : null, e.model]
+                              .filter(Boolean)
+                              .join(' · ')}
+                          </p>
+                        )}
+                        <p>
+                          <strong>
+                            {e.faults
+                              .map((f) => `${f.issue} (${f.quantity})${f.status ? ` · ${f.status}` : ''}`)
+                              .join(', ')}
+                          </strong>
+                        </p>
+                      </>
                     ) : (
                       <>
                         <strong>
@@ -1506,6 +1541,32 @@ function App({ user, onLogout }) {
                         value={editForm.technician}
                         options={options.technicians}
                         onChange={(v) => setEditForm((f) => ({ ...f, technician: v }))}
+                      />
+                    </label>
+                    <label>
+                      Report date
+                      <input type="date" value={editForm.reportDate} onChange={eSet('reportDate')} required />
+                    </label>
+                  </div>
+                )}
+
+                {isTransmittal && (
+                  <div className="grid tx-fields">
+                    <label>
+                      Type
+                      <select value={editForm.type || 'OTHER'} onChange={eSet('type')}>
+                        {options.types.map((t) => (
+                          <option key={t}>{t}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      <span className="cap">Description <span className="opt">(optional)</span></span>
+                      <input
+                        list="models-list"
+                        value={editForm.model}
+                        onChange={eSet('model')}
+                        placeholder="e.g. Hand-Micro Loud Speaker"
                       />
                     </label>
                     <label>
@@ -1897,7 +1958,7 @@ function TransmittalPrint({ report }) {
       <table className="print-main">
         <thead>
           <tr>
-            <th>#</th><th>TYPE</th><th>MODEL</th><th>MATERIAL</th><th>QTY</th><th>COMPANY</th><th>STATUS</th>
+            <th>#</th><th>TYPE</th><th>DESCRIPTION</th><th>MATERIAL</th><th>QTY</th><th>COMPANY</th><th>STATUS</th>
           </tr>
         </thead>
         <tbody>
