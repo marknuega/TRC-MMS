@@ -2180,3 +2180,80 @@ h2 {
     font-size: 0.8rem;
   }
 }
+
+/* ---- Code Reference card ---- */
+.ref-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+.ref-intro {
+  max-width: 60rem;
+  margin: 0 0 1rem;
+}
+.ref-example {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.9rem 1.1rem;
+  margin: 0 0 1.4rem;
+  display: grid;
+  gap: 0.35rem;
+}
+.ref-syntax {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--text-h);
+}
+.ref-example code {
+  font-family: ui-monospace, Consolas, monospace;
+  font-weight: 700;
+  background: var(--surface-3);
+  padding: 0.05rem 0.35rem;
+  border-radius: 4px;
+}
+.ref-section {
+  margin: 1.4rem 0 0.7rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 2px solid var(--border);
+  color: var(--text-h);
+  font-size: 1.05rem;
+}
+.ref-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 0.9rem 1.2rem;
+  align-items: start;
+}
+.ref-block {
+  min-width: 0;
+}
+.ref-grp-title {
+  margin: 0 0 0.4rem;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.ref-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+.ref-table td {
+  border: 1px solid var(--border);
+  padding: 0.3rem 0.6rem;
+  text-align: left;
+  vertical-align: top;
+}
+.ref-table .ref-code {
+  font-family: ui-monospace, Consolas, monospace;
+  font-weight: 700;
+  white-space: nowrap;
+  width: 3.4em;
+  color: var(--primary);
+  background: var(--surface-2);
+}

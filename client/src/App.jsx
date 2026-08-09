@@ -30,6 +30,7 @@ import AgencyTotals from './AgencyTotals'
 import SparePartsReport from './SparePartsReport'
 import Dashboard from './Dashboard'
 import AdminUsers from './AdminUsers'
+import ReferenceCard from './ReferenceCard'
 import {
   groupReports,
   buildDateReport,
@@ -59,12 +60,13 @@ const NAV = [
   { id: 'spareparts', icon: '🧰', label: 'Spare Parts' },
   { id: 'agency', icon: '🏢', label: 'Agency Totals' },
   { id: 'inventory', icon: '📦', label: 'Inventory' },
+  { id: 'reference', icon: '🔤', label: 'Code Reference' },
   { id: 'manage', icon: '⚙️', label: 'Manage Inputs', adminOnly: true },
   { id: 'admin', icon: '🔐', label: 'Users & Access', adminOnly: true },
 ]
 // Data-heavy pages fill the available width (tables/charts); form-style pages
 // stay centred at a readable measure.
-const WIDE_PAGES = new Set(['dashboard', 'monthly', 'spareparts', 'agency', 'inventory'])
+const WIDE_PAGES = new Set(['dashboard', 'monthly', 'spareparts', 'agency', 'inventory', 'reference'])
 const SIDEBAR_KEY = 'trc_sidebar'
 const loadSidebar = () => {
   try {
@@ -1832,6 +1834,8 @@ function App({ user, onLogout }) {
           {page === 'agency' && <AgencyTotals saved={saved} branches={BRANCHES} embedded lockBranch={lockBranch} />}
 
           {page === 'inventory' && <Inventory embedded />}
+
+          {page === 'reference' && <ReferenceCard />}
 
           {page === 'manage' && isAdmin && <ManageInputs options={options} onChange={setCategory} embedded />}
 
