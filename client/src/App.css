@@ -565,6 +565,13 @@ h2 {
 .fault-row--tx {
   grid-template-columns: 1fr 4.75rem 9.5rem 8rem auto;
 }
+/* …with a leading Type column so Type sits on the same line (add form). */
+.fault-row--txtype {
+  grid-template-columns: 7.5rem 1fr 4.75rem 9.5rem 8rem auto;
+}
+.tx-type-spacer {
+  min-width: 0;
+}
 .fault-head {
   font-size: 0.78rem;
   font-weight: 700;

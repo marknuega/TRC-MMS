@@ -1301,20 +1301,9 @@ function App({ user, onLogout }) {
             </button>
             {faultsOpen && (
             <>
-            {isTransmittal && (
-              <div className="grid tx-fields">
-                <label>
-                  Type
-                  <select value={form.type || 'OTHER'} onChange={set('type')}>
-                    {options.types.map((t) => (
-                      <option key={t}>{t}</option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-            )}
             <div className="faults">
-              <div className={`fault-row fault-head${isTransmittal ? ' fault-row--tx' : ''}`}>
+              <div className={`fault-row fault-head${isTransmittal ? ' fault-row--tx fault-row--txtype' : ''}`}>
+                {isTransmittal && <span>Type</span>}
                 <span>{isTransmittal ? 'Material' : 'Issue'}</span>
                 <span>Qty</span>
                 {!isTransmittal && <span>Action</span>}
@@ -1323,7 +1312,17 @@ function App({ user, onLogout }) {
                 <span />
               </div>
               {form.faults.map((fault, i) => (
-                <div className={`fault-row${isTransmittal ? ' fault-row--tx' : ''}`} key={i}>
+                <div className={`fault-row${isTransmittal ? ' fault-row--tx fault-row--txtype' : ''}`} key={i}>
+                  {isTransmittal &&
+                    (i === 0 ? (
+                      <select value={form.type || 'OTHER'} onChange={set('type')} aria-label="Type">
+                        {options.types.map((t) => (
+                          <option key={t}>{t}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="tx-type-spacer" aria-hidden="true" />
+                    ))}
                   <input
                     list={isTransmittal ? 'materials-list' : 'issue-types'}
                     value={fault.issue}
