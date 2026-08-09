@@ -286,6 +286,15 @@ function printDocument(html) {
   setTimeout(doPrint, 800) // fallback if load never fires
 }
 
+// A compact fingerprint of the working entries — changes when an entry is
+// added, edited or removed. Used to auto-refresh when new data arrives.
+function entriesSig(list) {
+  if (!Array.isArray(list)) return ''
+  return list
+    .map((e) => `${e.id}:${(e.faults ?? []).map((f) => `${f.issue}|${f.action}|${f.quantity}|${f.company}|${f.status}`).join(',')}`)
+    .join('||')
+}
+
 function downloadText(filename, text) {
   const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
   const url = URL.createObjectURL(blob)
@@ -335,6 +344,7 @@ function App({ user, onLogout }) {
   const [sync, setSync] = useState({ online: true, pending: 0 })
   const [editId, setEditId] = useState(null) // entry id being edited in the modal
   const [editForm, setEditForm] = useState(null)
+  const lastEntriesSig = useRef('') // baseline for the live-refresh poll
 
   // Non-admins are pinned to their own branch everywhere.
   useEffect(() => {
@@ -445,7 +455,9 @@ function App({ user, onLogout }) {
   // (defaults to the current one).
   async function refresh(m = mode) {
     try {
-      setEntries(await listEntries(m))
+      const list = await listEntries(m)
+      setEntries(list)
+      lastEntriesSig.current = entriesSig(list) // keep the live-poll baseline current
       setError(null)
     } catch (err) {
       setError(err.message)
@@ -479,6 +491,39 @@ function App({ user, onLogout }) {
   useEffect(() => {
     reloadAll() // populate entries, saved, inventory + option suggestions
   }, [])
+
+  // Live refresh: poll the working entries and, when a new one arrives (added,
+  // edited or removed — e.g. from another device), refresh the view once. It
+  // never touches the form you're editing, only the entries list + calculations.
+  useEffect(() => {
+    let cancelled = false
+    const poll = async () => {
+      if (document.hidden || busy) return // don't fight an in-flight save/edit
+      try {
+        const list = await listEntries(mode)
+        if (cancelled) return
+        const sig = entriesSig(list)
+        if (lastEntriesSig.current && sig !== lastEntriesSig.current) {
+          setEntries(list) // a new/changed entry arrived
+          refreshSaved() // keep Dashboard / Monthly totals in step
+        }
+        lastEntriesSig.current = sig
+      } catch {
+        /* offline or transient — try again next tick */
+      }
+    }
+    const id = setInterval(poll, 12000)
+    const onVisible = () => {
+      if (!document.hidden) poll() // catch up the moment the tab is focused
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      cancelled = true
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, busy])
 
   // Offline status pill + refetch fresh data once queued writes have synced.
   useEffect(() => {
