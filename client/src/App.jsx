@@ -492,7 +492,7 @@ function App({ user, onLogout }) {
     reloadAll() // populate entries, saved, inventory + option suggestions
   }, [])
 
-  // Live refresh: poll the working entries and, when a new one arrives (added,
+  // Live refresh: poll the working entries every 3s and, when a new one arrives (added,
   // edited or removed — e.g. from another device), refresh the view once. It
   // never touches the form you're editing, only the entries list + calculations.
   useEffect(() => {
@@ -512,7 +512,7 @@ function App({ user, onLogout }) {
         /* offline or transient — try again next tick */
       }
     }
-    const id = setInterval(poll, 12000)
+    const id = setInterval(poll, 3000)
     const onVisible = () => {
       if (!document.hidden) poll() // catch up the moment the tab is focused
     }
