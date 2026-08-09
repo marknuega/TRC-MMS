@@ -53,8 +53,8 @@ export default function Dashboard({ saved, branches, embedded = false, lockBranc
     [spReport],
   )
   const showTopTech = charts.dashTopTech !== false
-  const showPartsPie = charts.dashPartsPie !== false
-  const hasPartsPie = companyPie.length > 0 || brandPie.some((b) => b.value > 0)
+  const showCompanyPie = charts.dashPartsCompany !== false && companyPie.length > 0
+  const showBrandPie = charts.dashPartsBrand !== false && brandPie.some((b) => b.value > 0)
   const sumBy = (list, keys) =>
     list.reduce((a, r) => {
       keys.forEach((k) => (a[k] = (a[k] || 0) + (r[k] || 0)))
@@ -144,17 +144,17 @@ export default function Dashboard({ saved, branches, embedded = false, lockBranc
                   <Pie data={partsPie} />
                 </div>
 
-                {showPartsPie && hasPartsPie && (
-                  <>
-                    <div className="dash-card">
-                      <h3 className="sp-brand-h">Parts by company</h3>
-                      <Pie data={companyPie} />
-                    </div>
-                    <div className="dash-card">
-                      <h3 className="sp-brand-h">Parts by brand</h3>
-                      <Pie data={brandPie} />
-                    </div>
-                  </>
+                {showCompanyPie && (
+                  <div className="dash-card">
+                    <h3 className="sp-brand-h">Parts by company</h3>
+                    <Pie data={companyPie} />
+                  </div>
+                )}
+                {showBrandPie && (
+                  <div className="dash-card">
+                    <h3 className="sp-brand-h">Parts by brand</h3>
+                    <Pie data={brandPie} />
+                  </div>
                 )}
 
                 <div className="dash-card dash-wide">

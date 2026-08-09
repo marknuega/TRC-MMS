@@ -74,6 +74,8 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
     [report],
   )
   const companyPie = report.companyTotals.map((c) => ({ label: c.company, value: c.qty }))
+  const showCompanyPie = charts.spPartsCompany !== false && companyPie.length > 0
+  const showBrandPie = charts.spPartsBrand !== false && brandPie.some((b) => b.value > 0)
   const hasData = report.grandParts > 0 || report.activity.length > 0 || report.agencies.length > 0
 
   const title = `TRC ${branch || 'All'} - Spare Parts`
@@ -197,14 +199,18 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
             <p className="empty">No saved reports for this month/branch yet.</p>
           ) : (
             <>
-              {charts.sparePartsPie !== false && (companyPie.length > 0 || brandPie.some((b) => b.value > 0)) && (
+              {(showCompanyPie || showBrandPie) && (
                 <div className="pie-row">
-                  <div className="pie-card">
-                    <Pie title="Parts by company" data={companyPie} />
-                  </div>
-                  <div className="pie-card">
-                    <Pie title="Parts by brand" data={brandPie} />
-                  </div>
+                  {showCompanyPie && (
+                    <div className="pie-card">
+                      <Pie title="Parts by company" data={companyPie} />
+                    </div>
+                  )}
+                  {showBrandPie && (
+                    <div className="pie-card">
+                      <Pie title="Parts by brand" data={brandPie} />
+                    </div>
+                  )}
                 </div>
               )}
 

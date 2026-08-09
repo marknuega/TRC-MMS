@@ -48,17 +48,31 @@ export const DEFAULT_OPTIONS = {
   statuses: ['New', 'Refurbish'],
 
   // Chart visibility toggles (admin-managed in Manage Inputs). See DEFAULT_CHARTS.
-  charts: { dashTopTech: true, dashPartsPie: true, sparePartsPie: true },
+  charts: {
+    dashTopTech: true,
+    dashPartsCompany: true,
+    dashPartsBrand: true,
+    spPartsCompany: true,
+    spPartsBrand: true,
+  },
 }
 
 // Default visibility for the pie charts; true = shown. Missing key = shown.
-export const DEFAULT_CHARTS = { dashTopTech: true, dashPartsPie: true, sparePartsPie: true }
+export const DEFAULT_CHARTS = {
+  dashTopTech: true,
+  dashPartsCompany: true,
+  dashPartsBrand: true,
+  spPartsCompany: true,
+  spPartsBrand: true,
+}
 
-// Chart on/off switches shown in Manage Inputs.
+// Chart on/off switches shown in Manage Inputs — one per pie, per page.
 export const CHART_TOGGLES = [
   { key: 'dashTopTech', label: 'Dashboard · Top technicians (pie)' },
-  { key: 'dashPartsPie', label: 'Dashboard · Parts by company & brand (pie)' },
-  { key: 'sparePartsPie', label: 'Spare Parts · Parts pie charts' },
+  { key: 'dashPartsCompany', label: 'Dashboard · Parts by company (pie)' },
+  { key: 'dashPartsBrand', label: 'Dashboard · Parts by brand (pie)' },
+  { key: 'spPartsCompany', label: 'Spare Parts · Parts by company (pie)' },
+  { key: 'spPartsBrand', label: 'Spare Parts · Parts by brand (pie)' },
 ]
 
 // Branches shown in the header selector; the choice appears in the report header/number.

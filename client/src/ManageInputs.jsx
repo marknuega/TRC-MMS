@@ -82,6 +82,17 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
             everywhere. Existing entries keep whatever value they were saved with.
           </p>
 
+          <div className="manage-links">
+            <a
+              className="manage-link-btn"
+              href="https://trcmmswhatsapp-production.up.railway.app/admin.html"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              🔗 WhatsApp Code Map Admin
+            </a>
+          </div>
+
           <div className="manage-controls">
             <label>
               Category

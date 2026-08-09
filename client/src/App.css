@@ -1773,6 +1773,33 @@ h2 {
   flex: 1;
   min-width: 0;
 }
+/* External link buttons in Manage inputs (e.g. WhatsApp code-map admin). */
+.manage-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: 0 0 1.1rem;
+}
+.manage-link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  height: var(--control-h);
+  padding: 0 1.15rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-h);
+  font-weight: 600;
+  font-size: 0.92rem;
+  text-decoration: none;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.manage-link-btn:hover {
+  border-color: var(--primary);
+  background: var(--surface-3);
+}
+
 /* Chart visibility toggles in Manage inputs. */
 .manage-charts {
   margin-top: 1.6rem;
