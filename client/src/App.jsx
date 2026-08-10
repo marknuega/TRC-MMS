@@ -1754,11 +1754,11 @@ function App({ user, onLogout }) {
             </h2>
             <div className="breakdown-actions">
               <a
-                href="https://wa.me/966594291523"
+                href="https://chat.whatsapp.com/GseaRTA11rvBvlAPBjunb5"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="btn-whatsapp"
-                title="Open WhatsApp (Ntksajeddah2020 · TRCMTJDailyActivityReport) to paste the copied report"
+                title="Open the TRCMTJDailyActivityReport WhatsApp group to paste the copied report"
               >
                 🟢 WhatsApp
               </a>
