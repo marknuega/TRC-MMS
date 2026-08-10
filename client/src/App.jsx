@@ -855,20 +855,17 @@ function App({ user, onLogout }) {
   // until you Save, which mints the real REP-#### number.
   const reports = useMemo(() => {
     // All Branches: the working set already holds every branch's entries for this
-    // mode. Group them by day so all branches with data on the same day merge into
-    // one exportable report (branches with no data that day simply don't appear).
+    // mode. Consolidate them into ONE report so every branch merges into a single
+    // exportable document — maintenance and transmittal alike (branches with no
+    // data simply don't contribute).
     if (isAllBranches) {
-      const id = `${ALL_BRANCHES}-${nextDocId}` // e.g. "All Branches-TRANS-0002"
+      if (!entries.length) return []
+      const id = `${ALL_BRANCHES}-${nextDocId}` // e.g. "All Branches-REP-0001"
       const handover = { branch: ALL_BRANCHES, mode, transmittedBy: reportTransmittedBy, receivedBy: reportReceivedBy }
-      // Transmittal: one consolidated table across every date (the table carries a
-      // per-entry Date column). Maintenance stays one report per day.
-      if (mode === 'transmittal') {
-        if (!entries.length) return []
-        const dates = [...new Set(entries.map((e) => fmtLongDate(e.reportDate)).filter(Boolean))]
-        const label = dates.length <= 1 ? dates[0] ?? '' : `${dates[0]} … ${dates[dates.length - 1]}`
-        return [buildDateReport(label, id, entries, handover)]
-      }
-      return groupReports(entries).map((g) => buildDateReport(g.dateLabel, id, g.entries, handover))
+      // Label spans the date range the merged entries cover.
+      const dates = [...new Set(entries.map((e) => fmtLongDate(e.reportDate)).filter(Boolean))]
+      const label = dates.length <= 1 ? dates[0] ?? '' : `${dates[0]} … ${dates[dates.length - 1]}`
+      return [buildDateReport(label, id, entries, handover)]
     }
     return groupReports(entries).map((g) =>
       buildDateReport(g.dateLabel, repLabel(nextDocId, branch, mode), g.entries, {
