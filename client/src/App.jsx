@@ -819,20 +819,14 @@ function App({ user, onLogout }) {
   // One report per date, newest first. The live view uses the draft (next) id
   // until you Save, which mints the real REP-#### number.
   const reports = useMemo(() => {
-    // All Branches: merge every branch's saved doc for the selected date into one,
-    // respecting the current document type (report vs transmittal).
+    // All Branches: the working set already holds every branch's entries for this
+    // mode. Group them by day so all branches with data on the same day merge into
+    // one exportable report (branches with no data that day simply don't appear).
     if (isAllBranches) {
-      const dl = dmyOf(form.reportDate)
-      const wantTx = mode === 'transmittal'
-      const byBranch = new Map()
-      for (const r of saved ?? []) {
-        if ((String(r.mode).toUpperCase() === 'TRANSMITTAL') !== wantTx || r.dateLabel !== dl) continue
-        const prev = byBranch.get(r.branch || '')
-        if (!prev || (r.seq ?? 0) > (prev.seq ?? 0)) byBranch.set(r.branch || '', r)
-      }
-      const merged = [...byBranch.values()].flatMap((r) => (Array.isArray(r.entries) ? r.entries : []))
-      if (!merged.length) return []
-      return [buildDateReport(dl, 'ALL-BRANCHES', merged, { branch: ALL_BRANCHES, mode, transmittedBy, receivedBy })]
+      const id = `${ALL_BRANCHES}-${nextDocId}` // e.g. "All Branches-TRANS-0002"
+      return groupReports(entries).map((g) =>
+        buildDateReport(g.dateLabel, id, g.entries, { branch: ALL_BRANCHES, mode, transmittedBy, receivedBy }),
+      )
     }
     return groupReports(entries).map((g) =>
       buildDateReport(g.dateLabel, repLabel(nextDocId, branch, mode), g.entries, {
@@ -1252,23 +1246,29 @@ function App({ user, onLogout }) {
             <div className="handover-grid">
               <label>
                 Transmitted by
-                <select value={transmittedBy} onChange={changeTransmittedBy}>
-                  <option value="">— select —</option>
-                  {options.technicians.map((t) => (
-                    <option key={t}>{t}</option>
-                  ))}
-                </select>
+                <input
+                  list="handover-names"
+                  value={transmittedBy}
+                  onChange={changeTransmittedBy}
+                  placeholder="Select or type — separate multiple with commas"
+                />
               </label>
               <label>
                 Received by
-                <select value={receivedBy} onChange={changeReceivedBy}>
-                  <option value="">— select —</option>
-                  {options.technicians.map((t) => (
-                    <option key={t}>{t}</option>
-                  ))}
-                </select>
+                <input
+                  list="handover-names"
+                  value={receivedBy}
+                  onChange={changeReceivedBy}
+                  placeholder="Select or type — separate multiple with commas"
+                />
               </label>
             </div>
+            <datalist id="handover-names">
+              {options.technicians.map((t) => (
+                <option key={t} value={t} />
+              ))}
+            </datalist>
+            <p className="saved-hint">Tip: enter more than one name separated by commas — e.g. “AMIR, Shabir”.</p>
           </section>
         )}
 
