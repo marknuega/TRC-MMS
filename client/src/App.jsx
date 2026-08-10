@@ -31,6 +31,7 @@ import SparePartsReport from './SparePartsReport'
 import Dashboard from './Dashboard'
 import AdminUsers from './AdminUsers'
 import ReferenceCard from './ReferenceCard'
+import { Credit, CREDIT_HTML } from './copyright'
 import {
   groupReports,
   buildDateReport,
@@ -999,7 +1000,7 @@ function App({ user, onLogout }) {
         `td:last-child{text-align:left;word-break:break-word;overflow-wrap:anywhere}` +
         `p.foot{margin-top:4px;font-size:7.5px;color:#555}</style></head><body>` +
         `<h1>${title}</h1>${monthlyTableHtml(colgroup)}` +
-        `<p class="foot">Software Developed by Muhammad Amir · MT# MT1063 · © 2026 Muhammad Amir. All rights reserved.</p>` +
+        `<p class="foot">${CREDIT_HTML}</p>` +
         `</body></html>`
     printDocument(html)
   }
@@ -1916,7 +1917,7 @@ function App({ user, onLogout }) {
           {page === 'admin' && isAdmin && <AdminUsers currentUser={user} embedded />}
 
           <footer className="app-footer">
-            Software Developed by Muhammad Amir · MT# MT1063 · © 2026 Muhammad Amir. All rights reserved.
+            <Credit />
           </footer>
         </main>
       </div>
@@ -2004,7 +2005,7 @@ function TransmittalPrint({ report, descByMaterial = {} }) {
       </div>
 
       <p className="print-footer">
-        Software Developed by Muhammad Amir · MT# MT1063 · © 2026 Muhammad Amir. All rights reserved.
+        <Credit />
       </p>
     </section>
   )
@@ -2059,7 +2060,7 @@ function ReportPrint({ report }) {
       <SplitColumns byType={devices} />
 
       <p className="print-footer">
-        Software Developed by Muhammad Amir · MT# MT1063 · © 2026 Muhammad Amir. All rights reserved.
+        <Credit />
       </p>
     </section>
   )

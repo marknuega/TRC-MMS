@@ -6,6 +6,7 @@
 import { useMemo, useState } from 'react'
 import { monthEntries, buildSparePartsReport } from './report'
 import { Pie } from './Pie'
+import { CREDIT_HTML } from './copyright'
 
 const ALL = '__all__'
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
@@ -212,7 +213,7 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
           ? `<h2>Agency totals</h2><table><thead><tr><th>Agency</th><th class="c">Maint.</th><th class="c">Prog.</th><th class="c">Install</th><th class="c">Dismantle</th></tr></thead>` +
             `<tbody>${agencyRows}<tr><td class="tot">TOTAL</td><td class="tot c">${agencyGrand.maintenance}</td><td class="tot c">${agencyGrand.programming}</td><td class="tot c">${agencyGrand.install}</td><td class="tot c">${agencyGrand.dismantle}</td></tr></tbody></table>`
           : '') +
-        `<p class="meta" style="margin-top:16px">Software Developed by Muhammad Amir · MT# MT1063 · © 2026 Muhammad Amir. All rights reserved.</p>` +
+        `<p class="meta" style="margin-top:16px">${CREDIT_HTML}</p>` +
         `</body></html>`,
     )
     w.document.close()

@@ -6,6 +6,7 @@
 import { useState } from 'react'
 import { login, requestCredentials } from './api'
 import { BRANCHES } from './options'
+import { Credit } from './copyright'
 
 export default function LoginPage({ onAuthed }) {
   const [tab, setTab] = useState('login') // login | request
@@ -122,7 +123,7 @@ export default function LoginPage({ onAuthed }) {
           </form>
         )}
       </div>
-      <footer className="app-footer">Software Developed by Muhammad Amir · MT# MT1063 · © 2026 Muhammad Amir. All rights reserved.</footer>
+      <footer className="app-footer"><Credit /></footer>
     </div>
   )
 }
