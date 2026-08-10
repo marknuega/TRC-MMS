@@ -684,6 +684,29 @@ h2 {
 .breakdown-head .save-report:hover:not(:disabled) {
   background: var(--primary-hover);
 }
+.breakdown-head .btn-whatsapp {
+  height: 2.4rem;
+  padding: 0 1.15rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: #25d366;
+  color: #06301b;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: filter 0.12s, transform 0.03s;
+}
+.breakdown-head .btn-whatsapp:hover {
+  filter: brightness(1.08);
+}
+.breakdown-head .btn-whatsapp:active {
+  transform: translateY(1px);
+}
 .breakdown textarea {
   width: 100%;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;

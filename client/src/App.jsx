@@ -344,6 +344,7 @@ function App({ user, onLogout }) {
   const [entries, setEntries] = useState([])
   const [form, setForm] = useState(emptyForm)
   const [error, setError] = useState(null)
+  const [copied, setCopied] = useState(false)
   const [loading, setLoading] = useState(true)
   const [options, setOptions] = useState(DEFAULT_OPTIONS)
   const [saved, setSaved] = useState([])
@@ -1088,14 +1089,15 @@ function App({ user, onLogout }) {
   const reportResults = useMemo(() => searchInside(dailySaved, savedSearch), [dailySaved, savedSearch])
   const txResults = useMemo(() => searchInside(txSaved, savedTxSearch), [txSaved, savedTxSearch])
 
-  function handleDownloadTxt() {
-    if (!reports.length) return
-    // Name after the newest report, like the MOTECO export.
-    const top = reports[0]
-    const id = top.reportId ?? 'REP'
-    const stamp = top.dateLabel.replace(/\//g, '')
-    const label = isTransmittal ? 'Transmittal' : 'Maintenance'
-    downloadText(`TRC-${label}-Report-${id}-${stamp}.txt`, combinedTxt)
+  async function handleCopyTxt() {
+    if (!combinedTxt) return
+    try {
+      await navigator.clipboard.writeText(combinedTxt)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch (err) {
+      setError(`Could not copy: ${err.message}`)
+    }
   }
 
   // One saved-snapshot row (Edit -> Load / Delete).
@@ -1751,6 +1753,15 @@ function App({ user, onLogout }) {
               {reports.length > 0 && <span className="hint">(next: {nextDocId} · unsaved)</span>}
             </h2>
             <div className="breakdown-actions">
+              <a
+                href="https://wa.me/966594291523"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-whatsapp"
+                title="Open WhatsApp (Ntksajeddah2020 · TRCMTJDailyActivityReport) to paste the copied report"
+              >
+                🟢 WhatsApp
+              </a>
               <button
                 type="button"
                 className="save-report"
@@ -1760,8 +1771,8 @@ function App({ user, onLogout }) {
               >
                 💾 Save report
               </button>
-              <button type="button" className="btn-txt" onClick={handleDownloadTxt} disabled={!reports.length}>
-                ⭳ Text
+              <button type="button" className="btn-txt" onClick={handleCopyTxt} disabled={!reports.length}>
+                {copied ? '✅ Copied' : '⧉ Copy'}
               </button>
               <button type="button" className="btn-pdf" onClick={() => window.print()} disabled={!reports.length}>
                 ⭳ PDF
