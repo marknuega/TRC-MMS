@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { prisma } from '../db.js'
 import { branchWhere, writeBranch, canAccessBranch } from '../scope.js'
+import { buildDateReport, buildTxt } from '../../../client/src/report.js'
 
 const router = Router()
 
@@ -13,6 +14,11 @@ const dmy = (value) => {
   const d = new Date(value)
   return `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`
 }
+
+// Branch-prefixed id, e.g. "MAKKAH-REP-0001" — mirrors the client's repLabel()
+// so the WhatsApp-bound text matches what the Report page displayed.
+const repLabel = (id, branch, mode) =>
+  `${branch ? `${branch.toUpperCase()}-` : ''}${mode === 'transmittal' ? String(id ?? '-').replace('REP-', 'TRANS-') : id ?? '-'}`
 
 // Deduct stock for materials/faults that match an inventory item (by itemCode,
 // case-insensitive). Quantities across the snapshot are summed per item, and
@@ -90,6 +96,32 @@ router.get('/', async (req, res, next) => {
     ])
     // Per-mode "next id" previews so each document type numbers independently.
     res.json({ nextReportId: docId('report', repNo), nextTransmittalId: docId('transmittal', transNo), reports })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// GET /api/saved-reports/daily-text?date=YYYY-MM-DD&mode=report - the same
+// combined "Report text" the Report page shows, for every saved report whose
+// dateLabel matches that calendar date. Used by the WhatsApp integration's
+// scheduled daily send, so the report formatting lives in one place.
+router.get('/daily-text', async (req, res, next) => {
+  try {
+    const mode = String(req.query?.mode ?? 'report').trim().toLowerCase() === 'transmittal' ? 'transmittal' : 'report'
+    const dateLabel = dmy(req.query?.date ? req.query.date : new Date())
+    const reports = await prisma.savedReport.findMany({
+      where: { ...branchWhere(req, req.query.branch), mode, dateLabel },
+      orderBy: { seq: 'asc' },
+    })
+    if (reports.length === 0) {
+      return res.json({ text: '', count: 0, dateLabel })
+    }
+    const text = reports
+      .map((r) =>
+        buildTxt(buildDateReport(r.dateLabel, repLabel(r.reportId, r.branch, r.mode), r.entries, { branch: r.branch, mode: r.mode })),
+      )
+      .join('\n\n\n')
+    res.json({ text, count: reports.length, dateLabel })
   } catch (err) {
     next(err)
   }
