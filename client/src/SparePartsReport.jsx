@@ -20,6 +20,10 @@ const ACT_COLS = [
   ['install', 'Installation'],
   ['dismantle', 'Dismantle'],
 ]
+// Company display order: MOT first, then MOI, then any others, with "—" (no
+// company) last. Used for the cards and the exports alike.
+const companyRank = (c) => (c === 'MOT' ? 0 : c === 'MOI' ? 1 : c === '—' ? 9 : 5)
+
 // Regroup one brand's model blocks (rows carry a company) into per-company
 // groups, each keeping its model sub-blocks. -> [{ company, models, total }].
 function splitByCompany(models) {
@@ -35,7 +39,7 @@ function splitByCompany(models) {
   }
   const modelOrder = models.map((m) => m.model)
   return [...byCompany.keys()]
-    .sort((a, b) => a.localeCompare(b))
+    .sort((a, b) => companyRank(a) - companyRank(b) || a.localeCompare(b))
     .map((company) => {
       const mm = byCompany.get(company)
       const modelList = modelOrder
@@ -71,6 +75,16 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
   const grouped = useMemo(
     () => Object.keys(report.parts).map((type) => ({ type, groups: splitByCompany(report.parts[type]) })),
     [report],
+  )
+  // Flatten to one card per brand·company, ordered company-first (all MOT on the
+  // top rows, then MOI, then the rest) — a stable sort keeps AIRBUS/SEPURA/HYTERA
+  // order within each company band.
+  const cards = useMemo(
+    () =>
+      grouped
+        .flatMap(({ type, groups }) => groups.map((grp) => ({ type, grp })))
+        .sort((a, b) => companyRank(a.grp.company) - companyRank(b.grp.company)),
+    [grouped],
   )
   const brandPie = useMemo(
     () => Object.keys(report.parts).map((type) => ({ label: type, value: report.parts[type].reduce((s, m) => s + m.total, 0) })),
@@ -284,11 +298,10 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
               )}
 
               <div className="sp-grid">
-                {grouped.flatMap(({ type, groups }) =>
-                  groups.map((grp) => {
-                    const key = `${type}|${grp.company}`
-                    const cardOpen = !collapsed.has(key)
-                    return (
+                {cards.map(({ type, grp }) => {
+                  const key = `${type}|${grp.company}`
+                  const cardOpen = !collapsed.has(key)
+                  return (
                       <div className="sp-brand" key={key}>
                         <button
                           type="button"
@@ -335,8 +348,7 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
                           ))}
                       </div>
                     )
-                  }),
-                )}
+                })}
               </div>
 
               {report.companyTotals.length > 0 && (
