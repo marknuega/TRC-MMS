@@ -86,6 +86,21 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
         .sort((a, b) => companyRank(a.company) - companyRank(b.company)),
     [grouped],
   )
+  // Group the cards into per-company bands (MOT, then MOI, then the rest). Each
+  // band renders as its own grid, so MOT always fills its own row(s) before MOI
+  // starts on a fresh row.
+  const bands = useMemo(() => {
+    const order = []
+    const byCompany = new Map()
+    for (const c of cards) {
+      if (!byCompany.has(c.company)) {
+        byCompany.set(c.company, [])
+        order.push(c.company)
+      }
+      byCompany.get(c.company).push(c)
+    }
+    return order.map((company) => ({ company, items: byCompany.get(company) }))
+  }, [cards])
   const brandPie = useMemo(
     () => Object.keys(report.parts).map((type) => ({ label: type, value: report.parts[type].reduce((s, m) => s + m.total, 0) })),
     [report],
@@ -297,12 +312,13 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
                 </div>
               )}
 
-              <div className="sp-grid">
-                {cards.map(({ type, company, model }) => {
-                  const key = `${type}|${model.model}|${company}`
-                  const cardOpen = !collapsed.has(key)
-                  return (
-                    <div className="sp-brand" key={key}>
+              {bands.map(({ company, items }) => (
+                <div className="sp-grid" key={company}>
+                  {items.map(({ type, company: co, model }) => {
+                    const key = `${type}|${model.model}|${co}`
+                    const cardOpen = !collapsed.has(key)
+                    return (
+                      <div className="sp-brand" key={key}>
                       <button
                         type="button"
                         className="manage-toggle sp-card-toggle"
@@ -342,10 +358,11 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
                           </div>
                         </div>
                       )}
-                    </div>
-                  )
-                })}
-              </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              ))}
 
               {report.companyTotals.length > 0 && (
                 <div className="sp-block">
