@@ -28,9 +28,9 @@ const POLL_MS = 4000
 // ---- Fallback data (used only until the live map loads / if it fails) ----
 const FALLBACK = {
   equipmentCodes: {
-    H: 'Airbus TH1n', R: 'Airbus THR9', M: 'Airbus TMR880i', P: 'Sepura STP9000',
-    C: 'Sepura SRG Carkit', D: 'Sepura SRG Desktop', K: 'Sepura SRG Bike',
-    T: 'Hytera MT680', E: 'Hytera PT580H', N: 'Hytera PT590',
+    H: 'Airbus TH1n', R: 'Airbus THR9', M: 'Airbus TMR880i', T: 'Sepura STP9000',
+    C: 'Sepura SRG Carkit', D: 'Sepura SRG Desktop', B: 'Sepura SRG Bike',
+    S: 'Hytera MT680', E: 'Hytera PT580H', N: 'Hytera PT590',
   },
   components: {
     10: 'Antenna Short (/S)', 11: 'Antenna Big (/B)', 12: 'Front Cover A', 13: 'Rear Cover B',
@@ -39,7 +39,7 @@ const FALLBACK = {
     44: 'Microphone', 45: 'Speaker Low', 46: 'Speaker Mid', 95: 'Battery Pack',
     97: 'Charging Pin', 98: 'Charger', 99: 'Power Supply Unit',
   },
-  actions: { C: 'Change', N: 'New', R: 'Repair', I: 'Install', P: 'Program / Reprogram', D: 'Dismantle' },
+  actions: { C: 'Change', N: 'New', R: 'Repair', I: 'Install/Re-Install', P: 'Program/Re-program', D: 'Dismantle' },
   companies: { MI: 'MOI', MT: 'MOTECO' },
   agencies: { PSD: 'PSD', CD: 'CD', PRI: 'PRI', MEWA: 'MEWA', KINGDOM: 'KINGDOM' },
   technicians: { 1: 'Amir', 2: 'Muhammad Rashid', 3: 'Imran', 4: 'Rasheedullah', 5: 'Maroof', 6: 'Baghdad', 7: 'Engr. Khalid', 8: 'Engr. Hamed' },
