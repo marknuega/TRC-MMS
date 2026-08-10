@@ -1753,12 +1753,15 @@ function App({ user, onLogout }) {
               {reports.length > 0 && <span className="hint">(next: {nextDocId} · unsaved)</span>}
             </h2>
             <div className="breakdown-actions">
+              <button type="button" className="btn-txt" onClick={handleCopyTxt} disabled={!reports.length}>
+                {copied ? '✅ Copied' : '⧉ Copy'}
+              </button>
               <a
-                href="https://wa.me/966594291523"
+                href="https://chat.whatsapp.com/GseaRTA11rvBvlAPBjunb5"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="btn-whatsapp"
-                title="Open WhatsApp (Ntksajeddah2020 · TRCMTJDailyActivityReport) to paste the copied report"
+                title="Open the TRCMTJDailyActivityReport WhatsApp group to paste the copied report"
               >
                 🟢 WhatsApp
               </a>
@@ -1770,9 +1773,6 @@ function App({ user, onLogout }) {
                 title={isAllBranches ? 'All-Branches is a merged read-only view' : undefined}
               >
                 💾 Save report
-              </button>
-              <button type="button" className="btn-txt" onClick={handleCopyTxt} disabled={!reports.length}>
-                {copied ? '✅ Copied' : '⧉ Copy'}
               </button>
               <button type="button" className="btn-pdf" onClick={() => window.print()} disabled={!reports.length}>
                 ⭳ PDF
