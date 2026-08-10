@@ -257,7 +257,7 @@ function DeviceTable({ rows }) {
           return (
             <tr key={code}>
               <td className="ref-code">{code}</td>
-              <td>
+              <td className="ref-dev-name">
                 {p.before}
                 <strong className="ref-hit">{p.hit}</strong>
                 {p.after}

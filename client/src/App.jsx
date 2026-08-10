@@ -381,6 +381,7 @@ function App({ user, onLogout }) {
   const [editId, setEditId] = useState(null) // entry id being edited in the modal
   const [editForm, setEditForm] = useState(null)
   const lastEntriesSig = useRef('') // baseline for the live-refresh poll
+  const lastSavedSig = useRef('') // baseline for saved-report changes (any source)
 
   // Non-admins are pinned to their own branch everywhere.
   useEffect(() => {
@@ -539,7 +540,14 @@ function App({ user, onLogout }) {
   async function refreshSaved() {
     try {
       const data = await getSavedReports()
-      setSaved(data.reports)
+      const reports = data.reports ?? []
+      // Only swap state when something actually changed, so polling this every
+      // tick doesn't churn re-renders across the saved-report–derived pages.
+      const sig = reports.map((r) => `${r.id}:${r.seq ?? ''}:${r.savedAt ?? r.updatedAt ?? ''}`).join('|')
+      if (sig !== lastSavedSig.current) {
+        lastSavedSig.current = sig
+        setSaved(reports)
+      }
     } catch {
       /* leave the saved list as-is if the endpoint is unavailable */
     }
@@ -573,12 +581,16 @@ function App({ user, onLogout }) {
         const sig = entriesSig(list)
         if (lastEntriesSig.current && sig !== lastEntriesSig.current) {
           setEntries(list) // a new/changed entry arrived
-          refreshSaved() // keep Dashboard / Monthly totals in step
         }
         lastEntriesSig.current = sig
       } catch {
         /* offline or transient — try again next tick */
       }
+      // Independently keep the saved-report–derived pages (Spare Parts, Dashboard,
+      // Monthly, Agency, saved lists) live — a report saved on another tab/device
+      // or via the WhatsApp bridge changes saved reports without touching this
+      // tab's working entries. Signature-gated, so it only re-renders on a change.
+      if (!cancelled) refreshSaved()
     }
     const id = setInterval(poll, 5000)
     const onVisible = () => {

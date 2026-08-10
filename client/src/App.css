@@ -2390,6 +2390,10 @@ h2 {
   font-size: 0.85em;
   white-space: nowrap;
 }
+/* Keep the model name on one line to save vertical space. */
+.ref-table .ref-dev-name {
+  white-space: nowrap;
+}
 .ref-table th {
   border: 1px solid var(--border);
   padding: 0.3rem 0.6rem;
