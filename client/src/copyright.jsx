@@ -4,8 +4,11 @@
  */
 
 // Single source of truth for the author's copyright + professional credentials.
-// Shown in the app footer and on every exported / printed document, so the
-// wording only ever changes here.
+//
+// Two audiences, on purpose:
+//   • App UI footers  -> <Credit />: two columns, credentials on the right.
+//   • Exported/printed reports (PDF/Excel/print) -> plain copyright ONLY,
+//     no credentials. Use COPYRIGHT_HTML (strings) or <Copyright /> (JSX).
 
 export const AUTHOR = 'Muhammad Amir'
 export const DEVELOPED_BY = `Software Developed by ${AUTHOR} MT# MT1063`
@@ -13,27 +16,31 @@ export const COPYRIGHT = `© 2026 ${AUTHOR}. All rights reserved.`
 export const CREDENTIAL = 'Certified Electronics and Electrical Technician'
 export const LICENSE_ELECTRICAL = 'Electrical License CLN-NQ-***6092'
 export const LICENSE_ELECTRONICS = 'Electronics License CLN-COC-***204'
+export const LICENSE_LINE = `${LICENSE_ELECTRICAL} · ${LICENSE_ELECTRONICS}`
 
-// Plain-text lines, in display order (used by the JSX <Credit /> footer). The
-// empty string renders as a blank line separating the copyright from credentials.
-export const CREDIT_LINES = [
-  DEVELOPED_BY,
-  COPYRIGHT,
-  '',
-  CREDENTIAL,
-  LICENSE_ELECTRICAL,
-  LICENSE_ELECTRONICS,
-]
+// Plain copyright, one line — the ONLY thing shown on exported/printed reports.
+export const COPYRIGHT_HTML = `Software Developed by ${AUTHOR} · MT# MT1063 · ${COPYRIGHT}`
 
-// Same lines as an HTML fragment, for print / PDF export template strings.
-export const CREDIT_HTML = CREDIT_LINES.join('<br>')
+// JSX plain copyright for on-page print sheets (Save-as-PDF report views).
+export function Copyright() {
+  return COPYRIGHT_HTML
+}
 
-// Footer credit block used across the app UI. Renders each line, break-separated.
-export function Credit(props) {
-  return CREDIT_LINES.map((line, i) => (
-    <span key={i}>
-      {i > 0 && <br />}
-      {line}
+// App-UI footer credit block: left column = author/copyright, right column =
+// credentials/licenses. Shown in the live app only, never on exports.
+export function Credit() {
+  return (
+    <span style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', width: '100%', textAlign: 'left' }}>
+      <span>
+        {DEVELOPED_BY}
+        <br />
+        {COPYRIGHT}
+      </span>
+      <span style={{ textAlign: 'right' }}>
+        {CREDENTIAL}
+        <br />
+        {LICENSE_LINE}
+      </span>
     </span>
-  ))
+  )
 }

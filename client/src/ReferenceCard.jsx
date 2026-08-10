@@ -17,7 +17,7 @@
 // The bundled constants are only a fallback for when that fetch fails (offline).
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { CREDIT_HTML } from './copyright'
+import { COPYRIGHT_HTML } from './copyright'
 
 // Public, read-only mirror of the whatsapp code map (no PIN, CORS-open).
 const CODEMAP_URL = 'https://trcmmswhatsapp-production.up.railway.app/codemap'
@@ -139,7 +139,7 @@ function printReference(data) {
   </div>
   <div class="grp" style="margin-top:8px"><h3>Technician ID</h3><table>${codeRows(technicians)}</table></div>
 
-  <div class="foot">${CREDIT_HTML}</div>
+  <div class="foot">${COPYRIGHT_HTML}</div>
 </body></html>`
 
   const iframe = document.createElement('iframe')

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getInventory, createInventory, updateInventory, deleteInventory, importInventory, getInventoryTxns } from './api'
-import { CREDIT_HTML } from './copyright'
+import { COPYRIGHT_HTML } from './copyright'
 
 const TYPE_LABEL = { usage: 'Usage', adjustment: 'Adjustment', import: 'Import' }
 const esc = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -111,7 +111,7 @@ export default function Inventory({ embedded = false, branch = '' }) {
         `<h1>Transaction history — ${esc(h.item.sku)}</h1><p>${esc(h.item.itemCode)} · printed ${esc(stamp(Date.now()))}</p>` +
         (h.item.remarks ? `<p style="margin:-8px 0 14px;color:#111"><b>Remarks:</b> ${esc(h.item.remarks)}</p>` : '') +
         `<table><thead><tr>${head.map((x) => `<th>${esc(x)}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table>` +
-        `<p style="margin-top:14px">${CREDIT_HTML}</p>` +
+        `<p style="margin-top:14px">${COPYRIGHT_HTML}</p>` +
         `</body></html>`,
     )
     w.document.close()

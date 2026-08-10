@@ -31,7 +31,7 @@ import SparePartsReport from './SparePartsReport'
 import Dashboard from './Dashboard'
 import AdminUsers from './AdminUsers'
 import ReferenceCard from './ReferenceCard'
-import { Credit, CREDIT_HTML } from './copyright'
+import { Credit, Copyright, COPYRIGHT_HTML } from './copyright'
 import {
   groupReports,
   buildDateReport,
@@ -1000,7 +1000,7 @@ function App({ user, onLogout }) {
         `td:last-child{text-align:left;word-break:break-word;overflow-wrap:anywhere}` +
         `p.foot{margin-top:4px;font-size:7.5px;color:#555}</style></head><body>` +
         `<h1>${title}</h1>${monthlyTableHtml(colgroup)}` +
-        `<p class="foot">${CREDIT_HTML}</p>` +
+        `<p class="foot">${COPYRIGHT_HTML}</p>` +
         `</body></html>`
     printDocument(html)
   }
@@ -2005,7 +2005,7 @@ function TransmittalPrint({ report, descByMaterial = {} }) {
       </div>
 
       <p className="print-footer">
-        <Credit />
+        <Copyright />
       </p>
     </section>
   )
@@ -2060,7 +2060,7 @@ function ReportPrint({ report }) {
       <SplitColumns byType={devices} />
 
       <p className="print-footer">
-        <Credit />
+        <Copyright />
       </p>
     </section>
   )
