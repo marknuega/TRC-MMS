@@ -76,14 +76,14 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
     () => Object.keys(report.parts).map((type) => ({ type, groups: splitByCompany(report.parts[type]) })),
     [report],
   )
-  // Flatten to one card per brand·company, ordered company-first (all MOT on the
-  // top rows, then MOI, then the rest) — a stable sort keeps AIRBUS/SEPURA/HYTERA
-  // order within each company band.
+  // One card per brand·MODEL·company (every device gets its own card), ordered
+  // company-first (all MOT on the top rows, then MOI, then the rest). A stable
+  // sort keeps AIRBUS/SEPURA/HYTERA + the fixed model order within each band.
   const cards = useMemo(
     () =>
       grouped
-        .flatMap(({ type, groups }) => groups.map((grp) => ({ type, grp })))
-        .sort((a, b) => companyRank(a.grp.company) - companyRank(b.grp.company)),
+        .flatMap(({ type, groups }) => groups.flatMap((grp) => grp.models.map((model) => ({ type, company: grp.company, model }))))
+        .sort((a, b) => companyRank(a.company) - companyRank(b.company)),
     [grouped],
   )
   const brandPie = useMemo(
@@ -298,56 +298,52 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
               )}
 
               <div className="sp-grid">
-                {cards.map(({ type, grp }) => {
-                  const key = `${type}|${grp.company}`
+                {cards.map(({ type, company, model }) => {
+                  const key = `${type}|${model.model}|${company}`
                   const cardOpen = !collapsed.has(key)
                   return (
-                      <div className="sp-brand" key={key}>
-                        <button
-                          type="button"
-                          className="manage-toggle sp-card-toggle"
-                          onClick={() => toggleCard(key)}
-                          aria-expanded={cardOpen}
-                        >
-                          <span>
-                            {type} · {grp.company} <span className="hint">({grp.total})</span>
-                          </span>
-                          <span className="chev">{cardOpen ? '▲' : '▼'}</span>
-                        </button>
-                        {cardOpen &&
-                          grp.models.map((m) => (
-                            <div className="sp-model" key={m.model}>
-                              <h4 className="sp-model-h">
-                                {type} {m.model} · {grp.company}
-                              </h4>
-                              <div className="inv-scroll">
-                                <table className="inv-table sp-table">
-                                  <thead>
-                                    <tr>
-                                      <th className="num">#</th>
-                                      <th>Part</th>
-                                      <th className="num">Qty</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {m.rows.map((r, i) => (
-                                      <tr key={r.part}>
-                                        <td className="num idx">{i + 1}</td>
-                                        <td className="nowrap">{r.part}</td>
-                                        <td className="num">{r.qty}</td>
-                                      </tr>
-                                    ))}
-                                    <tr className="totals">
-                                      <td colSpan={2}>TOTAL {type} {m.model}</td>
-                                      <td className="num">{m.total}</td>
-                                    </tr>
-                                  </tbody>
-                                </table>
-                              </div>
-                            </div>
-                          ))}
-                      </div>
-                    )
+                    <div className="sp-brand" key={key}>
+                      <button
+                        type="button"
+                        className="manage-toggle sp-card-toggle"
+                        onClick={() => toggleCard(key)}
+                        aria-expanded={cardOpen}
+                      >
+                        <span>
+                          {type} {model.model} · {company} <span className="hint">({model.total})</span>
+                        </span>
+                        <span className="chev">{cardOpen ? '▲' : '▼'}</span>
+                      </button>
+                      {cardOpen && (
+                        <div className="sp-model">
+                          <div className="inv-scroll">
+                            <table className="inv-table sp-table">
+                              <thead>
+                                <tr>
+                                  <th className="num">#</th>
+                                  <th>Part</th>
+                                  <th className="num">Qty</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {model.rows.map((r, i) => (
+                                  <tr key={r.part}>
+                                    <td className="num idx">{i + 1}</td>
+                                    <td className="nowrap">{r.part}</td>
+                                    <td className="num">{r.qty}</td>
+                                  </tr>
+                                ))}
+                                <tr className="totals">
+                                  <td colSpan={2}>TOTAL {type} {model.model}</td>
+                                  <td className="num">{model.total}</td>
+                                </tr>
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
                 })}
               </div>
 
