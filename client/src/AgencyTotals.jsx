@@ -10,10 +10,10 @@ import { ALL_BRANCHES } from './options'
 const today = () => new Date().toISOString().slice(0, 10)
 const up = (v) => String(v ?? '').trim().toUpperCase()
 
-// dd/mm/yyyy -> Date (local midnight), or null.
-function parseDmy(label) {
-  const m = String(label || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
-  return m ? new Date(+m[3], +m[2] - 1, +m[1]) : null
+// yyyy-mm-dd (an entry's own service date) -> Date (local midnight), or null.
+function parseIso(v) {
+  const m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null
 }
 
 // Inclusive [start, end] for the period containing refDate.
@@ -41,20 +41,19 @@ export default function AgencyTotals({ saved, branches, embedded = false, lockBr
 
   const [start, end] = useMemo(() => periodRange(refDate, period), [refDate, period])
 
-  // Latest saved 'report' per date within the period + branch → flatten entries.
+  // Aggregate every saved report's entries by each entry's own service date
+  // within the period (reports are disjoint snapshots — saving clears the set).
   const rows = useMemo(() => {
-    const byDay = new Map()
+    const entries = []
     for (const r of saved ?? []) {
       if (up(r.mode) === 'TRANSMITTAL') continue
       if (branch && up(r.branch) !== up(branch)) continue
-      const d = parseDmy(r.dateLabel)
-      if (!d || d < start || d > end) continue
-      // Keep each branch's day separate so "All branches" merges every branch.
-      const key = `${up(r.branch)}|${r.dateLabel}`
-      const prev = byDay.get(key)
-      if (!prev || (r.seq ?? 0) > (prev.seq ?? 0)) byDay.set(key, r)
+      for (const e of Array.isArray(r.entries) ? r.entries : []) {
+        const d = parseIso(e.reportDate)
+        if (!d || d < start || d > end) continue
+        entries.push(e)
+      }
     }
-    const entries = [...byDay.values()].flatMap((r) => (Array.isArray(r.entries) ? r.entries : []))
     return agencyBlocks(entries)
   }, [saved, branch, start, end])
 

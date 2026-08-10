@@ -156,6 +156,10 @@ router.post('/', async (req, res, next) => {
         },
       })
       await applyInventoryUsage(tx, snapshot, created.reportId, branch) // auto stock deduction + ledger
+      // Auto-clear the working set for this mode+branch so the next report starts
+      // fresh — every saved report stays a disjoint snapshot (no cross-report
+      // double-counting in the monthly/spare-parts/agency aggregations).
+      await tx.reportEntry.deleteMany({ where: { mode, branch } })
       return created
     })
     res.status(201).json(saved)

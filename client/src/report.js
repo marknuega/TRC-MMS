@@ -386,23 +386,19 @@ export function agencyComment(entries) {
 // Latest saved 'report' per date within monthKey (YYYY-MM) + optional branch,
 // flattened to entries. Mirrors the monthly-matrix / agency-totals selection.
 export function monthEntries(savedReports, monthKey, branch = '') {
-  const byDay = new Map()
   const wantBranch = up(branch)
+  const out = []
+  // Every saved report is a disjoint snapshot (saving auto-clears the working
+  // set), so aggregate them all — no same-day dedup — and filter by each entry's
+  // OWN service date, which also handles reports that span more than one day.
   for (const r of savedReports ?? []) {
     if (up(r.mode) === 'TRANSMITTAL') continue
     if (wantBranch && up(r.branch) !== wantBranch) continue
-    const label = String(r.dateLabel || '') // dd/mm/yyyy
-    const m = label.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
-    if (!m) continue
-    const mk = `${m[3]}-${m[2].padStart(2, '0')}`
-    if (mk !== monthKey) continue
-    // Dedup the latest re-save per day, but keep each branch separate so an
-    // "All branches" view (branch = '') merges every branch's day, not just one.
-    const key = `${up(r.branch)}|${label}`
-    const prev = byDay.get(key)
-    if (!prev || (r.seq ?? 0) > (prev.seq ?? 0)) byDay.set(key, r)
+    for (const e of Array.isArray(r.entries) ? r.entries : []) {
+      if (String(e.reportDate || '').slice(0, 7) === monthKey) out.push(e)
+    }
   }
-  return [...byDay.values()].flatMap((r) => (Array.isArray(r.entries) ? r.entries : []))
+  return out
 }
 
 // Parts consumed per brand -> device model. A "part" is a Change/New/PCB fault
@@ -806,20 +802,18 @@ export function buildMonthlyMatrix(savedReports, opts = {}) {
     if (c.kind === 'dismantle') for (const t of c.types) dismantleByType.set(up(t), c.key)
   }
 
-  // Latest saved "report" per date within the month (+ branch filter).
-  const parse = (label) => {
-    const m = String(label || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
-    return m ? { d: +m[1], mo: +m[2] - 1, y: +m[3] } : null
-  }
-  const byDay = new Map()
+  // Aggregate every saved report's entries by the entry's own service date
+  // (reports are disjoint snapshots — saving auto-clears the working set).
+  const byDay = new Map() // day -> { entries: [] }
   for (const r of savedReports ?? []) {
     if (up(r.mode) === 'TRANSMITTAL') continue
     if (branch && up(r.branch) !== up(branch)) continue
-    const p = parse(r.dateLabel)
-    if (!p || p.y !== year || p.mo !== month) continue
-    const prev = byDay.get(p.d)
-    if (!prev || (r.seq ?? 0) > (prev.seq ?? 0)) {
-      byDay.set(p.d, { entries: Array.isArray(r.entries) ? r.entries : [], seq: r.seq ?? 0 })
+    for (const e of Array.isArray(r.entries) ? r.entries : []) {
+      const m = String(e.reportDate || '').match(/^(\d{4})-(\d{2})-(\d{2})$/)
+      if (!m || +m[1] !== year || +m[2] - 1 !== month) continue
+      const day = +m[3]
+      if (!byDay.has(day)) byDay.set(day, { entries: [] })
+      byDay.get(day).entries.push(e)
     }
   }
 

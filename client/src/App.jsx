@@ -623,6 +623,7 @@ function App({ user, onLogout }) {
     try {
       const rep = await saveReport({ branch, mode, transmittedBy: reportTransmittedBy, receivedBy: reportReceivedBy })
       setError(null)
+      await refresh() // saving auto-clears the working set server-side — reflect it
       await refreshSaved()
       refreshInventory() // stock was deducted server-side for matched items
       window.alert(`Saved as ${repLabel(rep.reportId, rep.branch, rep.mode)}.`)
