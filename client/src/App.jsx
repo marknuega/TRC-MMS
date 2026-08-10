@@ -819,18 +819,20 @@ function App({ user, onLogout }) {
   // One report per date, newest first. The live view uses the draft (next) id
   // until you Save, which mints the real REP-#### number.
   const reports = useMemo(() => {
-    // All Branches: merge every branch's saved report for the selected date into one.
+    // All Branches: merge every branch's saved doc for the selected date into one,
+    // respecting the current document type (report vs transmittal).
     if (isAllBranches) {
       const dl = dmyOf(form.reportDate)
+      const wantTx = mode === 'transmittal'
       const byBranch = new Map()
       for (const r of saved ?? []) {
-        if (String(r.mode).toUpperCase() === 'TRANSMITTAL' || r.dateLabel !== dl) continue
+        if ((String(r.mode).toUpperCase() === 'TRANSMITTAL') !== wantTx || r.dateLabel !== dl) continue
         const prev = byBranch.get(r.branch || '')
         if (!prev || (r.seq ?? 0) > (prev.seq ?? 0)) byBranch.set(r.branch || '', r)
       }
       const merged = [...byBranch.values()].flatMap((r) => (Array.isArray(r.entries) ? r.entries : []))
       if (!merged.length) return []
-      return [buildDateReport(dl, 'ALL-BRANCHES', merged, { branch: ALL_BRANCHES, mode: 'report' })]
+      return [buildDateReport(dl, 'ALL-BRANCHES', merged, { branch: ALL_BRANCHES, mode, transmittedBy, receivedBy })]
     }
     return groupReports(entries).map((g) =>
       buildDateReport(g.dateLabel, repLabel(nextDocId, branch, mode), g.entries, {
