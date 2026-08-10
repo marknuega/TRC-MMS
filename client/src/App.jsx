@@ -207,6 +207,18 @@ const lsSet = (k, v) => {
 const MODE_KEY = 'trc_mode'
 const loadMode = () => (lsGet(MODE_KEY) === 'transmittal' ? 'transmittal' : 'report')
 
+// Handover personnel are remembered PER BRANCH: { [branch]: { t, r } }. In an
+// All-Branches export each branch's own transmit/receive names are added.
+const HANDOVER_KEY = 'trc_handover'
+const loadHandover = () => {
+  try {
+    const v = JSON.parse(localStorage.getItem(HANDOVER_KEY) || '{}')
+    return v && typeof v === 'object' && !Array.isArray(v) ? v : {}
+  } catch {
+    return {}
+  }
+}
+
 const emptyForm = () => {
   const last = loadLast()
   return {
@@ -378,8 +390,26 @@ function App({ user, onLogout }) {
   useEffect(() => {
     if (!isAdmin && NAV.find((n) => n.id === page)?.adminOnly) setPage('report')
   }, [isAdmin, page])
-  const [transmittedBy, setTransmittedBy] = useState(() => lsGet('trc_tx'))
-  const [receivedBy, setReceivedBy] = useState(() => lsGet('trc_rx'))
+  // Handover is remembered per branch; the current fields reflect the selected one.
+  const [handoverMap, setHandoverMap] = useState(loadHandover)
+  const transmittedBy = handoverMap[branch]?.t ?? ''
+  const receivedBy = handoverMap[branch]?.r ?? ''
+  // In an All-Branches export, add each contributing branch's own personnel.
+  const aggHandover = (field) => {
+    const out = []
+    const seen = new Set()
+    for (const b of new Set((entries ?? []).map((e) => e.branch || ''))) {
+      const v = handoverMap[b]?.[field]
+      if (!v) continue
+      for (const n of String(v).split(',').map((s) => s.trim()).filter(Boolean)) {
+        const k = n.toLowerCase()
+        if (!seen.has(k)) { seen.add(k); out.push(n) }
+      }
+    }
+    return out.join(', ')
+  }
+  const reportTransmittedBy = isAllBranches ? aggHandover('t') : transmittedBy
+  const reportReceivedBy = isAllBranches ? aggHandover('r') : receivedBy
   const saveTimer = useRef(null)
   const isTransmittal = mode === 'transmittal'
   // The browser's "Save as PDF" dialog seeds its filename from document.title,
@@ -410,14 +440,14 @@ function App({ user, onLogout }) {
     setEditSavedId(null)
     refresh(m) // load that document type's own working entries
   }
-  const changeTransmittedBy = (e) => {
-    setTransmittedBy(e.target.value)
-    lsSet('trc_tx', e.target.value)
-  }
-  const changeReceivedBy = (e) => {
-    setReceivedBy(e.target.value)
-    lsSet('trc_rx', e.target.value)
-  }
+  const setHandover = (field, value) =>
+    setHandoverMap((m) => {
+      const next = { ...m, [branch]: { ...(m[branch] || {}), [field]: value } }
+      lsSet(HANDOVER_KEY, JSON.stringify(next))
+      return next
+    })
+  const changeTransmittedBy = (e) => setHandover('t', e.target.value)
+  const changeReceivedBy = (e) => setHandover('r', e.target.value)
 
   // Apply + persist the day/night theme on the root element.
   useEffect(() => {
@@ -579,7 +609,7 @@ function App({ user, onLogout }) {
   async function handleSaveReport() {
     setBusy(true)
     try {
-      const rep = await saveReport({ branch, mode, transmittedBy, receivedBy })
+      const rep = await saveReport({ branch, mode, transmittedBy: reportTransmittedBy, receivedBy: reportReceivedBy })
       setError(null)
       await refreshSaved()
       refreshInventory() // stock was deducted server-side for matched items
@@ -605,8 +635,13 @@ function App({ user, onLogout }) {
         setBranch(rep.branch)
         lsSet(BRANCH_KEY, rep.branch)
       }
-      setTransmittedBy(rep.transmittedBy ?? '')
-      setReceivedBy(rep.receivedBy ?? '')
+      // Remember this document's handover against its own branch.
+      setHandoverMap((m) => {
+        const b = rep.branch || ''
+        const next = { ...m, [b]: { t: rep.transmittedBy ?? '', r: rep.receivedBy ?? '' } }
+        lsSet(HANDOVER_KEY, JSON.stringify(next))
+        return next
+      })
       setError(null)
     } catch (err) {
       setError(err.message)
@@ -825,18 +860,18 @@ function App({ user, onLogout }) {
     if (isAllBranches) {
       const id = `${ALL_BRANCHES}-${nextDocId}` // e.g. "All Branches-TRANS-0002"
       return groupReports(entries).map((g) =>
-        buildDateReport(g.dateLabel, id, g.entries, { branch: ALL_BRANCHES, mode, transmittedBy, receivedBy }),
+        buildDateReport(g.dateLabel, id, g.entries, { branch: ALL_BRANCHES, mode, transmittedBy: reportTransmittedBy, receivedBy: reportReceivedBy }),
       )
     }
     return groupReports(entries).map((g) =>
       buildDateReport(g.dateLabel, repLabel(nextDocId, branch, mode), g.entries, {
         branch,
         mode,
-        transmittedBy,
-        receivedBy,
+        transmittedBy: reportTransmittedBy,
+        receivedBy: reportReceivedBy,
       }),
     )
-  }, [isAllBranches, form.reportDate, saved, entries, nextDocId, branch, mode, transmittedBy, receivedBy])
+  }, [isAllBranches, form.reportDate, saved, entries, nextDocId, branch, mode, reportTransmittedBy, reportReceivedBy])
   const combinedTxt = useMemo(() => reports.map(buildTxt).join('\n\n\n'), [reports])
   // Agency summary is a daily-report concept only — never on transmittals.
   const agencyCmt = useMemo(
@@ -1243,32 +1278,34 @@ function App({ user, onLogout }) {
         {isTransmittal && (
           <section className="handover">
             <h2>Handover</h2>
-            <div className="handover-grid">
-              <label>
-                Transmitted by
-                <input
-                  list="handover-names"
-                  value={transmittedBy}
-                  onChange={changeTransmittedBy}
-                  placeholder="Select or type — separate multiple with commas"
-                />
-              </label>
-              <label>
-                Received by
-                <input
-                  list="handover-names"
-                  value={receivedBy}
-                  onChange={changeReceivedBy}
-                  placeholder="Select or type — separate multiple with commas"
-                />
-              </label>
-            </div>
-            <datalist id="handover-names">
-              {options.technicians.map((t) => (
-                <option key={t} value={t} />
-              ))}
-            </datalist>
-            <p className="saved-hint">Tip: enter more than one name separated by commas — e.g. “AMIR, Shabir”.</p>
+            {isAllBranches ? (
+              <p className="saved-hint">
+                All Branches: each branch's own handover is added automatically —
+                Transmitted by <strong>{reportTransmittedBy || '—'}</strong>; Received by{' '}
+                <strong>{reportReceivedBy || '—'}</strong>. Set each branch's names by selecting that branch.
+              </p>
+            ) : (
+              <div className="handover-grid">
+                <label>
+                  Transmitted by
+                  <select value={transmittedBy} onChange={changeTransmittedBy}>
+                    <option value="">— select —</option>
+                    {options.technicians.map((t) => (
+                      <option key={t}>{t}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Received by
+                  <select value={receivedBy} onChange={changeReceivedBy}>
+                    <option value="">— select —</option>
+                    {options.technicians.map((t) => (
+                      <option key={t}>{t}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            )}
           </section>
         )}
 
