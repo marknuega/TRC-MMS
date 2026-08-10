@@ -59,16 +59,22 @@ async function nextSeq() {
   return (max._max.seq ?? 0) + 1
 }
 
-// Next series number within a document type (report vs transmittal number
-// independently: REP-0001, REP-0002… and TRANS-0001, TRANS-0002…).
-async function nextDocNumber(mode) {
-  const max = await prisma.savedReport.aggregate({ where: { mode: normMode(mode) }, _max: { docNumber: true } })
+// Next series number within a document type AND branch — each branch keeps its
+// own independent series (Makkah REP-0001…, Dammam REP-0001…, and likewise for
+// TRANS-####). Branch '' is the unassigned/legacy series.
+async function nextDocNumber(mode, branch) {
+  const max = await prisma.savedReport.aggregate({
+    where: { mode: normMode(mode), branch: branch ?? '' },
+    _max: { docNumber: true },
+  })
   return (max._max.docNumber ?? 0) + 1
 }
 
 // GET /api/saved-reports - list newest first, plus the next id a Save would mint.
 router.get('/', async (req, res, next) => {
   try {
+    // Preview the next id for the branch in view (client also derives its own).
+    const previewBranch = writeBranch(req, req.query.branch)
     const [reports, repNo, transNo] = await Promise.all([
       prisma.savedReport.findMany({
         where: branchWhere(req, req.query.branch),
@@ -79,8 +85,8 @@ router.get('/', async (req, res, next) => {
           entries: true, // snapshot, so the client can search inside report data
         },
       }),
-      nextDocNumber('report'),
-      nextDocNumber('transmittal'),
+      nextDocNumber('report', previewBranch),
+      nextDocNumber('transmittal', previewBranch),
     ])
     // Per-mode "next id" previews so each document type numbers independently.
     res.json({ nextReportId: docId('report', repNo), nextTransmittalId: docId('transmittal', transNo), reports })
@@ -141,7 +147,7 @@ router.post('/', async (req, res, next) => {
     const transmittedBy = String(req.body?.transmittedBy ?? '').trim()
     const receivedBy = String(req.body?.receivedBy ?? '').trim()
     const seq = await nextSeq()
-    const docNumber = await nextDocNumber(mode)
+    const docNumber = await nextDocNumber(mode, branch)
     const saved = await prisma.$transaction(async (tx) => {
       const created = await tx.savedReport.create({
         data: {

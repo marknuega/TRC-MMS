@@ -126,6 +126,21 @@ const repLabel = (baseId, branch, mode) => {
 }
 const isTx = (r) => String(r?.mode ?? '').toUpperCase() === 'TRANSMITTAL'
 
+const pad4 = (n) => String(n).padStart(4, '0')
+// Next document number for a branch's OWN series (each branch numbers itself).
+// Derived from the saved list so it updates instantly when the branch changes.
+function nextSeriesNumber(saved, mode, branch) {
+  const m = String(mode ?? 'report').toLowerCase() === 'transmittal' ? 'transmittal' : 'report'
+  const b = String(branch ?? '')
+  let max = 0
+  for (const r of saved ?? []) {
+    if (String(r.mode ?? 'report').toLowerCase() !== m) continue
+    if (String(r.branch ?? '') !== b) continue
+    if ((r.docNumber ?? 0) > max) max = r.docNumber ?? 0
+  }
+  return max + 1
+}
+
 // Deep search INSIDE a set of saved snapshots -> matching line items.
 function searchInside(list, query) {
   const q = String(query ?? '').trim().toLowerCase()
@@ -335,8 +350,6 @@ function App({ user, onLogout }) {
   const [pasteOpen, setPasteOpen] = useState(false)
   const [pasteText, setPasteText] = useState('')
   const [editSavedId, setEditSavedId] = useState(null) // which saved row shows Load/Delete
-  const [nextReportId, setNextReportId] = useState('REP-0001')
-  const [nextTransId, setNextTransId] = useState('TRANS-0001')
   const [inventory, setInventory] = useState([]) // for the issue/material suggestions + usage
   const [busy, setBusy] = useState(false)
   const [branch, setBranch] = useState(loadBranch)
@@ -347,6 +360,11 @@ function App({ user, onLogout }) {
   const branchList = options.branches?.length ? options.branches : BRANCHES
   const [theme, setTheme] = useState(loadTheme)
   const [mode, setMode] = useState(loadMode)
+  // Each branch has its OWN document series — derive the next id for the branch
+  // in view (All Branches previews the unassigned '' series; saving is off there).
+  const seriesBranch = isAllBranches ? '' : branch
+  const nextReportId = `REP-${pad4(nextSeriesNumber(saved, 'report', seriesBranch))}`
+  const nextTransId = `TRANS-${pad4(nextSeriesNumber(saved, 'transmittal', seriesBranch))}`
   const [sync, setSync] = useState({ online: true, pending: 0 })
   const [editId, setEditId] = useState(null) // entry id being edited in the modal
   const [editForm, setEditForm] = useState(null)
@@ -493,8 +511,6 @@ function App({ user, onLogout }) {
     try {
       const data = await getSavedReports()
       setSaved(data.reports)
-      setNextReportId(data.nextReportId)
-      setNextTransId(data.nextTransmittalId ?? 'TRANS-0001')
     } catch {
       /* leave the saved list as-is if the endpoint is unavailable */
     }

@@ -11,8 +11,8 @@ datasource db {
 model SavedReport {
   id            Int      @id @default(autoincrement())
   seq           Int      @unique // global insertion order (sorting + latest-per-date dedup)
-  docNumber     Int      @default(0) @map("doc_number") // per-mode series number (REP-#### / TRANS-####)
-  reportId      String   @unique @map("report_id")
+  docNumber     Int      @default(0) @map("doc_number") // per-branch series number (REP-#### / TRANS-####)
+  reportId      String   @map("report_id") // "REP-####"/"TRANS-####"; unique within a branch, not globally
   branch        String   @default("") // Makkah | Taif | Jeddah
   mode          String   @default("report") // report | transmittal
   transmittedBy String   @default("") @map("transmitted_by")
@@ -22,6 +22,7 @@ model SavedReport {
   entryCount    Int      @default(0) @map("entry_count")
   entries       Json // snapshot of entries + faults, used to reload into the form
 
+  @@unique([mode, branch, docNumber]) // each branch numbers its own series independently
   @@map("saved_reports")
 }
 
