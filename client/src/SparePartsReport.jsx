@@ -158,6 +158,68 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
     URL.revokeObjectURL(url)
   }
 
+  // Consolidated printable report — same sections as the Excel export, laid out
+  // for print/save-as-PDF. Merges every branch when "All branches" is selected.
+  function exportPdf() {
+    const w = window.open('', '_blank')
+    if (!w) return
+    const e = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    let b = ''
+    // Parts by brand -> company -> model
+    for (const { type, groups } of grouped) {
+      for (const grp of groups) {
+        b += `<tr><td class="sec" colspan="3">${e(type)} · ${e(grp.company)}</td></tr>`
+        for (const m of grp.models) {
+          b += `<tr><td class="sub" colspan="3">${e(type)} ${e(m.model)} · ${e(grp.company)}</td></tr>`
+          b += `<tr><th class="c">#</th><th>Part</th><th class="c">Qty</th></tr>`
+          m.rows.forEach((r, i) => {
+            b += `<tr><td class="c">${i + 1}</td><td>${e(r.part)}</td><td class="c">${r.qty}</td></tr>`
+          })
+          b += `<tr><td class="tot" colspan="2">TOTAL ${e(type)} ${e(m.model)}</td><td class="tot c">${m.total}</td></tr>`
+        }
+        b += `<tr><td class="tot" colspan="2">TOTAL ${e(type)} · ${e(grp.company)}</td><td class="tot c">${grp.total}</td></tr>`
+      }
+    }
+    let companyTbl = ''
+    if (report.companyTotals.length) {
+      companyTbl =
+        `<h2>Parts by company</h2><table><tbody>` +
+        report.companyTotals.map((c) => `<tr><td>TOTAL ${e(c.company)} PARTS</td><td class="c">${c.qty}</td></tr>`).join('') +
+        `<tr><td class="tot">TOTAL PARTS</td><td class="tot c">${report.grandParts}</td></tr></tbody></table>`
+    }
+    const actRows = report.activity
+      .map((g) => `<tr><td>${e(g.type)} ${e(g.model)}</td><td class="c">${g.maintenance}</td><td class="c">${g.programming}</td><td class="c">${g.install}</td><td class="c">${g.dismantle}</td></tr>`)
+      .join('')
+    const agencyRows = report.agencies
+      .map((ag) => `<tr><td>${e(ag.agency)}</td><td class="c">${agencyGet(ag, 'MAINTENANCE')}</td><td class="c">${agencyGet(ag, 'PROGRAMMING')}</td><td class="c">${agencyGet(ag, 'INSTALLATION')}</td><td class="c">${agencyGet(ag, 'DISMANTLE')}</td></tr>`)
+      .join('')
+    w.document.write(
+      `<!doctype html><html><head><meta charset="utf-8"><title>${e(fileBase)}</title>` +
+        `<style>body{font-family:Arial,sans-serif;color:#111;margin:24px}h1{font-size:17px;margin:0 0 2px}` +
+        `h2{font-size:13px;margin:18px 0 6px;color:#2563eb}p.meta{margin:0 0 14px;color:#555;font-size:12px}` +
+        `table{border-collapse:collapse;width:100%;font-size:11px;margin-bottom:6px}th,td{border:1px solid #999;padding:4px 6px;text-align:left}` +
+        `th{background:#dfe3ee}td.c,th.c{text-align:center}td.sec{background:#2563eb;color:#fff;font-weight:bold}` +
+        `td.sub{background:#eef;font-weight:bold}td.tot{background:#fff3bf;font-weight:bold}tfoot{color:#777}` +
+        `@media print{h2{page-break-after:avoid}tr{page-break-inside:avoid}}</style></head><body>` +
+        `<h1>${e(title)}</h1><p class="meta">${e(monthLabel(monthValue))} · consolidated · printed ${e(new Date().toLocaleString('en-GB'))}</p>` +
+        (b ? `<h2>Parts by brand</h2><table><tbody>${b}</tbody></table>` : '') +
+        companyTbl +
+        (actRows
+          ? `<h2>Activity totals</h2><table><thead><tr><th>Brand / Model</th><th class="c">Maint.</th><th class="c">Prog.</th><th class="c">Install</th><th class="c">Dismantle</th></tr></thead>` +
+            `<tbody>${actRows}<tr><td class="tot">TOTAL</td><td class="tot c">${actGrand.maintenance}</td><td class="tot c">${actGrand.programming}</td><td class="tot c">${actGrand.install}</td><td class="tot c">${actGrand.dismantle}</td></tr></tbody></table>`
+          : '') +
+        (agencyRows
+          ? `<h2>Agency totals</h2><table><thead><tr><th>Agency</th><th class="c">Maint.</th><th class="c">Prog.</th><th class="c">Install</th><th class="c">Dismantle</th></tr></thead>` +
+            `<tbody>${agencyRows}<tr><td class="tot">TOTAL</td><td class="tot c">${agencyGrand.maintenance}</td><td class="tot c">${agencyGrand.programming}</td><td class="tot c">${agencyGrand.install}</td><td class="tot c">${agencyGrand.dismantle}</td></tr></tbody></table>`
+          : '') +
+        `<p class="meta" style="margin-top:16px">Software Developed by Muhammad Amir · MT# MT1063 · © 2026 Muhammad Amir. All rights reserved.</p>` +
+        `</body></html>`,
+    )
+    w.document.close()
+    w.focus()
+    w.print()
+  }
+
   return (
     <section className="spareparts">
       {embedded ? (
@@ -191,6 +253,9 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
             </label>
             <button type="button" className="submit" onClick={exportExcel} disabled={!hasData}>
               ⭳ Excel
+            </button>
+            <button type="button" className="btn-pdf" onClick={exportPdf} disabled={!hasData}>
+              ⭳ PDF
             </button>
           </div>
           <p className="saved-hint">
