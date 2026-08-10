@@ -102,6 +102,7 @@ function printReference(data) {
   td.c, th.c { font-weight: 700; font-family: ui-monospace, Consolas, monospace; white-space: nowrap; width: 3.2em; }
   .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 18px; }
   .grp { break-inside: avoid; margin-bottom: 8px; }
+  td.grp { background: #eef; font-weight: 700; margin: 0; }
   .syntax { font-family: ui-monospace, Consolas, monospace; font-size: 14px; font-weight: 700; }
   .ex { background: #f4f4f4; border: 1px solid #ddd; padding: 8px 10px; border-radius: 6px; margin: 6px 0; }
   .ex code { font-family: ui-monospace, Consolas, monospace; font-weight: 700; }
@@ -119,15 +120,23 @@ function printReference(data) {
 
   <h2>Complete code creation details</h2>
   <div class="ex">
-    <div class="syntax">26HC1MT 44HR2MT&nbsp;·&nbsp;1234&nbsp;·&nbsp;4567&nbsp;·&nbsp;1&nbsp;&nbsp;→&nbsp;&nbsp;<code>PSD</code></div>
-    <div>One or more fault tokens, then <b>TEL</b> · <b>ISSI</b> · <b>Technician ID</b>, each as its own number. Then send the agency code alone (e.g. <code>PSD</code>) to confirm.</div>
+    <div class="syntax">44HR2MT&nbsp;·&nbsp;1234&nbsp;4567&nbsp;1&nbsp;·&nbsp;<code>PSD</code></div>
+    <div>The report has three fields: <b>1)</b> one or more fault tokens, <b>2)</b> TEL · ISSI · Technician ID (three numbers), then <b>3)</b> the agency code sent alone to confirm.</div>
   </div>
   <table>
-    <tr><th class="c">Field</th><th>Example</th><th>What it is</th></tr>
-    <tr><td class="c">Qty</td><td>1</td><td>Quantity — how many of that component/action, written right after the Action inside a fault token (the 1 in 26HC<b>1</b>MT). Omit for a single unit.</td></tr>
-    <tr><td class="c">TEL</td><td>1234</td><td>The radio's telephone number, sent as its own number after the last fault token.</td></tr>
+    <tr><th class="c">Part</th><th>Example</th><th>What it is</th></tr>
+    <tr><td colspan="3" class="grp">Field 1 · Fault token — one or more, space-separated (e.g. 26HC1MT 44HR2MT)</td></tr>
+    <tr><td class="c">Component</td><td>44</td><td>The part being reported (see Component Numbers).</td></tr>
+    <tr><td class="c">Device</td><td>H</td><td>The equipment model the part belongs to (see Device Letters).</td></tr>
+    <tr><td class="c">Action</td><td>R</td><td>What was done — Change / Repair / New… (see Actions).</td></tr>
+    <tr><td class="c">Quantity</td><td>2</td><td>How many of that component/action, right after the Action. Omit for a single unit.</td></tr>
+    <tr><td class="c">Company</td><td>MT</td><td>Who owns / funds the work (see Companies).</td></tr>
+    <tr><td colspan="3" class="grp">Field 2 · TEL · ISSI · Technician ID — three numbers (e.g. 1234 4567 1)</td></tr>
+    <tr><td class="c">TEL</td><td>1234</td><td>The radio's telephone number, sent after the last fault token.</td></tr>
     <tr><td class="c">ISSI</td><td>4567</td><td>The radio's Individual Short Subscriber Identity, sent right after TEL.</td></tr>
-    <tr><td class="c">Tech ID</td><td>1</td><td>Technician ID — who did the work, sent after ISSI (see Technician ID below).</td></tr>
+    <tr><td class="c">Tech ID</td><td>1</td><td>Who did the work, sent after ISSI (see Technician ID).</td></tr>
+    <tr><td colspan="3" class="grp">Field 3 · Agency (confirmation) — sent alone afterwards (e.g. PSD)</td></tr>
+    <tr><td class="c">Agency</td><td>PSD</td><td>Sent on its own after the report to confirm it (see Agencies).</td></tr>
   </table>
 
   <h2>Component Numbers</h2>
@@ -292,55 +301,80 @@ export default function ReferenceCard() {
         <div className="ref-sec-body">
           <div className="ref-example">
             <div className="ref-syntax">
-              26HC1MT 44HR2MT · 1234 · 4567 · 1 &nbsp;→&nbsp; <code>PSD</code>
+              44HR2MT · 1234&nbsp;4567&nbsp;1 · <code>PSD</code>
             </div>
             <div>
-              One or more fault tokens, then <strong>TEL</strong> · <strong>ISSI</strong> ·{' '}
-              <strong>Technician&nbsp;ID</strong>, each as its own number. Afterwards send the agency code
-              alone (e.g. <code>PSD</code>) to confirm.
+              The report has <strong>three fields</strong>: <strong>1)</strong> one or more fault tokens,{' '}
+              <strong>2)</strong> TEL · ISSI · Technician&nbsp;ID (three numbers), then{' '}
+              <strong>3)</strong> the agency code sent alone to confirm.
             </div>
           </div>
           <table className="ref-table ref-detail-table">
             <thead>
               <tr>
-                <th className="ref-code">Field</th>
+                <th className="ref-code">Part</th>
                 <th>Example</th>
                 <th>What it is</th>
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td className="ref-code">Qty</td>
-                <td>1</td>
-                <td>
-                  <strong>Quantity</strong> — how many of that component/action, written right after the
-                  Action inside a fault token (the <code>1</code> in <code>26HC<b>1</b>MT</code>). Omit for
-                  a single unit.
+              <tr className="ref-grp-row">
+                <td colSpan={3}>
+                  Field 1 · Fault token — one or more, space-separated (e.g. <code>26HC1MT 44HR2MT</code>)
                 </td>
+              </tr>
+              <tr>
+                <td className="ref-code">Component</td>
+                <td>44</td>
+                <td>The part being reported (see <strong>Component Numbers</strong>).</td>
+              </tr>
+              <tr>
+                <td className="ref-code">Device</td>
+                <td>H</td>
+                <td>The equipment model the part belongs to (see <strong>Device Letters</strong>).</td>
+              </tr>
+              <tr>
+                <td className="ref-code">Action</td>
+                <td>R</td>
+                <td>What was done — Change / Repair / New… (see <strong>Actions</strong>).</td>
+              </tr>
+              <tr>
+                <td className="ref-code">Quantity</td>
+                <td>2</td>
+                <td>How many of that component/action, right after the Action. Omit for a single unit.</td>
+              </tr>
+              <tr>
+                <td className="ref-code">Company</td>
+                <td>MT</td>
+                <td>Who owns / funds the work (see <strong>Companies</strong>).</td>
+              </tr>
+
+              <tr className="ref-grp-row">
+                <td colSpan={3}>Field 2 · TEL · ISSI · Technician ID — three numbers (e.g. <code>1234 4567 1</code>)</td>
               </tr>
               <tr>
                 <td className="ref-code">TEL</td>
                 <td>1234</td>
-                <td>
-                  <strong>TEL</strong> — the radio's telephone number, sent as its own number after the
-                  last fault token.
-                </td>
+                <td>The radio's telephone number, sent after the last fault token.</td>
               </tr>
               <tr>
                 <td className="ref-code">ISSI</td>
                 <td>4567</td>
-                <td>
-                  <strong>ISSI</strong> — the radio's Individual Short Subscriber Identity, sent right
-                  after TEL.
-                </td>
+                <td>The radio's Individual Short Subscriber Identity, sent right after TEL.</td>
               </tr>
               <tr>
                 <td className="ref-code">Tech&nbsp;ID</td>
                 <td>1</td>
-                <td>
-                  <strong>Technician ID</strong> — who did the work, sent after ISSI (see the Technician
-                  ID list below).
-                </td>
+                <td>Who did the work, sent after ISSI (see <strong>Technician ID</strong>).</td>
+              </tr>
+
+              <tr className="ref-grp-row">
+                <td colSpan={3}>Field 3 · Agency (confirmation) — sent alone afterwards (e.g. <code>PSD</code>)</td>
+              </tr>
+              <tr>
+                <td className="ref-code">Agency</td>
+                <td>PSD</td>
+                <td>Sent on its own after the report to confirm it (see <strong>Agencies</strong>).</td>
               </tr>
             </tbody>
           </table>

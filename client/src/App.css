@@ -2392,6 +2392,12 @@ h2 {
 .ref-detail-table {
   max-width: 48rem;
 }
+.ref-table .ref-grp-row td {
+  background: var(--surface-2);
+  color: var(--text-h);
+  font-weight: 600;
+  font-size: 0.82rem;
+}
 
 /* Collapsible reference sections (default closed). */
 .ref-sec {
