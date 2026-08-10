@@ -117,14 +117,27 @@ function printReference(data) {
     <div class="sub">Batch example: <code>26HC1MT 44HR2MT 1234 4567 1</code> &nbsp;(faults · tel · issi · technician&nbsp;ID). Then send the agency code alone, e.g. <code>PSD</code>, to confirm.</div>
   </div>
 
+  <h2>Complete code creation details</h2>
+  <div class="ex">
+    <div class="syntax">26HC1MT 44HR2MT&nbsp;·&nbsp;1234&nbsp;·&nbsp;4567&nbsp;·&nbsp;1&nbsp;&nbsp;→&nbsp;&nbsp;<code>PSD</code></div>
+    <div>One or more fault tokens, then <b>TEL</b> · <b>ISSI</b> · <b>Technician ID</b>, each as its own number. Then send the agency code alone (e.g. <code>PSD</code>) to confirm.</div>
+  </div>
+  <table>
+    <tr><th class="c">Field</th><th>Example</th><th>What it is</th></tr>
+    <tr><td class="c">Qty</td><td>1</td><td>Quantity — how many of that component/action, written right after the Action inside a fault token (the 1 in 26HC<b>1</b>MT). Omit for a single unit.</td></tr>
+    <tr><td class="c">TEL</td><td>1234</td><td>The radio's telephone number, sent as its own number after the last fault token.</td></tr>
+    <tr><td class="c">ISSI</td><td>4567</td><td>The radio's Individual Short Subscriber Identity, sent right after TEL.</td></tr>
+    <tr><td class="c">Tech ID</td><td>1</td><td>Technician ID — who did the work, sent after ISSI (see Technician ID below).</td></tr>
+  </table>
+
+  <h2>Component Numbers</h2>
+  <div class="cols">${componentTables}</div>
+
   <h2>Device Letters</h2>
   <div class="cols">
     <table>${codeRows(devices.slice(0, half))}</table>
     <table>${codeRows(devices.slice(half))}</table>
   </div>
-
-  <h2>Component Numbers</h2>
-  <div class="cols">${componentTables}</div>
 
   <h2>Actions</h2>
   <div class="cols">
@@ -132,12 +145,14 @@ function printReference(data) {
     <table>${codeRows(actions.slice(Math.ceil(actions.length / 2)))}</table>
   </div>
 
-  <h2>Companies · Agencies · Technicians</h2>
-  <div class="cols">
-    <div class="grp"><h3>Company</h3><table>${codeRows(companies)}</table></div>
-    <div class="grp"><h3>Agency (confirmation)</h3><table>${codeRows(agencies)}</table></div>
-  </div>
-  <div class="grp" style="margin-top:8px"><h3>Technician ID</h3><table>${codeRows(technicians)}</table></div>
+  <h2>Companies</h2>
+  <table>${codeRows(companies)}</table>
+
+  <h2>Agencies (confirmation)</h2>
+  <table>${codeRows(agencies)}</table>
+
+  <h2>Technician ID</h2>
+  <table>${codeRows(technicians)}</table>
 
   <div class="foot">${COPYRIGHT_HTML}</div>
 </body></html>`
@@ -272,51 +287,140 @@ export default function ReferenceCard() {
         </div>
       </div>
 
-      <h3 className="ref-section">Device Letters</h3>
-      <div className="ref-grid">
-        <div className="ref-block">
-          <CodeTable rows={data.devices.slice(0, half)} />
-        </div>
-        <div className="ref-block">
-          <CodeTable rows={data.devices.slice(half)} />
-        </div>
-      </div>
-
-      <h3 className="ref-section">Component Numbers</h3>
-      <div className="ref-grid">
-        {data.componentGroups.map((g) => (
-          <div className="ref-block" key={g.title}>
-            <h4 className="ref-grp-title">{g.title}</h4>
-            <CodeTable rows={g.items} />
+      <details className="ref-sec">
+        <summary className="ref-section">Complete code creation details</summary>
+        <div className="ref-sec-body">
+          <div className="ref-example">
+            <div className="ref-syntax">
+              26HC1MT 44HR2MT · 1234 · 4567 · 1 &nbsp;→&nbsp; <code>PSD</code>
+            </div>
+            <div>
+              One or more fault tokens, then <strong>TEL</strong> · <strong>ISSI</strong> ·{' '}
+              <strong>Technician&nbsp;ID</strong>, each as its own number. Afterwards send the agency code
+              alone (e.g. <code>PSD</code>) to confirm.
+            </div>
           </div>
-        ))}
-      </div>
+          <table className="ref-table ref-detail-table">
+            <thead>
+              <tr>
+                <th className="ref-code">Field</th>
+                <th>Example</th>
+                <th>What it is</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td className="ref-code">Qty</td>
+                <td>1</td>
+                <td>
+                  <strong>Quantity</strong> — how many of that component/action, written right after the
+                  Action inside a fault token (the <code>1</code> in <code>26HC<b>1</b>MT</code>). Omit for
+                  a single unit.
+                </td>
+              </tr>
+              <tr>
+                <td className="ref-code">TEL</td>
+                <td>1234</td>
+                <td>
+                  <strong>TEL</strong> — the radio's telephone number, sent as its own number after the
+                  last fault token.
+                </td>
+              </tr>
+              <tr>
+                <td className="ref-code">ISSI</td>
+                <td>4567</td>
+                <td>
+                  <strong>ISSI</strong> — the radio's Individual Short Subscriber Identity, sent right
+                  after TEL.
+                </td>
+              </tr>
+              <tr>
+                <td className="ref-code">Tech&nbsp;ID</td>
+                <td>1</td>
+                <td>
+                  <strong>Technician ID</strong> — who did the work, sent after ISSI (see the Technician
+                  ID list below).
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </details>
 
-      <h3 className="ref-section">Actions</h3>
-      <div className="ref-grid">
-        <div className="ref-block">
-          <CodeTable rows={data.actions.slice(0, actHalf)} />
+      <details className="ref-sec">
+        <summary className="ref-section">Component Numbers</summary>
+        <div className="ref-sec-body">
+          <div className="ref-grid">
+            {data.componentGroups.map((g) => (
+              <div className="ref-block" key={g.title}>
+                <h4 className="ref-grp-title">{g.title}</h4>
+                <CodeTable rows={g.items} />
+              </div>
+            ))}
+          </div>
         </div>
-        <div className="ref-block">
-          <CodeTable rows={data.actions.slice(actHalf)} />
-        </div>
-      </div>
+      </details>
 
-      <h3 className="ref-section">Companies · Agencies · Technicians</h3>
-      <div className="ref-grid">
-        <div className="ref-block">
-          <h4 className="ref-grp-title">Company</h4>
-          <CodeTable rows={data.companies} />
+      <details className="ref-sec">
+        <summary className="ref-section">Device Letters</summary>
+        <div className="ref-sec-body">
+          <div className="ref-grid">
+            <div className="ref-block">
+              <CodeTable rows={data.devices.slice(0, half)} />
+            </div>
+            <div className="ref-block">
+              <CodeTable rows={data.devices.slice(half)} />
+            </div>
+          </div>
         </div>
-        <div className="ref-block">
-          <h4 className="ref-grp-title">Agency (confirmation)</h4>
-          <CodeTable rows={data.agencies} />
+      </details>
+
+      <details className="ref-sec">
+        <summary className="ref-section">Actions</summary>
+        <div className="ref-sec-body">
+          <div className="ref-grid">
+            <div className="ref-block">
+              <CodeTable rows={data.actions.slice(0, actHalf)} />
+            </div>
+            <div className="ref-block">
+              <CodeTable rows={data.actions.slice(actHalf)} />
+            </div>
+          </div>
         </div>
-        <div className="ref-block">
-          <h4 className="ref-grp-title">Technician ID</h4>
-          <CodeTable rows={data.technicians} />
+      </details>
+
+      <details className="ref-sec">
+        <summary className="ref-section">Companies</summary>
+        <div className="ref-sec-body">
+          <div className="ref-grid">
+            <div className="ref-block">
+              <CodeTable rows={data.companies} />
+            </div>
+          </div>
         </div>
-      </div>
+      </details>
+
+      <details className="ref-sec">
+        <summary className="ref-section">Agencies (confirmation)</summary>
+        <div className="ref-sec-body">
+          <div className="ref-grid">
+            <div className="ref-block">
+              <CodeTable rows={data.agencies} />
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <details className="ref-sec">
+        <summary className="ref-section">Technician ID</summary>
+        <div className="ref-sec-body">
+          <div className="ref-grid">
+            <div className="ref-block">
+              <CodeTable rows={data.technicians} />
+            </div>
+          </div>
+        </div>
+      </details>
     </section>
   )
 }

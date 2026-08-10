@@ -2379,3 +2379,45 @@ h2 {
   color: var(--primary);
   background: var(--surface-2);
 }
+.ref-table th {
+  border: 1px solid var(--border);
+  padding: 0.3rem 0.6rem;
+  text-align: left;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.ref-detail-table {
+  max-width: 48rem;
+}
+
+/* Collapsible reference sections (default closed). */
+.ref-sec {
+  margin-top: 0.4rem;
+}
+.ref-sec > summary.ref-section {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.ref-sec > summary.ref-section::-webkit-details-marker {
+  display: none;
+}
+.ref-sec > summary.ref-section::before {
+  content: '▸';
+  color: var(--muted);
+  font-size: 0.9em;
+  transition: transform 0.15s ease;
+}
+.ref-sec[open] > summary.ref-section::before {
+  transform: rotate(90deg);
+}
+.ref-sec-body {
+  padding: 0.2rem 0 0.4rem;
+}
