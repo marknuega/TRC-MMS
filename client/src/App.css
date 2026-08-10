@@ -2092,6 +2092,16 @@ h2 {
   gap: 1rem;
   margin-bottom: 1.25rem;
 }
+/* Company band: all its cards on ONE row (MOT row, then MOI row); the cards
+   share the width and the row scrolls horizontally if they can't all fit. */
+.sp-band {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(20rem, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+  overflow-x: auto;
+}
 .sp-brand,
 .sp-block,
 .dash-card,

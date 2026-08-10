@@ -313,7 +313,7 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
               )}
 
               {bands.map(({ company, items }) => (
-                <div className="sp-grid" key={company}>
+                <div className="sp-band" key={company}>
                   {items.map(({ type, company: co, model }) => {
                     const key = `${type}|${model.model}|${co}`
                     const cardOpen = !collapsed.has(key)

@@ -17,7 +17,7 @@ export const DEFAULT_OPTIONS = {
 
   models: [
     'TH1N', 'THR9', 'TMR 880i', 'STP9000',
-    'SRG3900 CARKIT', 'SRG3900 DESKTOP', 'SRG3900 BIKE', 'PT580H', 'PT590',
+    'SRG3900 CARKIT', 'SRG3900 DESKTOP', 'SRG3900 BIKE', 'PT580H', 'PT590', 'MT680',
   ],
 
   issueTypes: [
@@ -98,6 +98,7 @@ export const MODEL_TYPE = {
   'SRG3900 BIKE': 'SEPURA',
   PT580H: 'HYTERA',
   PT590: 'HYTERA',
+  MT680: 'HYTERA',
 }
 
 // Category order + labels for the Manage Inputs panel.
