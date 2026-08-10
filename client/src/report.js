@@ -58,6 +58,13 @@ const techNames = (v) => {
   return list.length ? list : ['-']
 }
 
+// A spare part is consumed by a Change / New / PCB action — a Repair reuses the
+// existing part, so it is counted as maintenance activity but not a part.
+const isSparePartAction = (action) => {
+  const a = up(action)
+  return MAINTENANCE_ACTIONS.has(a) && a !== 'REPAIR'
+}
+
 export function classify(action) {
   const a = up(action)
   if (MAINTENANCE_ACTIONS.has(a)) return 'maintenance'
@@ -398,8 +405,8 @@ export function monthEntries(savedReports, monthKey, branch = '') {
   return [...byDay.values()].flatMap((r) => (Array.isArray(r.entries) ? r.entries : []))
 }
 
-// Parts consumed per brand -> device model. A "part" is a maintenance-action
-// fault (CHANGE/REPAIR/NEW/PCB) with a named issue; same part + same company
+// Parts consumed per brand -> device model. A "part" is a Change/New/PCB fault
+// with a named issue (Repair reuses the part, so it is excluded); same part + same company
 // sums, a different company keeps its own row. Rows sorted alphabetically.
 // -> { AIRBUS: [{ model, rows:[{part,company,qty}], total }], SEPURA: [...] }
 export function sparePartsByType(entries) {
@@ -418,7 +425,7 @@ export function sparePartsByType(entries) {
       }
       const bucket = byModel.get(md)
       for (const f of e.faults ?? []) {
-        if (classify(f.action) !== 'maintenance') continue // programming/install/dismantle are activities, not parts
+        if (!isSparePartAction(f.action)) continue // only Change/New/PCB consume a part (Repair reuses it)
         const part = up(f.issue)
         if (!part) continue
         const company = companyDisplay(f.company)
