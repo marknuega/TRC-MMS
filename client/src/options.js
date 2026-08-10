@@ -47,6 +47,10 @@ export const DEFAULT_OPTIONS = {
   // Transmittal item condition.
   statuses: ['New', 'Refurbish'],
 
+  // Selectable branches (admin-managed). Add here to open a new branch; the name
+  // is what gets stored on users, reports, and inventory for scoping.
+  branches: ['Makkah', 'Taif', 'Jeddah'],
+
   // Chart visibility toggles (admin-managed in Manage Inputs). See DEFAULT_CHARTS.
   charts: {
     dashTopTech: true,
@@ -75,8 +79,9 @@ export const CHART_TOGGLES = [
   { key: 'spPartsBrand', label: 'Spare Parts · Parts by brand (pie)' },
 ]
 
-// Branches shown in the header selector; the choice appears in the report header/number.
-export const BRANCHES = ['Makkah', 'Taif', 'Jeddah']
+// Default branches. The live list is admin-managed (Manage Inputs → Branches)
+// and stored in AppOptions; this is the seed / fallback when none are saved.
+export const BRANCHES = DEFAULT_OPTIONS.branches
 
 // Selecting a model auto-fills the Type. Keyed by UPPERCASE model name.
 export const MODEL_TYPE = {
@@ -102,6 +107,7 @@ export const CATEGORIES = [
   { key: 'companies', label: 'Companies' },
   { key: 'materials', label: 'Materials' },
   { key: 'statuses', label: 'Item status' },
+  { key: 'branches', label: 'Branches' },
 ]
 
 // A materials item may be a plain string (legacy) or { name, description }.

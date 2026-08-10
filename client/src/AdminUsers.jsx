@@ -12,10 +12,11 @@ import { BRANCHES } from './options'
 
 const BLANK = { username: '', password: '', role: 'user', branch: BRANCHES[0] ?? '' }
 
-export default function AdminUsers({ currentUser, embedded = false }) {
+export default function AdminUsers({ currentUser, embedded = false, branches = BRANCHES, onAddBranch }) {
   const [users, setUsers] = useState([])
   const [requests, setRequests] = useState([])
   const [form, setForm] = useState(BLANK)
+  const [newBranch, setNewBranch] = useState('')
   const [editId, setEditId] = useState(null) // user id being edited
   const [editForm, setEditForm] = useState({})
   const [error, setError] = useState('')
@@ -40,6 +41,16 @@ export default function AdminUsers({ currentUser, embedded = false }) {
     setTimeout(() => setNotice(''), 3000)
   }
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
+
+  // Add a new branch to the managed list and select it for the new user.
+  function addBranchInline() {
+    const v = newBranch.trim()
+    if (!v) return
+    if (!branches.some((b) => String(b).toLowerCase() === v.toLowerCase())) onAddBranch?.(v)
+    setForm((f) => ({ ...f, branch: v }))
+    setNewBranch('')
+    flash(`Branch "${v}" is now available.`)
+  }
 
   async function addUser(e) {
     e.preventDefault()
@@ -98,7 +109,7 @@ export default function AdminUsers({ currentUser, embedded = false }) {
     }
   }
   function makeAccountFrom(r) {
-    setForm({ username: r.name.replace(/\s+/g, '').toLowerCase(), password: '', role: 'user', branch: r.branch || BRANCHES[0] || '' })
+    setForm({ username: r.name.replace(/\s+/g, '').toLowerCase(), password: '', role: 'user', branch: r.branch || branches[0] || '' })
     setError('')
     document.getElementById('admin-new-user')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
@@ -160,12 +171,26 @@ export default function AdminUsers({ currentUser, embedded = false }) {
           </label>
           <label>Branch
             <select value={form.branch} onChange={set('branch')} disabled={form.role === 'admin'}>
-              {BRANCHES.map((b) => <option key={b}>{b}</option>)}
+              {branches.map((b) => <option key={b}>{b}</option>)}
             </select>
+          </label>
+          <label>New branch
+            <div className="add-row">
+              <input
+                value={newBranch}
+                onChange={(e) => setNewBranch(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addBranchInline())}
+                placeholder="Add a future branch"
+                disabled={form.role === 'admin'}
+              />
+              <button type="button" onClick={addBranchInline} disabled={form.role === 'admin' || !newBranch.trim()}>
+                Add
+              </button>
+            </div>
           </label>
           <button type="submit" className="submit">Create</button>
         </form>
-        <p className="saved-hint">Admins see all branches. Users are limited to their branch.</p>
+        <p className="saved-hint">Admins see all branches. Users are limited to their branch. New branches are also editable under ⚙️ Manage inputs → Branches.</p>
       </div>
 
       {/* Users */}
@@ -190,7 +215,7 @@ export default function AdminUsers({ currentUser, embedded = false }) {
                     <td>
                       <select value={editForm.branch} onChange={eset('branch')} disabled={editForm.role === 'admin'}>
                         <option value=""></option>
-                        {BRANCHES.map((b) => <option key={b}>{b}</option>)}
+                        {branches.map((b) => <option key={b}>{b}</option>)}
                       </select>
                     </td>
                     <td>

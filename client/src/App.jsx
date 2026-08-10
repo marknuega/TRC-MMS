@@ -343,6 +343,8 @@ function App({ user, onLogout }) {
   const [deviceOpen, setDeviceOpen] = useState(true)
   const [faultsOpen, setFaultsOpen] = useState(true)
   const isAllBranches = isAdmin && branch === ALL_BRANCHES
+  // Live, admin-managed branch list (falls back to the built-in defaults).
+  const branchList = options.branches?.length ? options.branches : BRANCHES
   const [theme, setTheme] = useState(loadTheme)
   const [mode, setMode] = useState(loadMode)
   const [sync, setSync] = useState({ online: true, pending: 0 })
@@ -618,6 +620,15 @@ function App({ user, onLogout }) {
       }, 400)
       return next
     })
+  }
+
+  // Add a new selectable branch (persisted in the managed options list).
+  function addBranch(name) {
+    const v = String(name ?? '').trim()
+    if (!v) return
+    const cur = options.branches?.length ? options.branches : BRANCHES
+    if (cur.some((b) => String(b).toLowerCase() === v.toLowerCase())) return
+    setCategory('branches', [...cur, v])
   }
 
   // Toggle one chart's visibility (persisted alongside the option lists).
@@ -1202,7 +1213,7 @@ function App({ user, onLogout }) {
               Branch
               {isAdmin ? (
                 <select value={branch} onChange={changeBranch}>
-                  {BRANCHES.map((b) => (
+                  {branchList.map((b) => (
                     <option key={b}>{b}</option>
                   ))}
                   <option value={ALL_BRANCHES}>{ALL_BRANCHES}</option>
@@ -1745,7 +1756,7 @@ function App({ user, onLogout }) {
                   {isAdmin ? (
                     <select value={monthBranch} onChange={(e) => setMonthBranch(e.target.value)}>
                       <option value="">All branches</option>
-                      {BRANCHES.map((b) => (
+                      {branchList.map((b) => (
                         <option key={b}>{b}</option>
                       ))}
                     </select>
@@ -1902,11 +1913,11 @@ function App({ user, onLogout }) {
             </section>
           )}
 
-          {page === 'dashboard' && <Dashboard saved={saved} branches={BRANCHES} embedded lockBranch={lockBranch} charts={options.charts} />}
+          {page === 'dashboard' && <Dashboard saved={saved} branches={branchList} embedded lockBranch={lockBranch} charts={options.charts} />}
 
-          {page === 'spareparts' && <SparePartsReport saved={saved} branches={BRANCHES} embedded lockBranch={lockBranch} charts={options.charts} />}
+          {page === 'spareparts' && <SparePartsReport saved={saved} branches={branchList} embedded lockBranch={lockBranch} charts={options.charts} />}
 
-          {page === 'agency' && <AgencyTotals saved={saved} branches={BRANCHES} embedded lockBranch={lockBranch} />}
+          {page === 'agency' && <AgencyTotals saved={saved} branches={branchList} embedded lockBranch={lockBranch} />}
 
           {page === 'inventory' && <Inventory embedded branch={isAllBranches ? '' : branch} />}
 
@@ -1914,7 +1925,7 @@ function App({ user, onLogout }) {
 
           {page === 'manage' && isAdmin && <ManageInputs options={options} onChange={setCategory} onToggleChart={setChart} embedded />}
 
-          {page === 'admin' && isAdmin && <AdminUsers currentUser={user} embedded />}
+          {page === 'admin' && isAdmin && <AdminUsers currentUser={user} branches={branchList} onAddBranch={addBranch} embedded />}
 
           <footer className="app-footer">
             <Credit />
