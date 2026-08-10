@@ -2023,11 +2023,14 @@ function fmtLongDate(v) {
   return isNaN(d) ? '' : `${MON_ABBR[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`
 }
 
-// "Name-Branch TRC" per handover person (comma-separated names supported).
+// Bare person name: drop any branch label already baked in (e.g. "Gabriel - Jeddah TRC" -> "Gabriel").
+const bareName = (n) => String(n || '').replace(/[\s\-–/]*[\w\s]*\bTRC\b\s*$/i, '').trim()
+
+// "Name-Branch TRC" per handover person (comma-separated names supported), no redundant label.
 function fmtHandover(val, branch) {
   return String(val || '')
     .split(',')
-    .map((s) => s.trim())
+    .map((s) => bareName(s))
     .filter(Boolean)
     .map((n) => `${n}-${branch} TRC`)
     .join(', ')
