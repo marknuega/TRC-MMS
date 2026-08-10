@@ -157,11 +157,11 @@ function printReference(data) {
   <h2>Companies</h2>
   <table>${codeRows(companies)}</table>
 
-  <h2>Agencies (confirmation)</h2>
-  <table>${codeRows(agencies)}</table>
-
   <h2>Technician ID</h2>
   <table>${codeRows(technicians)}</table>
+
+  <h2>Agencies (confirmation)</h2>
+  <table>${codeRows(agencies)}</table>
 
   <div class="foot">${COPYRIGHT_HTML}</div>
 </body></html>`
@@ -435,22 +435,22 @@ export default function ReferenceCard() {
       </details>
 
       <details className="ref-sec">
-        <summary className="ref-section">Agencies (confirmation)</summary>
+        <summary className="ref-section">Technician ID</summary>
         <div className="ref-sec-body">
           <div className="ref-grid">
             <div className="ref-block">
-              <CodeTable rows={data.agencies} />
+              <CodeTable rows={data.technicians} />
             </div>
           </div>
         </div>
       </details>
 
       <details className="ref-sec">
-        <summary className="ref-section">Technician ID</summary>
+        <summary className="ref-section">Agencies (confirmation)</summary>
         <div className="ref-sec-body">
           <div className="ref-grid">
             <div className="ref-block">
-              <CodeTable rows={data.technicians} />
+              <CodeTable rows={data.agencies} />
             </div>
           </div>
         </div>
