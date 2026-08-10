@@ -23,7 +23,7 @@ import {
   syncNow,
 } from './api'
 import { onSyncChange } from './offline'
-import { DEFAULT_OPTIONS, mergeOptions, MODEL_TYPE, BRANCHES, materialName, materialDescMap } from './options'
+import { DEFAULT_OPTIONS, mergeOptions, MODEL_TYPE, BRANCHES, ALL_BRANCHES, materialName, materialDescMap } from './options'
 import ManageInputs from './ManageInputs'
 import Inventory from './Inventory'
 import AgencyTotals from './AgencyTotals'
@@ -53,7 +53,6 @@ import './App.css'
 const DEVICE_LEVEL = new Set(['PROGRAM', 'RE-PROGRAM', 'INSTALL', 'RE-INSTALL', 'DISMANTLE'])
 const faultIsMeaningful = (f) => f.issue.trim() !== '' || DEVICE_LEVEL.has(String(f.action).toUpperCase())
 const today = () => new Date().toISOString().slice(0, 10)
-const ALL_BRANCHES = 'All Branches'
 const NAV = [
   { id: 'report', icon: '📋', label: 'Report' },
   { id: 'dashboard', icon: '📊', label: 'Dashboard' },
@@ -345,7 +344,8 @@ function App({ user, onLogout }) {
   const [monthExpanded, setMonthExpanded] = useState(false) // false = show 7 days only
   const [collapsedGroups, setCollapsedGroups] = useState(() => new Set()) // horizontally-collapsed groups
   const [monthValue, setMonthValue] = useState(() => today().slice(0, 7)) // YYYY-MM
-  const [monthBranch, setMonthBranch] = useState('')
+  // Monthly follows the same shared branch selection ('' = all branches).
+  const monthBranch = isAllBranches ? '' : branch
   const [manualSheet, setManualSheet] = useState(null) // pasted override for current month+branch
   const [pasteOpen, setPasteOpen] = useState(false)
   const [pasteText, setPasteText] = useState('')
@@ -372,10 +372,7 @@ function App({ user, onLogout }) {
 
   // Non-admins are pinned to their own branch everywhere.
   useEffect(() => {
-    if (lockBranch) {
-      setBranch(lockBranch)
-      setMonthBranch(lockBranch)
-    }
+    if (lockBranch) setBranch(lockBranch)
   }, [lockBranch])
   // Keep non-admins off admin-only pages.
   useEffect(() => {
@@ -478,8 +475,9 @@ function App({ user, onLogout }) {
       return next
     })
 
-  function changeBranch(e) {
-    const b = e.target.value
+  // The one branch selection, shared by every page. Selecting a branch on ANY
+  // page updates this, so all nav pages follow the last choice.
+  function selectBranch(b) {
     setBranch(b)
     try {
       localStorage.setItem(BRANCH_KEY, b)
@@ -491,6 +489,7 @@ function App({ user, onLogout }) {
     refresh(mode, isAdmin && b === ALL_BRANCHES ? '' : b)
     getInventory(isAdmin && b === ALL_BRANCHES ? '' : b).then(setInventory).catch(() => {})
   }
+  const changeBranch = (e) => selectBranch(e.target.value)
 
   // Working entries are per document type; refresh the set for the given mode
   // (defaults to the current one).
@@ -1770,11 +1769,11 @@ function App({ user, onLogout }) {
                 <label>
                   Branch
                   {isAdmin ? (
-                    <select value={monthBranch} onChange={(e) => setMonthBranch(e.target.value)}>
-                      <option value="">All branches</option>
+                    <select value={branch} onChange={changeBranch}>
                       {branchList.map((b) => (
                         <option key={b}>{b}</option>
                       ))}
+                      <option value={ALL_BRANCHES}>{ALL_BRANCHES}</option>
                     </select>
                   ) : (
                     <input value={monthBranch} readOnly aria-label="Branch" />
@@ -1929,11 +1928,11 @@ function App({ user, onLogout }) {
             </section>
           )}
 
-          {page === 'dashboard' && <Dashboard saved={saved} branches={branchList} embedded lockBranch={lockBranch} charts={options.charts} />}
+          {page === 'dashboard' && <Dashboard saved={saved} branches={branchList} branchSel={branch} onBranch={selectBranch} embedded lockBranch={lockBranch} charts={options.charts} />}
 
-          {page === 'spareparts' && <SparePartsReport saved={saved} branches={branchList} embedded lockBranch={lockBranch} charts={options.charts} />}
+          {page === 'spareparts' && <SparePartsReport saved={saved} branches={branchList} branchSel={branch} onBranch={selectBranch} embedded lockBranch={lockBranch} charts={options.charts} />}
 
-          {page === 'agency' && <AgencyTotals saved={saved} branches={branchList} embedded lockBranch={lockBranch} />}
+          {page === 'agency' && <AgencyTotals saved={saved} branches={branchList} branchSel={branch} onBranch={selectBranch} embedded lockBranch={lockBranch} />}
 
           {page === 'inventory' && <Inventory embedded branch={isAllBranches ? '' : branch} />}
 

@@ -7,8 +7,8 @@ import { useMemo, useState } from 'react'
 import { monthEntries, buildSparePartsReport } from './report'
 import { Pie } from './Pie'
 import { COPYRIGHT_HTML } from './copyright'
+import { ALL_BRANCHES } from './options'
 
-const ALL = '__all__'
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 const monthLabel = (mk) => {
   const [y, m] = String(mk || '').split('-').map(Number)
@@ -48,13 +48,13 @@ function splitByCompany(models) {
     })
 }
 
-export default function SparePartsReport({ saved, branches, embedded = false, lockBranch = null, charts = {} }) {
+export default function SparePartsReport({ saved, branches, embedded = false, lockBranch = null, charts = {}, branchSel = '', onBranch }) {
   const [openState, setOpen] = useState(false)
   const open = embedded || openState
   const [monthValue, setMonthValue] = useState(() => new Date().toISOString().slice(0, 7))
-  const [branchSel, setBranch] = useState(branches?.[0] ?? '')
-  // '' = every branch merged (admin "All branches"); non-admins are pinned.
-  const branch = lockBranch != null ? lockBranch : branchSel === ALL ? '' : branchSel
+  // Branch selection is shared app-wide (controlled by the parent). '' = every
+  // branch merged (admin "All Branches"); non-admins are pinned to their own.
+  const branch = lockBranch != null ? lockBranch : branchSel === ALL_BRANCHES ? '' : branchSel
 
   const [collapsed, setCollapsed] = useState(() => new Set()) // collapsed company cards
   const toggleCard = (key) =>
@@ -244,11 +244,11 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
               {lockBranch != null ? (
                 <input value={branch} readOnly aria-label="Branch" />
               ) : (
-                <select value={branchSel} onChange={(e) => setBranch(e.target.value)}>
+                <select value={branchSel} onChange={(e) => onBranch?.(e.target.value)}>
                   {(branches ?? []).map((b) => (
                     <option key={b}>{b}</option>
                   ))}
-                  <option value={ALL}>All branches</option>
+                  <option value={ALL_BRANCHES}>{ALL_BRANCHES}</option>
                 </select>
               )}
             </label>

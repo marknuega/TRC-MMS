@@ -7,8 +7,8 @@ import { useMemo, useState } from 'react'
 import { monthEntries, dashboardSummary, technicianTotals, topParts, monthlyTrend, agencyTransactions, buildSparePartsReport } from './report'
 import { Pie } from './Pie'
 import { toPie } from './chartUtils'
+import { ALL_BRANCHES } from './options'
 
-const ALL = '__all__'
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 const monthShort = (mk) => {
   const [y, m] = String(mk || '').split('-').map(Number)
@@ -19,12 +19,12 @@ const monthLong = (mk) => {
   return y && m ? `${['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][m - 1]} ${y}` : ''
 }
 
-export default function Dashboard({ saved, branches, embedded = false, lockBranch = null, charts = {} }) {
+export default function Dashboard({ saved, branches, embedded = false, lockBranch = null, charts = {}, branchSel = '', onBranch }) {
   const [openState, setOpen] = useState(false)
   const open = embedded || openState
   const [monthValue, setMonthValue] = useState(() => new Date().toISOString().slice(0, 7))
-  const [branchSel, setBranchSel] = useState(ALL)
-  const branch = lockBranch != null ? lockBranch : branchSel === ALL ? '' : branchSel
+  // Branch selection is shared app-wide (controlled by the parent).
+  const branch = lockBranch != null ? lockBranch : branchSel === ALL_BRANCHES ? '' : branchSel
 
   const entries = useMemo(() => monthEntries(saved, monthValue, branch), [saved, monthValue, branch])
   const summary = useMemo(() => dashboardSummary(entries), [entries])
@@ -97,11 +97,11 @@ export default function Dashboard({ saved, branches, embedded = false, lockBranc
               {lockBranch != null ? (
                 <input value={lockBranch || 'Your branch'} readOnly aria-label="Branch" />
               ) : (
-                <select value={branchSel} onChange={(e) => setBranchSel(e.target.value)}>
-                  <option value={ALL}>All branches</option>
+                <select value={branchSel} onChange={(e) => onBranch?.(e.target.value)}>
                   {(branches ?? []).map((b) => (
                     <option key={b}>{b}</option>
                   ))}
+                  <option value={ALL_BRANCHES}>{ALL_BRANCHES}</option>
                 </select>
               )}
             </label>

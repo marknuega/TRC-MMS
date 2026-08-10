@@ -5,6 +5,7 @@
 
 import { useMemo, useState } from 'react'
 import { agencyBlocks } from './report'
+import { ALL_BRANCHES } from './options'
 
 const today = () => new Date().toISOString().slice(0, 10)
 const up = (v) => String(v ?? '').trim().toUpperCase()
@@ -30,13 +31,13 @@ function periodRange(refDate, period) {
 
 const fmt = (d) => d.toLocaleDateString('en-GB')
 
-export default function AgencyTotals({ saved, branches, embedded = false, lockBranch = null }) {
+export default function AgencyTotals({ saved, branches, embedded = false, lockBranch = null, branchSel = '', onBranch }) {
   const [openState, setOpen] = useState(false)
   const open = embedded || openState
   const [period, setPeriod] = useState('month')
   const [refDate, setRefDate] = useState(today)
-  const [branchSel, setBranch] = useState('')
-  const branch = lockBranch != null ? lockBranch : branchSel
+  // Branch selection is shared app-wide (controlled by the parent).
+  const branch = lockBranch != null ? lockBranch : branchSel === ALL_BRANCHES ? '' : branchSel
 
   const [start, end] = useMemo(() => periodRange(refDate, period), [refDate, period])
 
@@ -118,11 +119,11 @@ export default function AgencyTotals({ saved, branches, embedded = false, lockBr
               {lockBranch != null ? (
                 <input value={branch} readOnly aria-label="Branch" />
               ) : (
-                <select value={branchSel} onChange={(e) => setBranch(e.target.value)}>
-                  <option value="">All branches</option>
+                <select value={branchSel} onChange={(e) => onBranch?.(e.target.value)}>
                   {branches.map((b) => (
                     <option key={b}>{b}</option>
                   ))}
+                  <option value={ALL_BRANCHES}>{ALL_BRANCHES}</option>
                 </select>
               )}
             </label>

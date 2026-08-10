@@ -83,6 +83,10 @@ export const CHART_TOGGLES = [
 // and stored in AppOptions; this is the seed / fallback when none are saved.
 export const BRANCHES = DEFAULT_OPTIONS.branches
 
+// Admin-only "show every branch" selection. Shared across all pages so one
+// branch choice follows the whole app. Maps to '' (no filter) when querying.
+export const ALL_BRANCHES = 'All Branches'
+
 // Selecting a model auto-fills the Type. Keyed by UPPERCASE model name.
 export const MODEL_TYPE = {
   TH1N: 'AIRBUS',
