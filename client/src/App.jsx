@@ -344,8 +344,6 @@ function App({ user, onLogout }) {
   const [monthExpanded, setMonthExpanded] = useState(false) // false = show 7 days only
   const [collapsedGroups, setCollapsedGroups] = useState(() => new Set()) // horizontally-collapsed groups
   const [monthValue, setMonthValue] = useState(() => today().slice(0, 7)) // YYYY-MM
-  // Monthly follows the same shared branch selection ('' = all branches).
-  const monthBranch = isAllBranches ? '' : branch
   const [manualSheet, setManualSheet] = useState(null) // pasted override for current month+branch
   const [pasteOpen, setPasteOpen] = useState(false)
   const [pasteText, setPasteText] = useState('')
@@ -356,6 +354,8 @@ function App({ user, onLogout }) {
   const [deviceOpen, setDeviceOpen] = useState(true)
   const [faultsOpen, setFaultsOpen] = useState(true)
   const isAllBranches = isAdmin && branch === ALL_BRANCHES
+  // Monthly follows the same shared branch selection ('' = all branches).
+  const monthBranch = isAllBranches ? '' : branch
   // Live, admin-managed branch list (falls back to the built-in defaults).
   const branchList = options.branches?.length ? options.branches : BRANCHES
   const [theme, setTheme] = useState(loadTheme)
