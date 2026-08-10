@@ -4,8 +4,8 @@ Software Developed by Muhammad Amir · MT# MT1063
 © 2026 Muhammad Amir. All rights reserved.
 
 Certified Electronics and Electrical Technician
-Philippines Electrical License CLN-NQ-***6092
-Philippines Electronics License CLN-COC-***204
+Electrical License CLN-NQ-***6092
+Electronics License CLN-COC-***204
 
 React (Vite) frontend + Node/Express API + PostgreSQL, deployed on Railway.
 
