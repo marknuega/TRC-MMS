@@ -2026,14 +2026,14 @@ function fmtLongDate(v) {
 // Bare person name: drop any branch label already baked in (e.g. "Gabriel - Jeddah TRC" -> "Gabriel").
 const bareName = (n) => String(n || '').replace(/[\s\-–/]*[\w\s]*\bTRC\b\s*$/i, '').trim()
 
-// "Name-Branch TRC" per handover person (comma-separated names supported), no redundant label.
-function fmtHandover(val, branch) {
-  return String(val || '')
-    .split(',')
-    .map((s) => bareName(s))
-    .filter(Boolean)
-    .map((n) => `${n}-${branch} TRC`)
-    .join(', ')
+// Comma-separated names with branch labels stripped: "Gabriel, Sam".
+const bareList = (val) => String(val || '').split(',').map(bareName).filter(Boolean).join(', ')
+
+// Combined "Transmitter/Receiver" for a branch, bare names only: "Gibriel/Amir".
+function handoverBy(handover) {
+  const t = bareList(handover?.t)
+  const r = bareList(handover?.r)
+  return [t, r].filter(Boolean).join('/') || '-'
 }
 
 // Transmittal manifest: material lines + handover signatures.
@@ -2067,15 +2067,23 @@ function TransmittalPrint({ report, descByMaterial = {}, handoverByBranch = {} }
         <thead>
           <tr>
             <th>#</th><th>TYPE</th><th>MATERIAL</th><th>DESCRIPTION</th><th>QTY</th><th>COMPANY</th><th>STATUS</th>
-            {isAll && <><th>DATE</th><th>TRANSMITTED BY</th><th>RECEIVED BY</th></>}
+            {isAll && <><th>DATE</th><th>BY:</th></>}
           </tr>
         </thead>
         <tbody>
           {isAll
             ? (() => {
                 let n = 0
-                return groups.flatMap(([b, list]) =>
-                  list.map((r, i) => {
+                return groups.flatMap(([b, list]) => {
+                  // Merge the DATE cell across consecutive rows that share the same date.
+                  const dateSpan = list.map((r, i) => {
+                    const d = fmtLongDate(r.date)
+                    if (i > 0 && fmtLongDate(list[i - 1].date) === d) return 0
+                    let span = 1
+                    while (i + span < list.length && fmtLongDate(list[i + span].date) === d) span += 1
+                    return span
+                  })
+                  return list.map((r, i) => {
                     n += 1
                     return (
                       <tr key={`${b}-${i}`}>
@@ -2086,13 +2094,16 @@ function TransmittalPrint({ report, descByMaterial = {}, handoverByBranch = {} }
                         <td>{r.qty}</td>
                         <td>{r.company}</td>
                         <td>{r.status}</td>
-                        <td className="nowrap">{fmtLongDate(r.date)}</td>
-                        {i === 0 && <td rowSpan={list.length}>{fmtHandover(handoverByBranch[b]?.t, b) || '-'}</td>}
-                        {i === 0 && <td rowSpan={list.length}>{fmtHandover(handoverByBranch[b]?.r, b) || '-'}</td>}
+                        {dateSpan[i] > 0 && (
+                          <td className="nowrap" rowSpan={dateSpan[i]}>
+                            {fmtLongDate(r.date)}
+                          </td>
+                        )}
+                        {i === 0 && <td rowSpan={list.length}>{handoverBy(handoverByBranch[b])}</td>}
                       </tr>
                     )
-                  }),
-                )
+                  })
+                })
               })()
             : rows.map((r, i) => (
                 <tr key={i}>
