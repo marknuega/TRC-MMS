@@ -1753,6 +1753,9 @@ function App({ user, onLogout }) {
               {reports.length > 0 && <span className="hint">(next: {nextDocId} · unsaved)</span>}
             </h2>
             <div className="breakdown-actions">
+              <button type="button" className="btn-txt" onClick={handleCopyTxt} disabled={!reports.length}>
+                {copied ? '✅ Copied' : '⧉ Copy'}
+              </button>
               <a
                 href="https://chat.whatsapp.com/GseaRTA11rvBvlAPBjunb5"
                 target="_blank"
@@ -1770,9 +1773,6 @@ function App({ user, onLogout }) {
                 title={isAllBranches ? 'All-Branches is a merged read-only view' : undefined}
               >
                 💾 Save report
-              </button>
-              <button type="button" className="btn-txt" onClick={handleCopyTxt} disabled={!reports.length}>
-                {copied ? '✅ Copied' : '⧉ Copy'}
               </button>
               <button type="button" className="btn-pdf" onClick={() => window.print()} disabled={!reports.length}>
                 ⭳ PDF
