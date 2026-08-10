@@ -241,6 +241,7 @@ export function transmittalRows(entries) {
         qty: Math.max(0, Number(f.quantity) || 0),
         company: companyDisplay(f.company),
         status: String(f.status ?? '').trim(),
+        branch: String(e.branch ?? ''),
       })
     }
   }

@@ -1990,7 +1990,7 @@ function App({ user, onLogout }) {
       {/* Printable view — hidden on screen, shown only when printing (Save as PDF). */}
       <div className="print-only print-report">
         {reports.map((r) => (
-          <PrintDate key={r.reportId ?? r.dateLabel} report={r} descByMaterial={descByMaterial} />
+          <PrintDate key={r.reportId ?? r.dateLabel} report={r} descByMaterial={descByMaterial} handoverByBranch={handoverMap} />
         ))}
       </div>
     </>
@@ -1998,19 +1998,38 @@ function App({ user, onLogout }) {
 }
 
 // Route each printed page to the right layout for its mode.
-function PrintDate({ report, descByMaterial }) {
+function PrintDate({ report, descByMaterial, handoverByBranch }) {
   return report.mode === 'transmittal' ? (
-    <TransmittalPrint report={report} descByMaterial={descByMaterial} />
+    <TransmittalPrint report={report} descByMaterial={descByMaterial} handoverByBranch={handoverByBranch} />
   ) : (
     <ReportPrint report={report} />
   )
 }
 
+// "Name-Branch TRC" per handover person (comma-separated names supported).
+function fmtHandover(val, branch) {
+  return String(val || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((n) => `${n}-${branch} TRC`)
+    .join(', ')
+}
+
 // Transmittal manifest: material lines + handover signatures.
-function TransmittalPrint({ report, descByMaterial = {} }) {
+function TransmittalPrint({ report, descByMaterial = {}, handoverByBranch = {} }) {
   const rows = transmittalRows(report.entries)
   const notes = reportNotes(report.entries)
   const totalQty = rows.reduce((s, r) => s + r.qty, 0)
+  const isAll = report.branch === ALL_BRANCHES
+
+  // All-Branches: group rows by branch (A–Z), materials A–Z within each, and add
+  // merged Transmitted/Received-by columns showing each branch's own personnel.
+  const groups = isAll
+    ? [...rows.reduce((m, r) => m.set(r.branch || '', [...(m.get(r.branch || '') || []), r]), new Map())]
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([b, list]) => [b, list.slice().sort((x, y) => x.material.localeCompare(y.material))])
+    : null
 
   return (
     <section className="print-day">
@@ -2028,20 +2047,43 @@ function TransmittalPrint({ report, descByMaterial = {} }) {
         <thead>
           <tr>
             <th>#</th><th>TYPE</th><th>MATERIAL</th><th>DESCRIPTION</th><th>QTY</th><th>COMPANY</th><th>STATUS</th>
+            {isAll && <><th>TRANSMITTED BY</th><th>RECEIVED BY</th></>}
           </tr>
         </thead>
         <tbody>
-          {rows.map((r, i) => (
-            <tr key={i}>
-              <td>{i + 1}</td>
-              <td>{r.type}</td>
-              <td className="ia">{r.material}</td>
-              <td>{descByMaterial[String(r.material).toUpperCase()] || ''}</td>
-              <td>{r.qty}</td>
-              <td>{r.company}</td>
-              <td>{r.status}</td>
-            </tr>
-          ))}
+          {isAll
+            ? (() => {
+                let n = 0
+                return groups.flatMap(([b, list]) =>
+                  list.map((r, i) => {
+                    n += 1
+                    return (
+                      <tr key={`${b}-${i}`}>
+                        <td>{n}</td>
+                        <td>{r.type}</td>
+                        <td className="ia">{r.material}</td>
+                        <td>{descByMaterial[String(r.material).toUpperCase()] || ''}</td>
+                        <td>{r.qty}</td>
+                        <td>{r.company}</td>
+                        <td>{r.status}</td>
+                        {i === 0 && <td rowSpan={list.length}>{fmtHandover(handoverByBranch[b]?.t, b) || '-'}</td>}
+                        {i === 0 && <td rowSpan={list.length}>{fmtHandover(handoverByBranch[b]?.r, b) || '-'}</td>}
+                      </tr>
+                    )
+                  }),
+                )
+              })()
+            : rows.map((r, i) => (
+                <tr key={i}>
+                  <td>{i + 1}</td>
+                  <td>{r.type}</td>
+                  <td className="ia">{r.material}</td>
+                  <td>{descByMaterial[String(r.material).toUpperCase()] || ''}</td>
+                  <td>{r.qty}</td>
+                  <td>{r.company}</td>
+                  <td>{r.status}</td>
+                </tr>
+              ))}
         </tbody>
       </table>
 
