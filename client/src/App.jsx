@@ -859,9 +859,16 @@ function App({ user, onLogout }) {
     // one exportable report (branches with no data that day simply don't appear).
     if (isAllBranches) {
       const id = `${ALL_BRANCHES}-${nextDocId}` // e.g. "All Branches-TRANS-0002"
-      return groupReports(entries).map((g) =>
-        buildDateReport(g.dateLabel, id, g.entries, { branch: ALL_BRANCHES, mode, transmittedBy: reportTransmittedBy, receivedBy: reportReceivedBy }),
-      )
+      const handover = { branch: ALL_BRANCHES, mode, transmittedBy: reportTransmittedBy, receivedBy: reportReceivedBy }
+      // Transmittal: one consolidated table across every date (the table carries a
+      // per-entry Date column). Maintenance stays one report per day.
+      if (mode === 'transmittal') {
+        if (!entries.length) return []
+        const dates = [...new Set(entries.map((e) => fmtLongDate(e.reportDate)).filter(Boolean))]
+        const label = dates.length <= 1 ? dates[0] ?? '' : `${dates[0]} … ${dates[dates.length - 1]}`
+        return [buildDateReport(label, id, entries, handover)]
+      }
+      return groupReports(entries).map((g) => buildDateReport(g.dateLabel, id, g.entries, handover))
     }
     return groupReports(entries).map((g) =>
       buildDateReport(g.dateLabel, repLabel(nextDocId, branch, mode), g.entries, {
@@ -2006,6 +2013,16 @@ function PrintDate({ report, descByMaterial, handoverByBranch }) {
   )
 }
 
+// Transaction date like "Aug. 5, 2026" from an ISO / yyyy-mm-dd value.
+const MON_ABBR = ['Jan.', 'Feb.', 'Mar.', 'Apr.', 'May', 'Jun.', 'Jul.', 'Aug.', 'Sep.', 'Oct.', 'Nov.', 'Dec.']
+function fmtLongDate(v) {
+  const s = String(v ?? '')
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (m) return `${MON_ABBR[+m[2] - 1]} ${+m[3]}, ${m[1]}`
+  const d = new Date(s)
+  return isNaN(d) ? '' : `${MON_ABBR[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`
+}
+
 // "Name-Branch TRC" per handover person (comma-separated names supported).
 function fmtHandover(val, branch) {
   return String(val || '')
@@ -2047,7 +2064,7 @@ function TransmittalPrint({ report, descByMaterial = {}, handoverByBranch = {} }
         <thead>
           <tr>
             <th>#</th><th>TYPE</th><th>MATERIAL</th><th>DESCRIPTION</th><th>QTY</th><th>COMPANY</th><th>STATUS</th>
-            {isAll && <><th>TRANSMITTED BY</th><th>RECEIVED BY</th></>}
+            {isAll && <><th>DATE</th><th>TRANSMITTED BY</th><th>RECEIVED BY</th></>}
           </tr>
         </thead>
         <tbody>
@@ -2066,6 +2083,7 @@ function TransmittalPrint({ report, descByMaterial = {}, handoverByBranch = {} }
                         <td>{r.qty}</td>
                         <td>{r.company}</td>
                         <td>{r.status}</td>
+                        <td className="nowrap">{fmtLongDate(r.date)}</td>
                         {i === 0 && <td rowSpan={list.length}>{fmtHandover(handoverByBranch[b]?.t, b) || '-'}</td>}
                         {i === 0 && <td rowSpan={list.length}>{fmtHandover(handoverByBranch[b]?.r, b) || '-'}</td>}
                       </tr>

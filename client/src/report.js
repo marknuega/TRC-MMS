@@ -242,6 +242,7 @@ export function transmittalRows(entries) {
         company: companyDisplay(f.company),
         status: String(f.status ?? '').trim(),
         branch: String(e.branch ?? ''),
+        date: e.reportDate ?? '',
       })
     }
   }
