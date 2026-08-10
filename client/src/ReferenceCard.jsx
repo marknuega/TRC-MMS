@@ -82,6 +82,15 @@ function printReference(data) {
   const { devices, componentGroups, actions, companies, agencies, technicians } = data
   const codeRows = (pairs) =>
     pairs.map(([c, n]) => `<tr><td class="c">${esc(c)}</td><td>${esc(n)}</td></tr>`).join('')
+  // Device rows bold the source char in the model name and add an explanation column.
+  const deviceRows = (pairs) =>
+    pairs
+      .map(([c, n]) => {
+        const p = deviceSource(c, n)
+        const name = `${esc(p.before)}<b>${esc(p.hit)}</b>${esc(p.after)}`
+        return `<tr><td class="c">${esc(c)}</td><td>${name}</td><td class="note">${esc(p.note)}</td></tr>`
+      })
+      .join('')
   const half = Math.ceil(devices.length / 2)
 
   const componentTables = componentGroups
@@ -100,6 +109,8 @@ function printReference(data) {
   table { border-collapse: collapse; width: 100%; }
   td, th { border: 1px solid #ccc; padding: 3px 6px; text-align: left; vertical-align: top; }
   td.c, th.c { font-weight: 700; font-family: ui-monospace, Consolas, monospace; white-space: nowrap; width: 3.2em; }
+  td.note { color: #555; font-size: 10px; white-space: nowrap; }
+  td b { color: #111; }
   .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 18px; }
   .grp { break-inside: avoid; margin-bottom: 8px; }
   td.grp { background: #eef; font-weight: 700; margin: 0; }
@@ -144,8 +155,8 @@ function printReference(data) {
 
   <h2>Device Letters</h2>
   <div class="cols">
-    <table>${codeRows(devices.slice(0, half))}</table>
-    <table>${codeRows(devices.slice(half))}</table>
+    <table>${deviceRows(devices.slice(0, half))}</table>
+    <table>${deviceRows(devices.slice(half))}</table>
   </div>
 
   <h2>Actions</h2>
@@ -197,6 +208,64 @@ function CodeTable({ rows }) {
             <td>{name}</td>
           </tr>
         ))}
+      </tbody>
+    </table>
+  )
+}
+
+// Whitespace-delimited word of `s` that contains index `i`.
+function wordAt(s, i) {
+  let a = i
+  let b = i
+  while (a > 0 && !/\s/.test(s[a - 1])) a -= 1
+  while (b < s.length - 1 && !/\s/.test(s[b + 1])) b += 1
+  return s.slice(a, b + 1)
+}
+
+// Letters not spelled in the model name come from a spoken digit instead.
+const DEVICE_DERIV = {
+  S: { char: '6', note: '“Six” — 6 in 680' },
+  E: { char: '8', note: '“Eight” — 8 in 580' },
+  N: { char: '9', note: '“Nine” — 9 in 590' },
+}
+
+// Where a device letter is taken from: the char to bold in the model name and a
+// short explanation. Searches after the brand word (so "Airbus TH[R]9" wins over
+// the R in "Airbus"); falls back to the spoken-digit map for S/E/N.
+function deviceSource(code, name) {
+  const c = String(code).trim().toUpperCase()
+  const s = String(name)
+  const sp = s.indexOf(' ')
+  let idx = s.toUpperCase().indexOf(c, sp >= 0 ? sp + 1 : 0)
+  let note = ''
+  if (idx >= 0) note = `${c} in ${wordAt(s, idx)}`
+  else if (DEVICE_DERIV[c]) {
+    idx = s.indexOf(DEVICE_DERIV[c].char)
+    note = DEVICE_DERIV[c].note
+  }
+  if (idx < 0) return { before: s, hit: '', after: '', note: note || '—' }
+  return { before: s.slice(0, idx), hit: s[idx], after: s.slice(idx + 1), note }
+}
+
+// Device Letters: model name with its source char bolded, plus an explanation.
+function DeviceTable({ rows }) {
+  return (
+    <table className="ref-table">
+      <tbody>
+        {rows.map(([code, name]) => {
+          const p = deviceSource(code, name)
+          return (
+            <tr key={code}>
+              <td className="ref-code">{code}</td>
+              <td>
+                {p.before}
+                <strong className="ref-hit">{p.hit}</strong>
+                {p.after}
+              </td>
+              <td className="ref-note">{p.note}</td>
+            </tr>
+          )
+        })}
       </tbody>
     </table>
   )
@@ -400,10 +469,10 @@ export default function ReferenceCard() {
         <div className="ref-sec-body">
           <div className="ref-grid">
             <div className="ref-block">
-              <CodeTable rows={data.devices.slice(0, half)} />
+              <DeviceTable rows={data.devices.slice(0, half)} />
             </div>
             <div className="ref-block">
-              <CodeTable rows={data.devices.slice(half)} />
+              <DeviceTable rows={data.devices.slice(half)} />
             </div>
           </div>
         </div>

@@ -2379,6 +2379,17 @@ h2 {
   color: var(--primary);
   background: var(--surface-2);
 }
+/* The source char of a device letter, highlighted in the model name. */
+.ref-table .ref-hit {
+  font-weight: 800;
+  color: var(--primary);
+}
+/* Explanation column for device letters. */
+.ref-table .ref-note {
+  color: var(--muted);
+  font-size: 0.85em;
+  white-space: nowrap;
+}
 .ref-table th {
   border: 1px solid var(--border);
   padding: 0.3rem 0.6rem;
