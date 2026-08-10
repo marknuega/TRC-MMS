@@ -7,6 +7,7 @@ import { useMemo, useState } from 'react'
 import { monthEntries, buildSparePartsReport } from './report'
 import { Pie } from './Pie'
 
+const ALL = '__all__'
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 const monthLabel = (mk) => {
   const [y, m] = String(mk || '').split('-').map(Number)
@@ -51,7 +52,8 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
   const open = embedded || openState
   const [monthValue, setMonthValue] = useState(() => new Date().toISOString().slice(0, 7))
   const [branchSel, setBranch] = useState(branches?.[0] ?? '')
-  const branch = lockBranch != null ? lockBranch : branchSel
+  // '' = every branch merged (admin "All branches"); non-admins are pinned.
+  const branch = lockBranch != null ? lockBranch : branchSel === ALL ? '' : branchSel
 
   const [collapsed, setCollapsed] = useState(() => new Set()) // collapsed company cards
   const toggleCard = (key) =>
@@ -183,6 +185,7 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
                   {(branches ?? []).map((b) => (
                     <option key={b}>{b}</option>
                   ))}
+                  <option value={ALL}>All branches</option>
                 </select>
               )}
             </label>
@@ -191,7 +194,7 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
             </button>
           </div>
           <p className="saved-hint">
-            Spare parts used and activity for <strong>{branch}</strong>, built from saved <strong>reports</strong> in{' '}
+            Spare parts used and activity for <strong>{branch || 'All branches'}</strong>, built from saved <strong>reports</strong> in{' '}
             <strong>{monthLabel(monthValue)}</strong>. Parts merge by name + company; totals are highlighted.
           </p>
 

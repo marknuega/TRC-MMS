@@ -387,8 +387,11 @@ export function monthEntries(savedReports, monthKey, branch = '') {
     if (!m) continue
     const mk = `${m[3]}-${m[2].padStart(2, '0')}`
     if (mk !== monthKey) continue
-    const prev = byDay.get(label)
-    if (!prev || (r.seq ?? 0) > (prev.seq ?? 0)) byDay.set(label, r)
+    // Dedup the latest re-save per day, but keep each branch separate so an
+    // "All branches" view (branch = '') merges every branch's day, not just one.
+    const key = `${up(r.branch)}|${label}`
+    const prev = byDay.get(key)
+    if (!prev || (r.seq ?? 0) > (prev.seq ?? 0)) byDay.set(key, r)
   }
   return [...byDay.values()].flatMap((r) => (Array.isArray(r.entries) ? r.entries : []))
 }

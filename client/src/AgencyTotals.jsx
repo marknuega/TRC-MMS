@@ -48,7 +48,8 @@ export default function AgencyTotals({ saved, branches, embedded = false, lockBr
       if (branch && up(r.branch) !== up(branch)) continue
       const d = parseDmy(r.dateLabel)
       if (!d || d < start || d > end) continue
-      const key = r.dateLabel
+      // Keep each branch's day separate so "All branches" merges every branch.
+      const key = `${up(r.branch)}|${r.dateLabel}`
       const prev = byDay.get(key)
       if (!prev || (r.seq ?? 0) > (prev.seq ?? 0)) byDay.set(key, r)
     }
