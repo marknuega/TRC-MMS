@@ -15,21 +15,29 @@
 // variant, so it could not tell an original side grip from a 3D-printed one.
 //
 // The lists below are pulled LIVE from this app's own /codemap, so the page
-// stays in step with edits made under Code Map. The bundled constants are only
-// a fallback for when that fetch fails (offline). Both the map and the fallback
-// live in codes.js, shared with the decoder that actually parses these codes —
-// one vocabulary, described in exactly one place.
+// stays in step with edits made in the "Edit Code Map" section further down
+// this same page. The bundled constants are only a fallback for when that
+// fetch fails (offline). Both the map and the fallback live in codes.js,
+// shared with the decoder that actually parses these codes — one vocabulary,
+// described in exactly one place.
 //
 // TWO sections describe how a code resolves, and their order is the resolution
 // order: a Claimed Code (an Issue type in Manage inputs) wins outright, and only
 // where there is no claim do Parts Numbers + Variants apply. The card used to
 // show the second without the first, which made it a partial description of a
 // vocabulary technicians rely on being complete.
+//
+// Editing used to be a separate admin-only "Code Map" page. It moved here —
+// as an admin-only collapsible section (CodeMapEditor, below) — because every
+// technician's decode resolves through this map, so an admin editing it
+// should see how the edit reads on the same page a technician consults,
+// rather than switching pages to check.
 
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { COPYRIGHT_HTML } from './copyright'
 import { FALLBACK, VARIANTS, useCodeMap } from './codes'
 import { groupComponents } from './refGroups'
+import { getCodeMap, saveCodeMap } from './api'
 
 const numericSort = ([a], [b]) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
 // Split a list into n roughly equal columns, keeping reading order down each one.
@@ -265,7 +273,308 @@ function DeviceTable({ rows }) {
   )
 }
 
-export default function ReferenceCard() {
+// ---- Admin editor for the code map (formerly its own "Code Map" page) ----
+//
+// Lives here, not on a separate page, because every technician's decode
+// resolves through this map — an admin editing it should see straight away
+// how that edit reads on the same page a technician consults. The read-only
+// tables below pick a save up on their own next poll (useCodeMap, every few
+// seconds); this editor keeps its own copy so in-progress edits aren't
+// clobbered mid-type by that poll.
+//
+// The categories the server accepts, in the order they appear in a code, then
+// the ones sent separately. `blankOk` marks the one place where an empty name
+// is a real value rather than an unfinished entry.
+const CATS = [
+  {
+    key: 'equipmentCodes',
+    label: 'Device letters',
+    codeLabel: 'Letter',
+    hint: 'The first character of a code — which radio it is. H = Airbus TH1n.',
+  },
+  {
+    key: 'components',
+    label: 'Parts numbers',
+    codeLabel: 'Number',
+    hint: 'The 2 digits after the device letter. 43 = Side Grip.',
+  },
+  {
+    key: 'variants',
+    label: 'Variants',
+    codeLabel: 'Letter',
+    blankOk: true,
+    hint:
+      'The letter after the parts number, added to the part name as a suffix. A is blank on purpose — an empty suffix is what makes A the default build, so leaving it empty is a real entry, not an unfinished one.',
+  },
+  { key: 'actions', label: 'Actions', codeLabel: 'Letter', hint: 'What was done. C = Change.' },
+  { key: 'companies', label: 'Companies', codeLabel: 'Code', hint: 'Who owns or funds the work. MT = MOTECO.' },
+  {
+    key: 'agencies',
+    label: 'Agencies',
+    codeLabel: 'Code',
+    hint: 'Sent on its own after a report to verify it. PSD = Public Security Department.',
+  },
+  { key: 'technicians', label: 'Technician IDs', codeLabel: 'ID', hint: 'The last number in a report. 1 = Amir.' },
+]
+
+const normCode = (v) => String(v ?? '').trim().toUpperCase()
+
+function CodeMapEditor() {
+  const [map, setMap] = useState(null)
+  const [cat, setCat] = useState(CATS[0].key)
+  const [newCode, setNewCode] = useState('')
+  const [newName, setNewName] = useState('')
+  const [editKey, setEditKey] = useState('') // the code currently open for edit
+  const [editCode, setEditCode] = useState('')
+  const [editName, setEditName] = useState('')
+  const [dirty, setDirty] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+
+  useEffect(() => {
+    getCodeMap()
+      .then(setMap)
+      .catch((e) => setError(e.message))
+  }, [])
+
+  // Staged edits live only in this tab until saved, and switching pages unmounts
+  // the component without warning. The browser can at least catch a tab close.
+  useEffect(() => {
+    if (!dirty) return
+    const warn = (e) => e.preventDefault()
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [dirty])
+
+  const meta = CATS.find((c) => c.key === cat) ?? CATS[0]
+  const entries = useMemo(() => Object.entries(map?.[cat] ?? {}), [map, cat])
+
+  function flash(msg) {
+    setNotice(msg)
+    setTimeout(() => setNotice(''), 3000)
+  }
+
+  // Rebuild the category from a list of pairs, so an edit keeps its position
+  // instead of being deleted and re-appended to the bottom.
+  function commit(pairs) {
+    setMap((m) => ({ ...m, [cat]: Object.fromEntries(pairs) }))
+    setDirty(true)
+    setError('')
+  }
+
+  // What is wrong with a code, or '' when it is usable.
+  function codeProblem(code, exceptKey = '') {
+    if (!code) return `Enter the ${meta.codeLabel.toLowerCase()}.`
+    const clash = entries.find(([k]) => k !== exceptKey && normCode(k) === code)
+    if (clash) return `${code} is already used by "${clash[1] || '(blank)'}".`
+    return ''
+  }
+
+  function add() {
+    const code = normCode(newCode)
+    const name = newName.trim()
+    const problem = codeProblem(code)
+    if (problem) return setError(problem)
+    if (!name && !meta.blankOk) return setError('Enter what this code means.')
+    commit([...entries, [code, name]])
+    setNewCode('')
+    setNewName('')
+  }
+
+  function startEdit(code, name) {
+    setEditKey(code)
+    setEditCode(code)
+    setEditName(name)
+    setError('')
+  }
+
+  function saveEdit() {
+    const code = normCode(editCode)
+    const name = editName.trim()
+    const problem = codeProblem(code, editKey)
+    if (problem) return setError(problem)
+    if (!name && !meta.blankOk) return setError('Enter what this code means.')
+    commit(entries.map(([k, v]) => (k === editKey ? [code, name] : [k, v])))
+    setEditKey('')
+  }
+
+  function remove(code) {
+    commit(entries.filter(([k]) => k !== code))
+    setEditKey('')
+  }
+
+  async function save() {
+    setSaving(true)
+    setError('')
+    try {
+      const saved = await saveCodeMap(map)
+      setMap(saved)
+      setDirty(false)
+      flash('Saved — the tables below and the WhatsApp bot pick this up within seconds.')
+    } catch (e) {
+      // A non-admin reaching the PUT is the server refusing, not a bug here.
+      setError(e.status === 403 ? 'Only an admin can change the code map.' : e.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function discard() {
+    try {
+      setMap(await getCodeMap())
+      setDirty(false)
+      setEditKey('')
+      setError('')
+      flash('Reloaded the saved map.')
+    } catch (e) {
+      setError(e.message)
+    }
+  }
+
+  return (
+    <div className="manage-body">
+      <p className="manage-hint">
+        The shared vocabulary a CDS code resolves through — <code>H43A</code> is a device letter, a parts number
+        and a variant looked up here. It is published at <code>/codemap</code> for the WhatsApp bot, so an edit
+        changes how every technician's codes decode. Changes are staged until you press Save.
+      </p>
+
+      {!map && !error && <p className="manage-hint">Loading…</p>}
+
+      {map && (
+        <>
+          <div className="manage-controls">
+            <label>
+              Category
+              <select
+                value={cat}
+                onChange={(e) => {
+                  setCat(e.target.value)
+                  setEditKey('')
+                  setNewCode('')
+                  setNewName('')
+                  setError('')
+                }}
+              >
+                {CATS.map((c) => (
+                  <option key={c.key} value={c.key}>
+                    {c.label} ({Object.keys(map[c.key] ?? {}).length})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field-code">
+              {meta.codeLabel}
+              <input
+                value={newCode}
+                onChange={(e) => setNewCode(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), add())}
+                placeholder="H"
+              />
+            </label>
+            <label className="grow">
+              Means
+              <div className="add-row">
+                <input
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), add())}
+                  placeholder={meta.blankOk ? 'Suffix — leave empty for the default build' : 'What this code means'}
+                />
+                <button type="button" onClick={add} disabled={!newCode.trim()}>
+                  Add
+                </button>
+              </div>
+            </label>
+          </div>
+
+          <p className="manage-hint">{meta.hint}</p>
+
+          {error && <p className="manage-notice error">{error}</p>}
+          {notice && <p className="manage-notice">{notice}</p>}
+
+          <div className="codemap-actions">
+            <button type="button" className="submit" onClick={save} disabled={!dirty || saving}>
+              {saving ? 'Saving…' : dirty ? 'Save changes' : 'Saved'}
+            </button>
+            <button type="button" className="ghost" onClick={discard} disabled={!dirty || saving}>
+              Discard
+            </button>
+            {dirty && <span className="codemap-dirty">Unsaved changes — nothing is published yet.</span>}
+          </div>
+
+          <ul className="manage-list">
+            {entries.length === 0 && <li className="manage-empty">Nothing here yet — add one above.</li>}
+            {entries.map(([code, name]) => (
+              <li key={code}>
+                {editKey === code ? (
+                  <>
+                    <div className="edit-fields">
+                      <div className="edit-code-row">
+                        <label className="field-code">
+                          {meta.codeLabel}
+                          <input
+                            className="edit-input"
+                            value={editCode}
+                            onChange={(e) => setEditCode(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault()
+                                saveEdit()
+                              }
+                              if (e.key === 'Escape') setEditKey('')
+                            }}
+                            autoFocus
+                          />
+                        </label>
+                      </div>
+                      <input
+                        className="edit-input"
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            saveEdit()
+                          }
+                          if (e.key === 'Escape') setEditKey('')
+                        }}
+                        placeholder={meta.blankOk ? 'Empty = the default build' : 'What this code means'}
+                      />
+                    </div>
+                    <div className="manage-item-actions">
+                      <button type="button" onClick={saveEdit}>Apply</button>
+                      <button type="button" className="ghost" onClick={() => setEditKey('')}>Cancel</button>
+                      {/* Delete lives inside Edit so it can't be hit by accident. */}
+                      <button type="button" className="danger" onClick={() => remove(code)}>Delete</button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <span className="manage-item-label">
+                      <span className="manage-item-code">{code}</span>
+                      {name || <em className="muted">(blank — default build)</em>}
+                    </span>
+                    <div className="manage-item-actions">
+                      <button type="button" className="ghost" onClick={() => startEdit(code, name)}>
+                        Edit
+                      </button>
+                    </div>
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      {error && !map && <p className="manage-notice error">{error}</p>}
+    </div>
+  )
+}
+
+export default function ReferenceCard({ isAdmin = false }) {
   const { map, status, updatedAt } = useCodeMap()
 
   // Derive display lists from the live map, falling back to bundled data.
@@ -317,6 +626,15 @@ export default function ReferenceCard() {
       <p className={`ref-status ${status}`}>
         <span className="ref-dot" aria-hidden="true" /> {statusLabel}
       </p>
+
+      {isAdmin && (
+        <details className="ref-sec">
+          <summary className="ref-section">✏️ Edit Code Map (admin)</summary>
+          <div className="ref-sec-body">
+            <CodeMapEditor />
+          </div>
+        </details>
+      )}
 
       <div className="ref-example">
         <div className="ref-syntax">
@@ -483,9 +801,9 @@ export default function ReferenceCard() {
               {data.unusableComponents.length === 1 ? 'is' : 'are'} not usable and{' '}
               {data.unusableComponents.length === 1 ? 'is' : 'are'} hidden here — a parts number must
               be exactly two digits, so nothing can reach{' '}
-              <code>{data.unusableComponents.map(([c]) => c).join(', ')}</code>. Remove them under{' '}
-              <strong>Code Map</strong>; if one names a real part, give it an Issue type instead so it
-              decodes.
+              <code>{data.unusableComponents.map(([c]) => c).join(', ')}</code>. Remove them in{' '}
+              <strong>Edit Code Map</strong> above; if one names a real part, give it an Issue type
+              instead so it decodes.
             </p>
           )}
           <div className="ref-grid">
