@@ -36,6 +36,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { COPYRIGHT_HTML } from './copyright'
 import { FALLBACK, VARIANTS, useCodeMap } from './codes'
+import { partsNumberName, partsNumberCode } from './options'
 import { groupComponents, PARTS_RE, COMPONENT_BUCKETS } from './refGroups'
 import { getCodeMap, saveCodeMap } from './api'
 
@@ -56,7 +57,7 @@ const esc = (s) =>
 // Build a clean, standalone printable document (independent of the app layout)
 // and print it through a hidden iframe — reliable for Chrome "Save as PDF".
 function printReference(data) {
-  const { devices, componentGroups, claims, actions, companies, agencies, technicians } = data
+  const { devices, componentGroups, claims, actions, companies, agencies, technicians, partsNumberRows } = data
   const codeRows = (pairs) =>
     pairs.map(([c, n]) => `<tr><td class="c">${esc(c)}</td><td>${esc(n)}</td></tr>`).join('')
   // Device rows bold the source char in the model name and add an explanation column.
@@ -77,6 +78,16 @@ function printReference(data) {
   // number, because what groups them is the issue they name, not the part range.
   const claimTables = chunk(claims, 3)
     .map((rows) => `<div class="grp"><table>${codeRows(rows)}</table></div>`)
+    .join('')
+  // Rows here are { number, name } objects, not [code, name] pairs — codeRows
+  // can't be reused directly.
+  const partsNumberTables = chunk(partsNumberRows, 3)
+    .map(
+      (rows) =>
+        `<div class="grp"><table>${rows
+          .map((r) => `<tr><td class="c">${esc(r.number)}</td><td>${esc(r.name)}</td></tr>`)
+          .join('')}</table></div>`,
+    )
     .join('')
   // "A = Original, B = 3D" — read from the same map the decoder uses.
   const variantList = Object.entries(VARIANTS)
@@ -155,6 +166,14 @@ function printReference(data) {
   <p class="sub">Used only when no claim above covers the code. A parts number is always exactly two digits.</p>
   <div class="cols">${componentTables}</div>
 
+  ${
+    partsNumberRows.length
+      ? `<h2>Parts Number Catalog</h2>
+  <p class="sub">Admin-managed catalog from Manage Inputs → Parts Number — separate from the Parts Numbers above.</p>
+  <div class="cols">${partsNumberTables}</div>`
+      : ''
+  }
+
   <h2>Type Letters</h2>
   <div class="cols">
     <table>${deviceRows(devices.slice(0, half))}</table>
@@ -208,6 +227,25 @@ function CodeTable({ rows }) {
           <tr key={code}>
             <td className="ref-code">{code}</td>
             <td>{name}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
+// Like CodeTable, but for the Manage Inputs -> Parts Number catalog: an array
+// of { key, number, name } rather than a map's [code, name] entries, since a
+// Part Number is optional and not guaranteed unique — an object key would
+// collide or go missing where CodeTable's map-derived pairs never do.
+function PartsNumberTable({ rows }) {
+  return (
+    <table className="ref-table">
+      <tbody>
+        {rows.map((r) => (
+          <tr key={r.key}>
+            <td className="ref-code">{r.number}</td>
+            <td>{r.name}</td>
           </tr>
         ))}
       </tbody>
@@ -658,7 +696,7 @@ function CodeMapEditor() {
   )
 }
 
-export default function ReferenceCard({ isAdmin = false }) {
+export default function ReferenceCard({ isAdmin = false, partsNumbers = [] }) {
   const { map, status, updatedAt } = useCodeMap()
 
   // Derive display lists from the live map, falling back to bundled data.
@@ -678,8 +716,19 @@ export default function ReferenceCard({ isAdmin = false }) {
       companies: asPairs(src.companies || FALLBACK.companies),
       agencies: sortedPairs(src.agencies || FALLBACK.agencies),
       technicians: sortedPairs(src.technicians || FALLBACK.technicians),
+      // The Manage Inputs -> Parts Number catalog. Comes straight from the
+      // `options` state in App.jsx (same prop already used for `charts`), not
+      // from the code map fetch above — so an edit there shows up here the
+      // instant it lands in that shared state, no poll needed. Indexed rather
+      // than keyed by number: the number is optional and not guaranteed unique,
+      // unlike the code-map sections above which are keyed maps.
+      partsNumberRows: (partsNumbers ?? []).map((v, i) => ({
+        key: i,
+        number: partsNumberCode(v),
+        name: partsNumberName(v),
+      })),
     }
-  }, [map])
+  }, [map, partsNumbers])
 
   const half = Math.ceil(data.devices.length / 2)
   const actHalf = Math.ceil(data.actions.length / 2)
@@ -898,6 +947,28 @@ export default function ReferenceCard({ isAdmin = false }) {
               </div>
             ))}
           </div>
+        </div>
+      </details>
+
+      <details className="ref-sec">
+        <summary className="ref-section">
+          Parts Number Catalog ({data.partsNumberRows.length})
+        </summary>
+        <div className="ref-sec-body">
+          <p className="muted">
+            The admin-managed catalog from <strong>Manage Inputs → Parts Number</strong> — separate
+            from the <strong>Parts Numbers</strong> section above, which is the 2-digit codes used to
+            decode a CDS short code. This list updates the instant it changes in Manage Inputs.
+          </p>
+          {data.partsNumberRows.length === 0 ? (
+            <p className="muted">No parts numbers yet — add some in Manage Inputs → Parts Number.</p>
+          ) : (
+            <div className="ref-grid">
+              <div className="ref-block">
+                <PartsNumberTable rows={data.partsNumberRows} />
+              </div>
+            </div>
+          )}
         </div>
       </details>
 

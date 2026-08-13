@@ -2141,7 +2141,7 @@ function App({ user, onLogout }) {
 
           {page === 'inventory' && <Inventory embedded branch={isAllBranches ? '' : branch} />}
 
-          {page === 'reference' && <ReferenceCard isAdmin={isAdmin} />}
+          {page === 'reference' && <ReferenceCard isAdmin={isAdmin} partsNumbers={options.partsNumbers} />}
 
           {page === 'manage' && isAdmin && <ManageInputs options={options} onChange={setCategory} onToggleChart={setChart} embedded />}
 
