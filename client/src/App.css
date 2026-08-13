@@ -1449,31 +1449,24 @@ h2 {
   background: var(--surface-3);
   color: var(--text-h);
   font-weight: 700;
+  /* Overrides the base th/td padding's 0.35rem top/bottom specifically for
+     header cells — that was tight enough that text visually crowded the cell
+     edge. Left/right stay at the inherited 0.5rem. */
+  padding-top: 0.55rem;
+  padding-bottom: 0.55rem;
+  line-height: 1.3;
 }
-/* Freeze BOTH header rows on vertical scroll. Row 2 pins directly below row 1,
-   so its offset must equal row 1's height EXACTLY: too small and row 2 sits on
-   top of row 1, too large and a strip of scrolling rows shows between them.
-
-   Row 1's height is therefore not asserted here at all — it is measured from
-   the live element and written back as --hdr-row1 (see monthHeadRef in
-   App.jsx). Pinning it to a fixed rem only held at one font size and one zoom
-   level; anywhere else the assumption and the reality drifted apart and the
-   header overlapped itself. The value below is just the fallback used for the
-   first paint, and where ResizeObserver is unavailable.
-
-   Nothing may consume --hdr-row1 as a HEIGHT: that would feed the measurement
-   back into the thing being measured. It positions row 2 and nothing else. */
-.monthly-table {
-  --hdr-row1: 2rem;
-}
-.monthly-table thead tr:nth-child(1) th {
+/* Freeze BOTH header rows on vertical scroll, AS ONE UNIT. Two independently
+   sticky rows each round to the nearest physical pixel on their own — at some
+   scroll offsets those two roundings disagree by a pixel, which reads as the
+   border between row 1 and row 2 twitching while you scroll. Stickying the
+   <thead> itself removes that possibility entirely: there is exactly one
+   positioned element for the two rows, so they cannot drift apart from each
+   other no matter the scroll offset, zoom level, or display scaling. */
+.monthly-table thead {
   position: sticky;
   top: 0;
-}
-.monthly-table thead tr:nth-child(2) th {
-  position: sticky;
-  top: var(--hdr-row1);
-  height: 1.8rem;
+  z-index: 4;
 }
 .monthly-table thead th {
   z-index: 4;
@@ -1488,9 +1481,11 @@ h2 {
   justify-content: center;
   gap: 0.4rem;
   width: 100%;
+  min-height: 1.2rem;
   font: inherit;
   font-size: 0.74rem;
   font-weight: 700;
+  line-height: 1.3;
   color: var(--text-h);
   background: transparent;
   border: 0;
@@ -1500,6 +1495,7 @@ h2 {
 .monthly-table .grp-toggle .chev {
   color: var(--muted);
   font-size: 0.7rem;
+  line-height: 1.3;
 }
 .monthly-table .collapsed-col {
   background: var(--surface-3);
@@ -1513,6 +1509,7 @@ h2 {
 .monthly-table .col-sub {
   font-size: 0.72rem;
   font-weight: 600;
+  line-height: 1.3;
   vertical-align: bottom;
 }
 /* Freeze the first two columns (Date + Day) on horizontal scroll. */
@@ -1593,6 +1590,11 @@ h2 {
 .monthly-table tr.weekend td {
   background: #22c55e;
   color: #052e16;
+  /* The shared --border color reads fine against a normal/white row, but has
+     too little contrast against this green — two consecutive weekend rows
+     (e.g. Sat+Sun) then look like one merged cell instead of two. A darker
+     green border keeps the boundary visible while still fitting the theme. */
+  border-bottom-color: #15803d;
 }
 .monthly-table tr.totals td {
   font-weight: 800;
