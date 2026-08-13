@@ -1504,11 +1504,11 @@ function App({ user, onLogout }) {
                 <>
                   <label>
                     <span className="cap">Tel number <span className="opt">(optional)</span></span>
-                    <input value={form.telNumber} onChange={set('telNumber')} placeholder="e.g. 0462260" />
+                    <input value={form.telNumber} onChange={set('telNumber')} placeholder="e.g. 1234" />
                   </label>
                   <label>
                     <span className="cap">ISSI number <span className="opt">(optional)</span></span>
-                    <input value={form.issiNumber} onChange={set('issiNumber')} placeholder="e.g. 1839517" />
+                    <input value={form.issiNumber} onChange={set('issiNumber')} placeholder="e.g. 1234 (as tel or ISSI last 4 digit)" />
                   </label>
                 </>
               )}
@@ -1761,11 +1761,11 @@ function App({ user, onLogout }) {
                     </label>
                     <label>
                       <span className="cap">Tel number <span className="opt">(optional)</span></span>
-                      <input value={editForm.telNumber} onChange={eSet('telNumber')} placeholder="e.g. 0462260" />
+                      <input value={editForm.telNumber} onChange={eSet('telNumber')} placeholder="e.g. 1234" />
                     </label>
                     <label>
                       <span className="cap">ISSI number <span className="opt">(optional)</span></span>
-                      <input value={editForm.issiNumber} onChange={eSet('issiNumber')} placeholder="e.g. 1839517" />
+                      <input value={editForm.issiNumber} onChange={eSet('issiNumber')} placeholder="e.g. 1234 (as tel or ISSI last 4 digit)" />
                     </label>
                     <label>
                       <span className="cap">Technician <span className="opt">(optional · multiple)</span></span>
@@ -2141,7 +2141,7 @@ function App({ user, onLogout }) {
 
           {page === 'inventory' && <Inventory embedded branch={isAllBranches ? '' : branch} />}
 
-          {page === 'reference' && <ReferenceCard isAdmin={isAdmin} partsNumbers={options.partsNumbers} />}
+          {page === 'reference' && <ReferenceCard isAdmin={isAdmin} issueTypes={options.issueTypes} />}
 
           {page === 'manage' && isAdmin && <ManageInputs options={options} onChange={setCategory} onToggleChart={setChart} embedded />}
 

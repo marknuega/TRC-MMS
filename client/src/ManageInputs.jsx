@@ -10,8 +10,6 @@ import {
   issueVariant,
   materialName,
   materialDesc,
-  partsNumberName,
-  partsNumberCode,
 } from './options'
 import { FALLBACK, useCodeMap, variantsOf } from './codes'
 
@@ -26,13 +24,11 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
   const [newDesc, setNewDesc] = useState('')
   const [newParts, setNewParts] = useState('')
   const [newVariant, setNewVariant] = useState('')
-  const [newNumber, setNewNumber] = useState('')
   const [editIndex, setEditIndex] = useState(-1)
   const [editValue, setEditValue] = useState('')
   const [editDesc, setEditDesc] = useState('')
   const [editParts, setEditParts] = useState('')
   const [editVariant, setEditVariant] = useState('')
-  const [editNumber, setEditNumber] = useState('')
   const [notice, setNotice] = useState('')
 
   // Only to describe what a code already means in the shared vocabulary — the
@@ -43,15 +39,11 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
   // variant, and their description IS their name; every other list is a string.
   const isMaterials = cat === 'materials'
   const isIssues = cat === 'issueTypes'
-  const isPartsNumbers = cat === 'partsNumbers'
   const list = options[cat] ?? []
-  const nameOf = (v) =>
-    isMaterials ? materialName(v) : isIssues ? issueName(v) : isPartsNumbers ? partsNumberName(v) : String(v)
+  const nameOf = (v) => (isMaterials ? materialName(v) : isIssues ? issueName(v) : String(v))
   const descOf = (v) => (isMaterials ? materialDesc(v) : '')
-  const numberOf = (v) => (isPartsNumbers ? partsNumberCode(v) : '')
-  const makeItem = (name, desc, parts, variant, number) => {
+  const makeItem = (name, desc, parts, variant) => {
     if (isIssues) return { name, parts: parts.trim(), variant: variant.trim().toUpperCase() }
-    if (isPartsNumbers) return { name, number: number.trim() }
     return isMaterials ? { name, description: desc.trim() } : name
   }
   const exists = (value, exceptIndex = -1) =>
@@ -103,12 +95,11 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
       flash(problem)
       return
     }
-    onChange(cat, [...list, makeItem(value, newDesc, newParts, newVariant, newNumber)])
+    onChange(cat, [...list, makeItem(value, newDesc, newParts, newVariant)])
     setNewValue('')
     setNewDesc('')
     setNewParts('')
     setNewVariant('')
-    setNewNumber('')
   }
 
   function startEdit(i) {
@@ -117,7 +108,6 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
     setEditDesc(descOf(list[i]))
     setEditParts(isIssues ? issueParts(list[i]) : '')
     setEditVariant(isIssues ? issueVariant(list[i]) : '')
-    setEditNumber(numberOf(list[i]))
   }
 
   function saveEdit() {
@@ -132,16 +122,12 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
       flash(problem)
       return
     }
-    onChange(
-      cat,
-      list.map((v, i) => (i === editIndex ? makeItem(value, editDesc, editParts, editVariant, editNumber) : v)),
-    )
+    onChange(cat, list.map((v, i) => (i === editIndex ? makeItem(value, editDesc, editParts, editVariant) : v)))
     setEditIndex(-1)
     setEditValue('')
     setEditDesc('')
     setEditParts('')
     setEditVariant('')
-    setEditNumber('')
   }
 
   function remove(i) {
@@ -180,7 +166,6 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                   setNewDesc('')
                   setNewParts('')
                   setNewVariant('')
-                  setNewNumber('')
                 }}
               >
                 {CATEGORIES.map((c) => (
@@ -217,34 +202,14 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                 </label>
               </>
             )}
-            {isPartsNumbers && (
-              <label className="field-code">
-                Part Number
-                <input
-                  value={newNumber}
-                  onChange={(e) => setNewNumber(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), add())}
-                  placeholder="11A"
-                  title="The part's catalog / stock number"
-                />
-              </label>
-            )}
             <label className="grow">
-              {isIssues ? 'Description' : isPartsNumbers ? 'Parts number name' : isMaterials ? 'Material name' : 'Add new'}
+              {isIssues ? 'Description' : isMaterials ? 'Material name' : 'Add new'}
               <div className="add-row">
                 <input
                   value={newValue}
                   onChange={(e) => setNewValue(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), add())}
-                  placeholder={
-                    isIssues
-                      ? 'Belt Clip'
-                      : isPartsNumbers
-                        ? 'Power Supply'
-                        : isMaterials
-                          ? 'Material name'
-                          : 'Type a value and press Add'
-                  }
+                  placeholder={isIssues ? 'Belt Clip' : isMaterials ? 'Material name' : 'Type a value and press Add'}
                 />
                 {isMaterials && (
                   <input
@@ -333,24 +298,6 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                           </label>
                         </div>
                       )}
-                      {isPartsNumbers && (
-                        <label className="field-code">
-                          Part Number
-                          <input
-                            className="edit-input"
-                            value={editNumber}
-                            onChange={(e) => setEditNumber(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault()
-                                saveEdit()
-                              }
-                              if (e.key === 'Escape') setEditIndex(-1)
-                            }}
-                            placeholder="11A"
-                          />
-                        </label>
-                      )}
                       <input
                         className="edit-input"
                         value={editValue}
@@ -362,9 +309,7 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                           }
                           if (e.key === 'Escape') setEditIndex(-1)
                         }}
-                        placeholder={
-                          isMaterials ? 'Material name' : isIssues ? 'Description' : isPartsNumbers ? 'Parts number name' : undefined
-                        }
+                        placeholder={isMaterials ? 'Material name' : isIssues ? 'Description' : undefined}
                         autoFocus
                       />
                       {isMaterials && (
@@ -395,9 +340,6 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                     <span className="manage-item-label">
                       {isIssues && issueCode(value) && (
                         <span className="manage-item-code">{issueCode(value)}</span>
-                      )}
-                      {isPartsNumbers && numberOf(value) && (
-                        <span className="manage-item-code">{numberOf(value)}</span>
                       )}
                       {nameOf(value)}
                       {isMaterials && descOf(value) && <span className="manage-item-desc">{descOf(value)}</span>}
