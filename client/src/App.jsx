@@ -34,6 +34,7 @@ import SparePartsReport from './SparePartsReport'
 import Dashboard from './Dashboard'
 import AdminUsers from './AdminUsers'
 import ReferenceCard from './ReferenceCard'
+import CodeMap from './CodeMap'
 import CodeEntry from './CodeEntry'
 import { Credit, Copyright, COPYRIGHT_HTML } from './copyright'
 import { BrandMark } from './brand'
@@ -69,6 +70,7 @@ const NAV = [
   { id: 'inventory', icon: '📦', label: 'Inventory' },
   { id: 'reference', icon: '🔤', label: 'Code Reference' },
   { id: 'manage', icon: '⚙️', label: 'Manage Inputs', adminOnly: true },
+  { id: 'codemap', icon: '🔡', label: 'Code Map', adminOnly: true },
   { id: 'admin', icon: '🔐', label: 'Users & Access', adminOnly: true },
 ]
 // Data-heavy pages fill the available width (tables/charts); form-style pages
@@ -2144,6 +2146,8 @@ function App({ user, onLogout }) {
           {page === 'reference' && <ReferenceCard />}
 
           {page === 'manage' && isAdmin && <ManageInputs options={options} onChange={setCategory} onToggleChart={setChart} embedded />}
+
+          {page === 'codemap' && isAdmin && <CodeMap embedded />}
 
           {page === 'admin' && isAdmin && <AdminUsers currentUser={user} branches={branchList} onAddBranch={addBranch} embedded />}
 

@@ -1923,7 +1923,7 @@ h2 {
   font-weight: 700;
   letter-spacing: 0.04em;
   color: var(--primary);
-  background: var(--primary-soft, rgba(0, 0, 0, 0.06));
+  background: var(--primary-soft);
   border-radius: 0.3rem;
   padding: 0.05rem 0.35rem;
 }
@@ -1960,6 +1960,23 @@ h2 {
 .manage-code-hint {
   color: var(--primary);
   font-weight: 600;
+}
+/* Code Map saves on a button, not per keystroke — the map is published to the
+   WhatsApp bot, so staged edits must be visibly unsaved until they are sent. */
+.codemap-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin: 0.9rem 0;
+}
+.codemap-dirty {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--warn);
+}
+.manage-notice.error {
+  color: var(--danger);
 }
 @media (max-width: 640px) {
   .field-code {

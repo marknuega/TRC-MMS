@@ -100,6 +100,14 @@ export const getOptions = () => request('/api/options')
 export const saveOptions = (data) =>
   request('/api/options', { method: 'PUT', body: JSON.stringify(data) })
 
+// The CDS code map — the vocabulary shared with the WhatsApp bot. Reading needs
+// a session; the PUT is admin-gated server-side, since every technician's
+// decode resolves through it.
+export const getCodeMap = () => request('/api/codemap')
+
+export const saveCodeMap = (data) =>
+  request('/api/codemap', { method: 'PUT', body: JSON.stringify(data) })
+
 export const getSavedReports = () => request('/api/saved-reports')
 
 export const saveReport = (meta = {}) =>
