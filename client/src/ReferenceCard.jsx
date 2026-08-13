@@ -57,7 +57,7 @@ const esc = (s) =>
 // Build a clean, standalone printable document (independent of the app layout)
 // and print it through a hidden iframe — reliable for Chrome "Save as PDF".
 function printReference(data) {
-  const { devices, componentGroups, claims, actions, companies, agencies, technicians, partsNumberRows } = data
+  const { devices, actions, companies, agencies, technicians, partsNumberRows } = data
   const codeRows = (pairs) =>
     pairs.map(([c, n]) => `<tr><td class="c">${esc(c)}</td><td>${esc(n)}</td></tr>`).join('')
   // Device rows bold the source char in the model name and add an explanation column.
@@ -71,14 +71,6 @@ function printReference(data) {
       .join('')
   const half = Math.ceil(devices.length / 2)
 
-  const componentTables = componentGroups
-    .map((g) => `<div class="grp"><h3>${esc(g.title)}</h3><table>${codeRows(g.items)}</table></div>`)
-    .join('')
-  // Claims print as plain columns — they are one flat list, not bucketed by
-  // number, because what groups them is the issue they name, not the part range.
-  const claimTables = chunk(claims, 3)
-    .map((rows) => `<div class="grp"><table>${codeRows(rows)}</table></div>`)
-    .join('')
   // Rows here are { number, name } objects, not [code, name] pairs — codeRows
   // can't be reused directly.
   const partsNumberTables = chunk(partsNumberRows, 3)
@@ -89,10 +81,6 @@ function printReference(data) {
           .join('')}</table></div>`,
     )
     .join('')
-  // "A = Original, B = 3D" — read from the same map the decoder uses.
-  const variantList = Object.entries(VARIANTS)
-    .map(([k, v]) => `<b>${esc(k)}</b> = ${esc(v.label)}`)
-    .join(', ')
 
   const html = `<!doctype html><html><head><meta charset="utf-8" />
 <title>TRC-MMS Short-Code Reference</title>
@@ -130,41 +118,6 @@ function printReference(data) {
     <div class="sub">Separators are free: <code>H43AC1MT222165751</code>, <code>H43A-C-1-MT-2221-6575-1</code>, <code>H43A_C_1_MT_2221_6575_1</code> and <code>H43A:C:1:MT:2221:6575:1</code> all read the same.</div>
     <div class="sub"><b>Short cuts.</b> Leave the <b>quantity</b> out for 1: <code>H43ACMT</code>. Leave the <b>type letter</b> off every code after the first — one report is one radio, so it carries down: <code>H11AC1MT 11AC1MI 2221 6666 1</code>. Write the <b>company</b> with one letter: <code>T</code> = MOTECO, <code>I</code> = MOI, so <code>H11AC1T</code>. All three together: <code>H11ACT 11ACI 2221 6666 1</code>.</div>
   </div>
-
-  <h2>Complete code creation details</h2>
-  <div class="ex">
-    <div class="syntax">H43A&nbsp;C&nbsp;1&nbsp;MT&nbsp;·&nbsp;2221&nbsp;6575&nbsp;1&nbsp;·&nbsp;<code>PSD</code></div>
-    <div>The report has three fields: <b>1)</b> one or more fault tokens, <b>2)</b> TEL · ISSI · Technician ID (three numbers), then <b>3)</b> the agency code sent alone to verify.</div>
-  </div>
-  <table>
-    <tr><th class="c">Part</th><th>Example</th><th>What it is</th></tr>
-    <tr><td colspan="3" class="grp">Field 1a · CDS code — the first 4 characters (e.g. H43A)</td></tr>
-    <tr><td class="c">Type</td><td>H</td><td>The equipment model being worked on (see Type Letters).</td></tr>
-    <tr><td class="c">Parts</td><td>43</td><td>The part being reported (see Parts Numbers).</td></tr>
-    <tr><td class="c">Variant</td><td>A</td><td>Which build of that part — ${variantList}. So H43A is the TH1n side grip (Original) and H43B the 3D one.</td></tr>
-    <tr><td colspan="3" class="grp">Field 1b · Action, quantity, company — straight after the code (e.g. C 1 MT)</td></tr>
-    <tr><td class="c">Action</td><td>C</td><td>What was done — Change / Repair / New… (see Actions).</td></tr>
-    <tr><td class="c">Quantity</td><td>1</td><td>How many of that part/action, right after the Action. Omit for a single unit.</td></tr>
-    <tr><td class="c">Company</td><td>MT</td><td>Who owns / funds the work (see Companies).</td></tr>
-    <tr><td colspan="3" class="grp">Field 2 · TEL · ISSI · Technician ID — three numbers (e.g. 2221 6575 1)</td></tr>
-    <tr><td class="c">TEL</td><td>2221</td><td>The <b>last 4 digits</b> of the radio's telephone number, after the last fault token.</td></tr>
-    <tr><td class="c">ISSI</td><td>6575</td><td>The <b>last 4 digits</b> of the radio's ISSI, right after TEL.</td></tr>
-    <tr><td class="c">Tech ID</td><td>1</td><td>Who did the work, sent after ISSI (see Technician ID).</td></tr>
-    <tr><td colspan="3" class="grp">Field 3 · Agency (verification) — sent alone afterwards (e.g. PSD)</td></tr>
-    <tr><td class="c">Agency</td><td>PSD</td><td>Sent on its own after the report to verify it (see Agencies).</td></tr>
-  </table>
-
-  ${
-    claims.length
-      ? `<h2>Claimed Codes — these win over Parts + Variant</h2>
-  <p class="sub">An Issue type can claim a parts+variant pair outright. Where it does, the claim decides the issue and the Parts Numbers / Variants tables are not consulted — which is how <code>99A</code> and <code>99B</code> can be two different chargers rather than two builds of one. Still type the device letter: <code>H43A</code>.</p>
-  <div class="cols">${claimTables}</div>`
-      : ''
-  }
-
-  <h2>Parts Numbers</h2>
-  <p class="sub">Used only when no claim above covers the code. A parts number is always exactly two digits.</p>
-  <div class="cols">${componentTables}</div>
 
   ${
     partsNumberRows.length
@@ -797,168 +750,13 @@ export default function ReferenceCard({ isAdmin = false, partsNumbers = [] }) {
       </div>
 
       <details className="ref-sec">
-        <summary className="ref-section">Complete code creation details</summary>
-        <div className="ref-sec-body">
-          <div className="ref-example">
-            <div className="ref-syntax">
-              44HR2MT · 1234&nbsp;4567&nbsp;1 · <code>PSD</code>
-            </div>
-            <div>
-              The report has <strong>three fields</strong>: <strong>1)</strong> one or more fault tokens,{' '}
-              <strong>2)</strong> TEL · ISSI · Technician&nbsp;ID (three numbers), then{' '}
-              <strong>3)</strong> the agency code sent alone to confirm.
-            </div>
-          </div>
-          <table className="ref-table ref-detail-table">
-            <thead>
-              <tr>
-                <th className="ref-code">Part</th>
-                <th>Example</th>
-                <th>What it is</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="ref-grp-row">
-                <td colSpan={3}>
-                  Field 1a · CDS code — the first 4 characters (e.g. <code>H43A</code>)
-                </td>
-              </tr>
-              <tr>
-                <td className="ref-code">Type</td>
-                <td>H</td>
-                <td>The equipment model being worked on (see <strong>Type Letters</strong>).</td>
-              </tr>
-              <tr>
-                <td className="ref-code">Parts</td>
-                <td>43</td>
-                <td>The part being reported (see <strong>Parts Numbers</strong>).</td>
-              </tr>
-              <tr>
-                <td className="ref-code">Variant</td>
-                <td>A</td>
-                <td>
-                  Which build of that part —{' '}
-                  {Object.entries(VARIANTS).map(([k, v], i) => (
-                    <span key={k}>
-                      {i ? ', ' : ''}
-                      <strong>{k}</strong> = {v.label}
-                    </span>
-                  ))}
-                  . So <code>H43A</code> is the TH1n side grip (Original) and <code>H43B</code> the 3D one.
-                </td>
-              </tr>
-
-              <tr className="ref-grp-row">
-                <td colSpan={3}>
-                  Field 1b · Action, quantity, company — straight after the code (e.g. <code>C 1 MT</code>)
-                </td>
-              </tr>
-              <tr>
-                <td className="ref-code">Action</td>
-                <td>C</td>
-                <td>What was done — Change / Repair / New… (see <strong>Actions</strong>).</td>
-              </tr>
-              <tr>
-                <td className="ref-code">Quantity</td>
-                <td>1</td>
-                <td>How many of that part/action, right after the Action. Omit for a single unit.</td>
-              </tr>
-              <tr>
-                <td className="ref-code">Company</td>
-                <td>MT</td>
-                <td>Who owns / funds the work (see <strong>Companies</strong>).</td>
-              </tr>
-
-              <tr className="ref-grp-row">
-                <td colSpan={3}>Field 2 · TEL · ISSI · Technician ID — three numbers (e.g. <code>2221 6575 1</code>)</td>
-              </tr>
-              <tr>
-                <td className="ref-code">TEL</td>
-                <td>2221</td>
-                <td>The <strong>last 4 digits</strong> of the radio's telephone number, after the last fault token.</td>
-              </tr>
-              <tr>
-                <td className="ref-code">ISSI</td>
-                <td>6575</td>
-                <td>The <strong>last 4 digits</strong> of the radio's ISSI, right after TEL.</td>
-              </tr>
-              <tr>
-                <td className="ref-code">Tech&nbsp;ID</td>
-                <td>1</td>
-                <td>Who did the work, sent after ISSI (see <strong>Technician ID</strong>).</td>
-              </tr>
-
-              <tr className="ref-grp-row">
-                <td colSpan={3}>Field 3 · Agency (verification) — sent alone afterwards (e.g. <code>PSD</code>)</td>
-              </tr>
-              <tr>
-                <td className="ref-code">Agency</td>
-                <td>PSD</td>
-                <td>Sent on its own after the report to verify it (see <strong>Agencies</strong>).</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </details>
-
-      {data.claims.length > 0 && (
-        <details className="ref-sec" open>
-          <summary className="ref-section">Claimed Codes — these win</summary>
-          <div className="ref-sec-body">
-            <p className="muted">
-              An <strong>Issue type</strong> (Manage inputs) can claim a parts+variant pair outright.
-              Where it does, the claim decides the issue and the Parts Numbers and Variants tables
-              below are not consulted at all — which is how <code>99A</code> and <code>99B</code> can
-              be two different chargers rather than two builds of one. Still type the device letter:{' '}
-              <code>H43A</code>, <code>T43A</code>.
-            </p>
-            <div className="ref-grid">
-              {chunk(data.claims, 3).map((rows, i) => (
-                // eslint-disable-next-line react/no-array-index-key
-                <div className="ref-block" key={i}>
-                  <CodeTable rows={rows} />
-                </div>
-              ))}
-            </div>
-          </div>
-        </details>
-      )}
-
-      <details className="ref-sec">
-        <summary className="ref-section">Parts Numbers</summary>
-        <div className="ref-sec-body">
-          {data.unusableComponents.length > 0 && (
-            <p className="ref-warn">
-              ⚠️ {data.unusableComponents.length} entr
-              {data.unusableComponents.length === 1 ? 'y' : 'ies'} in the code map{' '}
-              {data.unusableComponents.length === 1 ? 'is' : 'are'} not usable and{' '}
-              {data.unusableComponents.length === 1 ? 'is' : 'are'} hidden here — a parts number must
-              be exactly two digits, so nothing can reach{' '}
-              <code>{data.unusableComponents.map(([c]) => c).join(', ')}</code>. Remove them in{' '}
-              <strong>Edit Code Map</strong> above; if one names a real part, claim it in{' '}
-              <strong>Manage Inputs → Faulty / Parts</strong> instead so it decodes.
-            </p>
-          )}
-          <div className="ref-grid">
-            {data.componentGroups.map((g) => (
-              <div className="ref-block" key={g.title}>
-                <h4 className="ref-grp-title">{g.title}</h4>
-                <CodeTable rows={g.items} />
-              </div>
-            ))}
-          </div>
-        </div>
-      </details>
-
-      <details className="ref-sec">
         <summary className="ref-section">
           Parts Number Catalog ({data.partsNumberRows.length})
         </summary>
         <div className="ref-sec-body">
           <p className="muted">
-            The admin-managed catalog from <strong>Manage Inputs → Parts Number</strong> — separate
-            from the <strong>Parts Numbers</strong> section above, which is the 2-digit codes used to
-            decode a CDS short code. This list updates the instant it changes in Manage Inputs.
+            The admin-managed catalog from <strong>Manage Inputs → Parts Number</strong>. This list
+            updates the instant it changes in Manage Inputs.
           </p>
           {data.partsNumberRows.length === 0 ? (
             <p className="muted">No parts numbers yet — add some in Manage Inputs → Parts Number.</p>

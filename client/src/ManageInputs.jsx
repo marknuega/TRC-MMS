@@ -224,7 +224,7 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                   value={newNumber}
                   onChange={(e) => setNewNumber(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), add())}
-                  placeholder="e.g. PN-1234"
+                  placeholder="11A"
                   title="The part's catalog / stock number"
                 />
               </label>
@@ -347,7 +347,7 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                               }
                               if (e.key === 'Escape') setEditIndex(-1)
                             }}
-                            placeholder="e.g. PN-1234"
+                            placeholder="11A"
                           />
                         </label>
                       )}
