@@ -18,6 +18,7 @@ import optionsRouter from './routes/options.js'
 import savedReportsRouter from './routes/savedReports.js'
 import monthlyRouter from './routes/monthly.js'
 import inventoryRouter from './routes/inventory.js'
+import codemapRouter, { publicCodeMap } from './routes/codemap.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url)) // server/src
 const clientDist = path.resolve(here, '../../client/dist') // repo/client/dist
@@ -103,6 +104,13 @@ app.get('/health/db', async (req, res) => {
   }
 })
 
+// Public, CORS-open mirror of the code map. Deliberately unauthenticated and
+// OUTSIDE /api: the WhatsApp bot reads it server-to-server with no session, and
+// this is the exact path + shape it already consumes, so repointing the bot at
+// this app is a URL change and nothing more. Registered before the SPA fallback
+// so it is not swallowed by it.
+app.get('/codemap', publicCodeMap)
+
 // Public auth endpoints (login, logout, me, credential request).
 app.use('/api/auth', authRouter)
 // Admin-only user + request management (guarded inside the router).
@@ -114,6 +122,8 @@ app.use('/api/options', authRequired, optionsRouter)
 app.use('/api/saved-reports', authRequired, savedReportsRouter)
 app.use('/api/monthly', authRequired, monthlyRouter)
 app.use('/api/inventory', authRequired, inventoryRouter)
+// Reading the map needs a session; editing it is admin-gated inside the router.
+app.use('/api/codemap', authRequired, codemapRouter)
 
 // In production the same service also serves the built React app, so the
 // browser sees one origin (no CORS). In dev, Vite serves the client instead.

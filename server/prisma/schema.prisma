@@ -114,6 +114,20 @@ model AppOptions {
   @@map("app_options")
 }
 
+// Single-row (id=1) store for the CDS code map — the shared vocabulary that
+// turns a short code like H43AC1MT into a part, action, company and technician.
+// This app is now the home of that map; it is served publicly at GET /codemap
+// in the same shape the WhatsApp bridge used to publish, so the bot only needs
+// its URL repointed here. Kept as one JSON blob rather than tables because it
+// is edited as a whole document and the bridge consumes it as a whole document.
+model CodeMap {
+  id        Int      @id @default(1)
+  data      Json     @default("{}")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("code_map")
+}
+
 // One report per date, holding the sequential REP-#### id shared by that day's entries.
 model Report {
   id         Int      @id @default(autoincrement())
