@@ -2013,7 +2013,12 @@ function App({ user, onLogout }) {
                 <table className="monthly-table">
                   <thead>
                     <tr>
-                      <th colSpan={2} rowSpan={2} className="corner" />
+                      {/* "Date / Day" in the month and day views, "Month" in the
+                          year view — the matrix carries its own row headings.
+                          They span the whole header and top-align, so they read
+                          on the same line as the device-type row beside them. */}
+                      <th rowSpan={2} className="dh col-date">{matrix.rowHeads[0]}</th>
+                      <th rowSpan={2} className="dh col-day">{matrix.rowHeads[1]}</th>
                       {groupCols.map(({ group, cols }) => {
                         const collapsed = collapsedGroups.has(group)
                         return (
@@ -2025,7 +2030,7 @@ function App({ user, onLogout }) {
                           </th>
                         )
                       })}
-                      <th rowSpan={3} className="act-head">
+                      <th rowSpan={2} className="act-head">
                         Activity description and spare parts was used
                       </th>
                     </tr>
@@ -2038,17 +2043,6 @@ function App({ user, onLogout }) {
                                 {c.label}
                               </th>
                             )),
-                      )}
-                    </tr>
-                    <tr>
-                      {/* "Date / Day" in the month and day views, "Month" in the
-                          year view — the matrix carries its own row headings. */}
-                      <th className="dh col-date">{matrix.rowHeads[0]}</th>
-                      <th className="dh col-day">{matrix.rowHeads[1]}</th>
-                      {groupCols.flatMap(({ group, cols }) =>
-                        collapsedGroups.has(group)
-                          ? [<th key={group} className="col-blank collapsed-col" />]
-                          : cols.map((c) => <th key={c.key} className="col-blank" />),
                       )}
                     </tr>
                   </thead>

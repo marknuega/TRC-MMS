@@ -1417,27 +1417,37 @@ h2 {
 .month-expand:hover {
   border-color: var(--primary);
 }
+/* `separate`, not `collapse`, on purpose. Collapsed borders are painted as part
+   of the TABLE rather than the cell, so they do not travel with a sticky header
+   — scrolling rows bleed through its top edge. Giving each cell its own border
+   keeps the frozen header opaque right to the edge. Cells carry right+bottom
+   only; the outer top/left comes from the .monthly-scroll border. */
 .monthly-table {
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   width: 100%;
   font-size: 0.82rem;
 }
 .monthly-table th,
 .monthly-table td {
-  border: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
   padding: 0.35rem 0.5rem;
   text-align: center;
   white-space: nowrap;
 }
+/* No :last-child border trimming here — the Activity column spans down from
+   header row 1, so the last cell of row 2 is a MODEL column, not the rightmost
+   one, and trimming it would erase that divider. */
 .monthly-table thead th {
   background: var(--surface-3);
   color: var(--text-h);
   font-weight: 700;
 }
-/* Freeze the three header rows on vertical scroll. Each row is pinned below the
-   one above it, so the offsets have to be known up front — hence the explicit
-   heights. They are set ABOVE the natural content height of each row so the
-   browser always honours them and the stack can never drift out of alignment. */
+/* Freeze the two header rows on vertical scroll. The second is pinned below the
+   first, so the offset has to be known up front — hence the explicit heights.
+   They are set ABOVE the natural content height of each row so the browser
+   always honours them and the stack can never drift out of alignment. */
 .monthly-table thead tr:nth-child(1) th {
   position: sticky;
   top: 0;
@@ -1446,11 +1456,6 @@ h2 {
 .monthly-table thead tr:nth-child(2) th {
   position: sticky;
   top: 2rem;
-  height: 1.8rem;
-}
-.monthly-table thead tr:nth-child(3) th {
-  position: sticky;
-  top: 3.8rem;
   height: 1.8rem;
 }
 .monthly-table thead th {
@@ -1493,14 +1498,9 @@ h2 {
   font-weight: 600;
   vertical-align: bottom;
 }
-.monthly-table .corner,
-.monthly-table .col-blank {
-  background: var(--surface);
-}
 /* Freeze the first two columns (Date + Day) on horizontal scroll. */
 .monthly-table .col-date,
-.monthly-table .col-total,
-.monthly-table .corner {
+.monthly-table .col-total {
   position: sticky;
   left: 0;
   z-index: 2;
@@ -1518,8 +1518,7 @@ h2 {
 /* Sticky in BOTH axes (top + left), so these must outrank the header row (4)
    and the left-frozen body cells (2) they cross over. */
 .monthly-table thead .col-date,
-.monthly-table thead .col-day,
-.monthly-table .corner {
+.monthly-table thead .col-day {
   z-index: 6;
   background: var(--surface-3);
 }
@@ -1535,8 +1534,11 @@ h2 {
 .monthly-table tr.totals .col-total {
   background: var(--surface-3);
 }
+/* Date/Day span all three header rows, so pull the label to the top edge —
+   otherwise it centres against the model row instead of the device-type row. */
 .monthly-table .dh {
   font-weight: 700;
+  vertical-align: top;
 }
 .monthly-table .act-head {
   min-width: 22rem;
