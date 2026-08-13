@@ -128,6 +128,25 @@ model CodeMap {
   @@map("code_map")
 }
 
+// WhatsApp message ids (wamid) already acted on, so a retried webhook delivery
+// of the same message is never processed twice.
+//
+// This MUST be durable storage. Meta has redelivered a message ~40 minutes
+// after the original attempt (2026-08-08), and this service redeploys several
+// times on a busy day — an in-memory guard forgets every id on each redeploy,
+// so a retry landing afterwards files a duplicate report. The bot kept this on
+// a Railway volume; this service has no volume, so it lives here instead.
+//
+// Rows are pruned after RETENTION_DAYS (see processedMessages.js) — Meta does
+// not retry forever, and this table would otherwise grow without bound.
+model ProcessedMessage {
+  messageId   String   @id @map("message_id")
+  processedAt DateTime @default(now()) @map("processed_at")
+
+  @@index([processedAt])
+  @@map("processed_messages")
+}
+
 // One report per date, holding the sequential REP-#### id shared by that day's entries.
 model Report {
   id         Int      @id @default(autoincrement())

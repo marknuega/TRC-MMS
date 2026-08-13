@@ -109,22 +109,31 @@ export function faultCodes(issueTypes) {
 }
 
 /**
- * Public, read-only, CORS-open mirror — mounted at GET /codemap.
+ * The whole decoding vocabulary: the stored map plus the derived `faults`.
  *
  * `faults` is derived on read, never stored: it is a projection of AppOptions,
- * so persisting it here would create a second copy free to disagree with the
- * list the app actually edits. It is also absent from CODEMAP_CATEGORIES, so a
- * PUT can never write it back and turn the projection into state.
+ * so persisting it would create a second copy free to disagree with the list
+ * the app actually edits. It is also absent from CODEMAP_CATEGORIES, so a PUT
+ * can never write it back and turn the projection into state.
+ *
+ * Both consumers go through here — the public mirror below and the WhatsApp
+ * webhook — so a technician's code can never decode against a different
+ * vocabulary than the one published.
  */
+export async function fullCodeMap() {
+  const [map, opts] = await Promise.all([
+    readCodeMap(),
+    prisma.appOptions.findUnique({ where: { id: 1 } }),
+  ])
+  return { ...map, faults: faultCodes(opts?.data?.issueTypes) }
+}
+
+/** Public, read-only, CORS-open mirror — mounted at GET /codemap. */
 export async function publicCodeMap(req, res, next) {
   try {
     res.set('Access-Control-Allow-Origin', '*')
     res.set('Cache-Control', 'no-store')
-    const [map, opts] = await Promise.all([
-      readCodeMap(),
-      prisma.appOptions.findUnique({ where: { id: 1 } }),
-    ])
-    res.json({ ...map, faults: faultCodes(opts?.data?.issueTypes) })
+    res.json(await fullCodeMap())
   } catch (err) {
     next(err)
   }

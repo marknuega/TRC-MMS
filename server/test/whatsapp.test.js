@@ -1,0 +1,173 @@
+import { test, before, after, describe } from 'node:test'
+import assert from 'node:assert/strict'
+import { randomBytes } from 'node:crypto'
+import { app } from '../src/app.js'
+import { prisma } from '../src/db.js'
+import { decodeBatch, decodeAgencyOnly } from '../src/whatsapp/decoder.js'
+import { alreadyProcessed } from '../src/whatsapp/dedup.js'
+import { splitBody } from '../src/whatsapp/send.js'
+
+let server
+let baseUrl
+
+// A minimal map covering both resolution paths: 43A/99B are CLAIMED by issue
+// types, 19 is an ordinary component resolved through parts + variant.
+const MAP = {
+  equipmentCodes: { H: 'Airbus TH1n', T: 'Sepura STP9000' },
+  components: { 19: 'Fistmic', 41: 'Rotary Knob' },
+  variants: { A: '', B: '3D' },
+  faults: { '43A': 'Side Grip', '43B': 'Side Grip-3D', '99A': 'Charger', '99B': 'Charger-818' },
+  actions: { C: 'Change', R: 'Repair' },
+  companies: { MT: 'MOTECO', MI: 'MOI' },
+  agencies: { PSD: 'PUBLIC SECURITY DEPARTMENT' },
+  technicians: { 1: 'Amir' },
+}
+
+const one = (text) => {
+  const r = decodeBatch(text, MAP)
+  assert.ok(r.ok, `expected "${text}" to decode, got: ${r.reason}`)
+  return r.batch.groups[0].faults[0]
+}
+
+before(async () => {
+  server = app.listen(0)
+  await new Promise((resolve) => server.once('listening', resolve))
+  baseUrl = `http://localhost:${server.address().port}`
+})
+
+after(async () => {
+  await server?.close()
+  await prisma.$disconnect()
+})
+
+describe('whatsapp decoder', () => {
+  test('a claimed parts+variant outranks the component lookup', () => {
+    // 43 is not in components at all; the claim is the only way this resolves.
+    assert.equal(one('H43AC1MT 1').componentName, 'Side Grip')
+    assert.equal(one('H43BC1MT 1').componentName, 'Side Grip-3D')
+    // 99A and 99B are different chargers, not two builds of one — the variant
+    // suffix must NOT be appended on a claimed code.
+    assert.equal(one('H99BC1MT 1').componentName, 'Charger-818')
+  })
+
+  test('an unclaimed code falls back to component + variant suffix', () => {
+    assert.equal(one('H19AC1MT 1').componentName, 'Fistmic')
+    assert.equal(one('H19BC1MT 1').componentName, 'Fistmic 3D')
+  })
+
+  test("variant A's blank suffix is a real value, not a missing one", () => {
+    // If the code tested falsiness rather than undefined, '' would read as
+    // absent and every ordinary code would be rejected as an unknown variant.
+    const r = decodeBatch('H19AC1MT 1', MAP)
+    assert.ok(r.ok, r.reason)
+  })
+
+  test('quantity is optional and defaults to 1', () => {
+    assert.equal(one('H43AC1MT 1').quantity, 1)
+    assert.equal(one('H43ACMT 1').quantity, 1)
+    assert.equal(one('H43AC3MT 1').quantity, 3)
+  })
+
+  test('the superseded 3-character format is rejected, showing the new code', () => {
+    const r = decodeBatch('26HC1MT 1', MAP)
+    assert.equal(r.ok, false)
+    assert.match(r.reason, /old code format/)
+    // The whole point of the message: it must name the replacement.
+    assert.match(r.reason, /H26AC1MT/)
+  })
+
+  test('tel + issi are pulled off the end, technician id last', () => {
+    const r = decodeBatch('H43AC1MT H19AR2MI 2221 6575 1', MAP)
+    assert.ok(r.ok, r.reason)
+    assert.equal(r.batch.telNumber, '2221')
+    assert.equal(r.batch.issiNumber, '6575')
+    assert.equal(r.batch.techName, 'Amir')
+    assert.equal(r.batch.groups[0].faults.length, 2)
+  })
+
+  test('a batch mixing two brands is refused rather than split', () => {
+    const r = decodeBatch('H43AC1MT T41AC1MT 1', MAP)
+    assert.equal(r.ok, false)
+    assert.match(r.reason, /Mismatched parts/)
+  })
+
+  test('unknown codes are named individually', () => {
+    assert.match(decodeBatch('X43AC1MT 1', MAP).reason, /device letter "X"/)
+    assert.match(decodeBatch('H77AC1MT 1', MAP).reason, /parts number "77"/)
+    assert.match(decodeBatch('H19ZC1MT 1', MAP).reason, /variant "Z"/)
+    assert.match(decodeBatch('H43AC1MT 9', MAP).reason, /Unknown technician ID "9"/)
+  })
+
+  test('agency-only messages decode, anything else does not', () => {
+    assert.deepEqual(decodeAgencyOnly('psd', MAP), {
+      agencyCode: 'PSD',
+      agencyName: 'PUBLIC SECURITY DEPARTMENT',
+    })
+    assert.equal(decodeAgencyOnly('NOPE', MAP), null)
+    assert.equal(decodeAgencyOnly('H43AC1MT', MAP), null)
+  })
+})
+
+describe('whatsapp webhook mount', () => {
+  // The regression this file exists for: app.js has a catch-all SPA fallback
+  // that answers any unmatched GET with index.html. If the webhook router is
+  // ever mounted after it, Meta's verification receives HTML instead of the
+  // challenge and the callback URL silently stops working.
+  test('the verification handshake returns the challenge, not the SPA', async () => {
+    const token = process.env.WA_WEBHOOK_VERIFY_TOKEN || 'test-verify-token'
+    process.env.WA_WEBHOOK_VERIFY_TOKEN = token
+
+    const res = await fetch(
+      `${baseUrl}/webhook?hub.mode=subscribe&hub.verify_token=${encodeURIComponent(token)}&hub.challenge=abc123`,
+    )
+    assert.equal(res.status, 200)
+    assert.equal(await res.text(), 'abc123')
+  })
+
+  test('a wrong verify token is refused', async () => {
+    process.env.WA_WEBHOOK_VERIFY_TOKEN = 'the-real-token'
+    const res = await fetch(`${baseUrl}/webhook?hub.mode=subscribe&hub.verify_token=wrong&hub.challenge=abc123`)
+    assert.equal(res.status, 403)
+  })
+
+  test('an incoming message is acked immediately', async () => {
+    // Meta retries aggressively on anything but a fast 200, so the ack must not
+    // wait on decoding or saving.
+    const res = await fetch(`${baseUrl}/webhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ entry: [{ changes: [{ value: {} }] }] }),
+    })
+    assert.equal(res.status, 200)
+  })
+})
+
+describe('whatsapp dedup', () => {
+  test('the same message id is only processed once', async () => {
+    const id = `wamid.test.${randomBytes(8).toString('hex')}`
+    try {
+      assert.equal(await alreadyProcessed(id), false, 'first delivery must be processed')
+      assert.equal(await alreadyProcessed(id), true, 'a retry must be refused')
+    } finally {
+      await prisma.processedMessage.deleteMany({ where: { messageId: id } })
+    }
+  })
+
+  test('a blank id is never treated as a duplicate', async () => {
+    assert.equal(await alreadyProcessed(undefined), false)
+  })
+})
+
+describe('whatsapp send', () => {
+  test('a long body is split on line boundaries and numbered', () => {
+    const line = 'x'.repeat(200)
+    const parts = splitBody(Array.from({ length: 40 }, () => line).join('\n'))
+    assert.ok(parts.length > 1, 'expected the body to be split')
+    for (const p of parts) assert.ok(p.length <= 4096, 'each part must fit WhatsApp’s limit')
+    assert.match(parts[0], /^\(1\/\d+\)\n/)
+  })
+
+  test('a short body is left exactly as-is', () => {
+    assert.deepEqual(splitBody('hello'), ['hello'])
+  })
+})

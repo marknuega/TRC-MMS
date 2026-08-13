@@ -19,6 +19,7 @@ import savedReportsRouter from './routes/savedReports.js'
 import monthlyRouter from './routes/monthly.js'
 import inventoryRouter from './routes/inventory.js'
 import codemapRouter, { publicCodeMap } from './routes/codemap.js'
+import whatsappRouter from './whatsapp/routes.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url)) // server/src
 const clientDist = path.resolve(here, '../../client/dist') // repo/client/dist
@@ -40,9 +41,10 @@ app.use(
         scriptSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", 'data:', 'https:'],
-        // Allow the Code Reference page to read the whatsapp app's public
-        // /codemap so it mirrors the admin edits live.
-        connectSrc: ["'self'", 'https://trcmmswhatsapp-production.up.railway.app'],
+        // The Code Reference page reads /codemap from this same origin — it
+        // used to come from the standalone WhatsApp service, which is why this
+        // once listed a second host.
+        connectSrc: ["'self'"],
         fontSrc: ["'self'", 'data:'],
         objectSrc: ["'none'"],
       },
@@ -110,6 +112,17 @@ app.get('/health/db', async (req, res) => {
 // this app is a URL change and nothing more. Registered before the SPA fallback
 // so it is not swallowed by it.
 app.get('/codemap', publicCodeMap)
+
+// The WhatsApp webhook. Unauthenticated by necessity — Meta calls it with no
+// session — and outside /api so the callback URL stays what Meta already knows.
+// It authenticates itself two ways: the verification handshake checks
+// WA_WEBHOOK_VERIFY_TOKEN, and WA_ALLOWED_SENDERS restricts which numbers can
+// file anything.
+//
+// MUST be registered before the SPA fallback below: that fallback answers any
+// unmatched GET with index.html, which would hand Meta HTML instead of the
+// hub.challenge and fail verification.
+app.use('/', whatsappRouter)
 
 // Public auth endpoints (login, logout, me, credential request).
 app.use('/api/auth', authRouter)

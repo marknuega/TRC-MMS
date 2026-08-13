@@ -1,7 +1,10 @@
 import { Router } from 'express'
 import { prisma } from '../db.js'
 import { branchWhere, writeBranch, canAccessBranch } from '../scope.js'
-import { buildDateReport, buildTxt } from '../../../client/src/report.js'
+// The daily text is also sent to a technician who texts "report", so it is
+// built in one place rather than once per caller. See src/dailyText.js, which
+// also owns dmy() and repLabel().
+import { dailyReportText, dmy } from '../dailyText.js'
 
 const router = Router()
 
@@ -9,16 +12,6 @@ const router = Router()
 const normMode = (m) => (String(m ?? 'report').trim().toLowerCase() === 'transmittal' ? 'transmittal' : 'report')
 const docId = (mode, n) => `${normMode(mode) === 'transmittal' ? 'TRANS' : 'REP'}-${String(n).padStart(4, '0')}`
 const withFaults = { faults: { orderBy: { position: 'asc' } } }
-
-const dmy = (value) => {
-  const d = new Date(value)
-  return `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`
-}
-
-// Branch-prefixed id, e.g. "MAKKAH-REP-0001" — mirrors the client's repLabel()
-// so the WhatsApp-bound text matches what the Report page displayed.
-const repLabel = (id, branch, mode) =>
-  `${branch ? `${branch.toUpperCase()}-` : ''}${mode === 'transmittal' ? String(id ?? '-').replace('REP-', 'TRANS-') : id ?? '-'}`
 
 // Deduct stock for materials/faults that match an inventory item (by itemCode,
 // case-insensitive). Quantities across the snapshot are summed per item, and
@@ -107,21 +100,13 @@ router.get('/', async (req, res, next) => {
 // scheduled daily send, so the report formatting lives in one place.
 router.get('/daily-text', async (req, res, next) => {
   try {
-    const mode = String(req.query?.mode ?? 'report').trim().toLowerCase() === 'transmittal' ? 'transmittal' : 'report'
-    const dateLabel = dmy(req.query?.date ? req.query.date : new Date())
-    const reports = await prisma.savedReport.findMany({
-      where: { ...branchWhere(req, req.query.branch), mode, dateLabel },
-      orderBy: { seq: 'asc' },
-    })
-    if (reports.length === 0) {
-      return res.json({ text: '', count: 0, dateLabel })
-    }
-    const text = reports
-      .map((r) =>
-        buildTxt(buildDateReport(r.dateLabel, repLabel(r.reportId, r.branch, r.mode), r.entries, { branch: r.branch, mode: r.mode })),
-      )
-      .join('\n\n\n')
-    res.json({ text, count: reports.length, dateLabel })
+    res.json(
+      await dailyReportText({
+        where: branchWhere(req, req.query.branch),
+        mode: normMode(req.query?.mode),
+        date: req.query?.date,
+      }),
+    )
   } catch (err) {
     next(err)
   }
