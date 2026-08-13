@@ -10,7 +10,7 @@
 
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
-import { faultCodes } from '../src/routes/codemap.js'
+import { faultCodes, sanitizeCodeMap, validateCodeMap } from '../src/routes/codemap.js'
 import { issueCode, issueName } from '../../client/src/options.js'
 
 // The same rows the app stores, in every shape it has ever written them.
@@ -72,5 +72,47 @@ describe('faultCodes', () => {
   test('missing or empty options are not an error — just no faults', () => {
     assert.deepEqual(faultCodes(undefined), {})
     assert.deepEqual(faultCodes([]), {})
+  })
+})
+
+// A parts number is exactly two digits (see refGroups.js PARTS_RE, client-side).
+// The five codes the WhatsApp bridge seed carried in `components` — H43A, H43B,
+// 98A, 99A, 99B — could never decode for that reason. Re-checked here so a PUT
+// can never write another one back in, even if the client's own check is
+// bypassed.
+describe('sanitizeCodeMap', () => {
+  test('drops stale 2-digit+suffix part codes that can never decode', () => {
+    const cleaned = sanitizeCodeMap({
+      components: { '43': 'Side Grip', H43A: 'Legacy', '98A': 'Power Supply', '99B': 'Charger DC' },
+      componentCategories: { '43': 'Audio & Controls', H43A: 'Legacy' },
+    })
+
+    assert.deepEqual(cleaned.components, { '43': 'Side Grip' })
+    assert.deepEqual(cleaned.componentCategories, { '43': 'Audio & Controls' })
+  })
+})
+
+describe('validateCodeMap', () => {
+  test('accepts a well-formed map', () => {
+    assert.equal(
+      validateCodeMap({ components: { '43': 'Side Grip' }, componentCategories: { '43': 'Audio & Controls' } }),
+      null,
+    )
+  })
+
+  test('rejects a components code that is not exactly two digits', () => {
+    for (const bad of ['98A', '99A', '99B', 'H43A', 'H43B']) {
+      const problem = validateCodeMap({ components: { [bad]: 'Something' } })
+      assert.match(problem, /is not a parts number/)
+    }
+  })
+
+  test('rejects the same malformed codes in componentCategories', () => {
+    const problem = validateCodeMap({ componentCategories: { '98A': 'Power & Charging' } })
+    assert.match(problem, /is not a parts number/)
+  })
+
+  test('componentCategories is a recognised category, not rejected as unknown', () => {
+    assert.equal(validateCodeMap({ componentCategories: { '43': 'Audio & Controls' } }), null)
   })
 })

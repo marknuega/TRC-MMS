@@ -10,7 +10,8 @@
     "test": "node --test --env-file=.env \"test/**/*.test.js\"",
     "migrate:dev": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
-    "studio": "prisma studio"
+    "studio": "prisma studio",
+    "fix-codemap": "node --env-file=.env scripts/fix-stale-codemap-entries.js"
   },
   "dependencies": {
     "@prisma/client": "^6.3.1",

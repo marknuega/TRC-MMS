@@ -35,20 +35,33 @@ const numericSort = ([a], [b]) => a.localeCompare(b, undefined, { numeric: true,
  * wins and says something different. They come back separately so the page can
  * report them as a maintenance problem instead of quietly hiding them.
  *
+ * `categories` is the admin-assigned code -> category-name override (Edit Code
+ * Map, "Category" field on a parts number). A part with no override falls back
+ * to its numeric-range bucket, so the grouping keeps working for a map that has
+ * never used the field. An override group appears after the numeric buckets,
+ * in the order its first part was encountered.
+ *
  * @returns {{groups: {title: string, items: [string, string][]}[], unusable: [string, string][]}}
  */
-export function groupComponents(components) {
+export function groupComponents(components, categories = {}) {
   const pairs = Object.entries(components || {})
     .map(([k, v]) => [String(k), String(v)])
     .sort(numericSort)
 
   const buckets = COMPONENT_BUCKETS.map((b) => ({ title: b.title, items: [] }))
+  const custom = new Map() // title -> items, in first-seen order
   const other = { title: 'Other', items: [] }
   const unusable = []
 
   for (const [code, name] of pairs) {
     if (!PARTS_RE.test(code)) {
       unusable.push([code, name])
+      continue
+    }
+    const explicit = String(categories?.[code] ?? '').trim()
+    if (explicit) {
+      if (!custom.has(explicit)) custom.set(explicit, [])
+      custom.get(explicit).push([code, name])
       continue
     }
     const n = parseInt(code, 10)
@@ -58,6 +71,7 @@ export function groupComponents(components) {
   }
 
   const groups = buckets.filter((g) => g.items.length)
+  for (const [title, items] of custom) groups.push({ title, items })
   if (other.items.length) groups.push(other)
   return { groups, unusable }
 }

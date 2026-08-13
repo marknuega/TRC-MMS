@@ -32,6 +32,9 @@ export const DEFAULT_OPTIONS = {
     'TEMPORARY DISABLED', 'TOP BOARD', 'UI FRAME',
   ],
 
+  // Parts Number list for the admin-managed catalog of shared hardware IDs.
+  partsNumbers: [],
+
   // The report engine knows the codes for these built-ins (C/R/N/PCB/P/RP/I/RI/D).
   // Adding a custom action is fine — it just prints its own name as the code.
   actions: ['CHANGE', 'REPAIR', 'NEW', 'PCB', 'PROGRAM', 'RE-PROGRAM', 'INSTALL', 'RE-INSTALL', 'DISMANTLE'],
@@ -107,7 +110,8 @@ export const CATEGORIES = [
   { key: 'agencies', label: 'Agencies' },
   { key: 'types', label: 'Types' },
   { key: 'models', label: 'Models' },
-  { key: 'issueTypes', label: 'Issue types' },
+  { key: 'partsNumbers', label: 'Parts Number' },
+  { key: 'issueTypes', label: 'Faulty / Parts' },
   { key: 'actions', label: 'Actions' },
   { key: 'companies', label: 'Companies' },
   { key: 'materials', label: 'Materials' },

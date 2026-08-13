@@ -49,3 +49,24 @@ test('parts land in their number buckets', () => {
   assert.deepEqual(byTitle['Audio & Controls'], ['43'])
   assert.deepEqual(byTitle['Power & Charging'], ['98'])
 })
+
+// The Edit Code Map "Category" field on a parts number (client/src/ReferenceCard.jsx,
+// CodeMapEditor) — an override that wins over the automatic by-number bucket.
+test('an explicit category overrides the automatic number bucket', () => {
+  const { groups } = groupComponents({ 11: 'Antenna Connector', 43: 'Side Grip' }, { 11: 'Batteries' })
+  const byTitle = Object.fromEntries(groups.map((g) => [g.title, g.items.map(([c]) => c)]))
+  assert.deepEqual(byTitle.Batteries, ['11'])
+  assert.equal(byTitle['Housing & Antenna'], undefined)
+  assert.deepEqual(byTitle['Audio & Controls'], ['43'])
+})
+
+test('a blank or missing category falls back to the number bucket', () => {
+  const { groups } = groupComponents({ 11: 'Antenna Connector' }, { 11: '  ', 26: 'Orphaned override' })
+  const byTitle = Object.fromEntries(groups.map((g) => [g.title, g.items.map(([c]) => c)]))
+  assert.deepEqual(byTitle['Housing & Antenna'], ['11'])
+})
+
+test('an unusable code ignores any category override', () => {
+  const { unusable } = groupComponents({ '98A': 'Power Supply - PSE65-12' }, { '98A': 'Power & Charging' })
+  assert.deepEqual(unusable, [['98A', 'Power Supply - PSE65-12']])
+})

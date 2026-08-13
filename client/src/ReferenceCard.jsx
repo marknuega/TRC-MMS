@@ -36,7 +36,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { COPYRIGHT_HTML } from './copyright'
 import { FALLBACK, VARIANTS, useCodeMap } from './codes'
-import { groupComponents } from './refGroups'
+import { groupComponents, PARTS_RE, COMPONENT_BUCKETS } from './refGroups'
 import { getCodeMap, saveCodeMap } from './api'
 
 const numericSort = ([a], [b]) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
@@ -324,9 +324,14 @@ function CodeMapEditor() {
   const [cat, setCat] = useState(CATS[0].key)
   const [newCode, setNewCode] = useState('')
   const [newName, setNewName] = useState('')
+  // Only used for the 'components' category — which group a parts number
+  // prints under on the Code Reference page (Housing & Antenna, etc.), or
+  // blank to keep the automatic by-number grouping.
+  const [newCategory, setNewCategory] = useState('')
   const [editKey, setEditKey] = useState('') // the code currently open for edit
   const [editCode, setEditCode] = useState('')
   const [editName, setEditName] = useState('')
+  const [editCategory, setEditCategory] = useState('')
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -349,16 +354,41 @@ function CodeMapEditor() {
 
   const meta = CATS.find((c) => c.key === cat) ?? CATS[0]
   const entries = useMemo(() => Object.entries(map?.[cat] ?? {}), [map, cat])
+  const isComponents = cat === 'components'
+  // Every category name already in use, so the free-text Category field can
+  // suggest reusing one instead of a near-duplicate ("Power" vs "Power &
+  // Charging") — includes the built-in number buckets even before any part
+  // has been assigned to them explicitly.
+  const categoryChoices = useMemo(() => {
+    if (!isComponents) return []
+    const used = new Set(Object.values(map?.componentCategories ?? {}).map((v) => String(v).trim()).filter(Boolean))
+    for (const b of COMPONENT_BUCKETS) used.add(b.title)
+    return [...used].sort()
+  }, [map, isComponents])
 
   function flash(msg) {
     setNotice(msg)
     setTimeout(() => setNotice(''), 3000)
   }
 
+  // The category override for one components code, or undefined for every
+  // other category (nothing to patch). `oldCode` lets a rename move the
+  // override to its new key instead of orphaning it under the old one.
+  function categoryPatch(newCodeKey, value, oldCode = newCodeKey) {
+    if (!isComponents) return undefined
+    const cats = { ...(map?.componentCategories ?? {}) }
+    if (oldCode !== newCodeKey) delete cats[oldCode]
+    const c = value.trim()
+    if (c) cats[newCodeKey] = c
+    else delete cats[newCodeKey]
+    return { componentCategories: cats }
+  }
+
   // Rebuild the category from a list of pairs, so an edit keeps its position
-  // instead of being deleted and re-appended to the bottom.
-  function commit(pairs) {
-    setMap((m) => ({ ...m, [cat]: Object.fromEntries(pairs) }))
+  // instead of being deleted and re-appended to the bottom. `extra` merges in
+  // any sibling map that changed alongside it (componentCategories).
+  function commit(pairs, extra) {
+    setMap((m) => ({ ...m, [cat]: Object.fromEntries(pairs), ...extra }))
     setDirty(true)
     setError('')
   }
@@ -366,6 +396,9 @@ function CodeMapEditor() {
   // What is wrong with a code, or '' when it is usable.
   function codeProblem(code, exceptKey = '') {
     if (!code) return `Enter the ${meta.codeLabel.toLowerCase()}.`
+    if (isComponents && !PARTS_RE.test(code)) {
+      return `"${code}" is not a parts number — it must be exactly two digits, e.g. 43.`
+    }
     const clash = entries.find(([k]) => k !== exceptKey && normCode(k) === code)
     if (clash) return `${code} is already used by "${clash[1] || '(blank)'}".`
     return ''
@@ -377,13 +410,15 @@ function CodeMapEditor() {
     const problem = codeProblem(code)
     if (problem) return setError(problem)
     if (!name && !meta.blankOk) return setError('Enter what this code means.')
-    commit([...entries, [code, name]])
+    commit([...entries, [code, name]], categoryPatch(code, newCategory))
     setNewCode('')
     setNewName('')
+    setNewCategory('')
   }
 
   function startEdit(code, name) {
     setEditKey(code)
+    setEditCategory(isComponents ? String(map?.componentCategories?.[code] ?? '') : '')
     setEditCode(code)
     setEditName(name)
     setError('')
@@ -395,12 +430,15 @@ function CodeMapEditor() {
     const problem = codeProblem(code, editKey)
     if (problem) return setError(problem)
     if (!name && !meta.blankOk) return setError('Enter what this code means.')
-    commit(entries.map(([k, v]) => (k === editKey ? [code, name] : [k, v])))
+    commit(
+      entries.map(([k, v]) => (k === editKey ? [code, name] : [k, v])),
+      categoryPatch(code, editCategory, editKey),
+    )
     setEditKey('')
   }
 
   function remove(code) {
-    commit(entries.filter(([k]) => k !== code))
+    commit(entries.filter(([k]) => k !== code), categoryPatch(code, ''))
     setEditKey('')
   }
 
@@ -454,6 +492,7 @@ function CodeMapEditor() {
                   setEditKey('')
                   setNewCode('')
                   setNewName('')
+                  setNewCategory('')
                   setError('')
                 }}
               >
@@ -482,14 +521,39 @@ function CodeMapEditor() {
                   onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), add())}
                   placeholder={meta.blankOk ? 'Suffix — leave empty for the default build' : 'What this code means'}
                 />
+                {isComponents && (
+                  <input
+                    value={newCategory}
+                    onChange={(e) => setNewCategory(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), add())}
+                    placeholder="Category — blank = group by number"
+                    list="component-categories"
+                    aria-label="Category"
+                    title="Which section this part prints under on Code Reference. Leave blank to group it automatically by number."
+                  />
+                )}
                 <button type="button" onClick={add} disabled={!newCode.trim()}>
                   Add
                 </button>
               </div>
             </label>
           </div>
+          {isComponents && (
+            <datalist id="component-categories">
+              {categoryChoices.map((c) => (
+                <option key={c} value={c} />
+              ))}
+            </datalist>
+          )}
 
           <p className="manage-hint">{meta.hint}</p>
+          {isComponents && (
+            <p className="manage-hint">
+              Category is optional — leave it blank and the part groups by its number (10–19 Housing &amp;
+              Antenna, 20–39 Electronics &amp; UI, 40–49 Audio &amp; Controls, 90–99 Power &amp; Charging, anything
+              else under Other). Set it to put a part under a different heading on the Code Reference page.
+            </p>
+          )}
 
           {error && <p className="manage-notice error">{error}</p>}
           {notice && <p className="manage-notice">{notice}</p>}
@@ -542,6 +606,23 @@ function CodeMapEditor() {
                         }}
                         placeholder={meta.blankOk ? 'Empty = the default build' : 'What this code means'}
                       />
+                      {isComponents && (
+                        <input
+                          className="edit-input"
+                          value={editCategory}
+                          onChange={(e) => setEditCategory(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault()
+                              saveEdit()
+                            }
+                            if (e.key === 'Escape') setEditKey('')
+                          }}
+                          placeholder="Category — blank = group by number"
+                          list="component-categories"
+                          aria-label="Category"
+                        />
+                      )}
                     </div>
                     <div className="manage-item-actions">
                       <button type="button" onClick={saveEdit}>Apply</button>
@@ -555,6 +636,9 @@ function CodeMapEditor() {
                     <span className="manage-item-label">
                       <span className="manage-item-code">{code}</span>
                       {name || <em className="muted">(blank — default build)</em>}
+                      {isComponents && map?.componentCategories?.[code] && (
+                        <em className="muted"> — {map.componentCategories[code]}</em>
+                      )}
                     </span>
                     <div className="manage-item-actions">
                       <button type="button" className="ghost" onClick={() => startEdit(code, name)}>
@@ -580,7 +664,7 @@ export default function ReferenceCard({ isAdmin = false }) {
   // Derive display lists from the live map, falling back to bundled data.
   const data = useMemo(() => {
     const src = map || FALLBACK
-    const { groups, unusable } = groupComponents(src.components || FALLBACK.components)
+    const { groups, unusable } = groupComponents(src.components || FALLBACK.components, src.componentCategories)
     return {
       devices: asPairs(src.equipmentCodes || FALLBACK.equipmentCodes),
       componentGroups: groups,
@@ -802,8 +886,8 @@ export default function ReferenceCard({ isAdmin = false }) {
               {data.unusableComponents.length === 1 ? 'is' : 'are'} hidden here — a parts number must
               be exactly two digits, so nothing can reach{' '}
               <code>{data.unusableComponents.map(([c]) => c).join(', ')}</code>. Remove them in{' '}
-              <strong>Edit Code Map</strong> above; if one names a real part, give it an Issue type
-              instead so it decodes.
+              <strong>Edit Code Map</strong> above; if one names a real part, claim it in{' '}
+              <strong>Manage Inputs → Faulty / Parts</strong> instead so it decodes.
             </p>
           )}
           <div className="ref-grid">

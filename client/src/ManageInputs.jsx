@@ -39,6 +39,7 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
   // variant, and their description IS their name; every other list is a string.
   const isMaterials = cat === 'materials'
   const isIssues = cat === 'issueTypes'
+  const isPartsNumbers = cat === 'partsNumbers'
   const list = options[cat] ?? []
   const nameOf = (v) => (isMaterials ? materialName(v) : isIssues ? issueName(v) : String(v))
   const descOf = (v) => (isMaterials ? materialDesc(v) : '')
@@ -203,14 +204,20 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
               </>
             )}
             <label className="grow">
-              {isIssues ? 'Description' : isMaterials ? 'Material name' : 'Add new'}
+              {isIssues ? 'Description' : isPartsNumbers ? 'Parts number name' : isMaterials ? 'Material name' : 'Add new'}
               <div className="add-row">
                 <input
                   value={newValue}
                   onChange={(e) => setNewValue(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), add())}
                   placeholder={
-                    isIssues ? 'Belt Clip' : isMaterials ? 'Material name' : 'Type a value and press Add'
+                    isIssues
+                      ? 'Belt Clip'
+                      : isPartsNumbers
+                        ? 'Power Supply'
+                        : isMaterials
+                          ? 'Material name'
+                          : 'Type a value and press Add'
                   }
                 />
                 {isMaterials && (
