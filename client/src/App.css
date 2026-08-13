@@ -1428,8 +1428,14 @@ h2 {
   width: 100%;
   font-size: 0.82rem;
 }
+/* border-box is load-bearing, not tidiness: there is no global box-sizing reset
+   in this stylesheet, so cells would default to content-box and the explicit
+   header heights below would exclude padding + border. Row 1 would then really
+   occupy ~2.76rem while row 2 pinned at 2rem — 12px too high, hidden behind
+   row 1, which reads as "the second row does not freeze". */
 .monthly-table th,
 .monthly-table td {
+  box-sizing: border-box;
   border-right: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
   padding: 0.35rem 0.5rem;
@@ -1444,18 +1450,27 @@ h2 {
   color: var(--text-h);
   font-weight: 700;
 }
-/* Freeze the two header rows on vertical scroll. The second is pinned below the
-   first, so the offset has to be known up front — hence the explicit heights.
-   They are set ABOVE the natural content height of each row so the browser
-   always honours them and the stack can never drift out of alignment. */
+/* Freeze BOTH header rows on vertical scroll. Row 2 is pinned directly below
+   row 1, so its offset must equal row 1's height exactly — one variable owns
+   both, so they cannot drift apart.
+   The height is set on .grp only, NOT on every row-1 cell: Date/Day/Activity
+   span both rows, and a height on a row-spanning cell is distributed across
+   the rows it covers, which lets row 1 render taller than the offset. Row 2
+   would then pin too high and disappear behind row 1. Only the single-row
+   group cells are allowed to define row 1's height. */
+.monthly-table {
+  --hdr-row1: 2rem;
+}
 .monthly-table thead tr:nth-child(1) th {
   position: sticky;
   top: 0;
-  height: 2rem;
+}
+.monthly-table thead tr:nth-child(1) .grp {
+  height: var(--hdr-row1);
 }
 .monthly-table thead tr:nth-child(2) th {
   position: sticky;
-  top: 2rem;
+  top: var(--hdr-row1);
   height: 1.8rem;
 }
 .monthly-table thead th {
