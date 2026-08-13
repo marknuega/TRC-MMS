@@ -113,6 +113,7 @@ function printReference(data) {
     <div>H (Airbus TH1n) + 43 (Side Grip) + A (Original) + C (Change) + 1 (qty) + MT (MOTECO)</div>
     <div class="sub">Full report: <code>H43A C 1 MT 2221 6575 1</code> &nbsp;(code · action · qty · company · last 4 of tel · last 4 of ISSI · technician&nbsp;ID). Then send the agency code alone, e.g. <code>PSD</code>, to verify.</div>
     <div class="sub">Separators are free: <code>H43AC1MT222165751</code>, <code>H43A-C-1-MT-2221-6575-1</code>, <code>H43A_C_1_MT_2221_6575_1</code> and <code>H43A:C:1:MT:2221:6575:1</code> all read the same.</div>
+    <div class="sub"><b>Short cuts.</b> Leave the <b>quantity</b> out for 1: <code>H43ACMT</code>. Leave the <b>type letter</b> off every code after the first — one report is one radio, so it carries down: <code>H11AC1MT 11AC1MI 2221 6666 1</code>. Write the <b>company</b> with one letter: <code>T</code> = MOTECO, <code>I</code> = MOI, so <code>H11AC1T</code>. All three together: <code>H11ACT 11ACI 2221 6666 1</code>.</div>
   </div>
 
   <h2>Complete code creation details</h2>
@@ -321,6 +322,14 @@ export default function ReferenceCard() {
           Separators are free — <code>H43AC1MT222165751</code>, <code>H43A-C-1-MT-2221-6575-1</code>,{' '}
           <code>H43A_C_1_MT_2221_6575_1</code> and <code>H43A:C:1:MT:2221:6575:1</code> all read the
           same.
+        </div>
+        <div className="muted">
+          <strong>Short cuts.</strong> Leave the <strong>quantity</strong> out for 1 —{' '}
+          <code>H43ACMT</code>. Leave the <strong>type letter</strong> off every code after the
+          first; one report is one radio, so it carries down —{' '}
+          <code>H11AC1MT 11AC1MI 2221 6666 1</code>. Write the <strong>company</strong> with one
+          letter — <code>T</code> = MOTECO, <code>I</code> = MOI — so <code>H11AC1T</code>. All three
+          together: <code>H11ACT 11ACI 2221 6666 1</code>.
         </div>
       </div>
 

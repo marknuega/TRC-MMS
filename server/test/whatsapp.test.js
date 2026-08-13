@@ -171,3 +171,72 @@ describe('whatsapp send', () => {
     assert.deepEqual(splitBody('hello'), ['hello'])
   })
 })
+
+describe('whatsapp shorthand', () => {
+  test('the device letter may be dropped from the second code onward', () => {
+    const full = decodeBatch('H43AC1MT H19AC2MI 1', MAP)
+    const short = decodeBatch('H43AC1MT 19AC2MI 1', MAP)
+    assert.ok(short.ok, short.reason)
+    // Not merely "it parses" — it must mean exactly what writing it out means.
+    assert.deepEqual(short.batch.groups, full.batch.groups)
+  })
+
+  test('the inherited device carries down a chain of codes', () => {
+    const r = decodeBatch('H43AC1MT 19AC2MI 19BRMT 1', MAP)
+    assert.ok(r.ok, r.reason)
+    assert.deepEqual(
+      r.batch.groups.flatMap((g) => g.faults).map((f) => f.componentCode),
+      ['H43A', 'H19A', 'H19B'],
+    )
+  })
+
+  test('the first code must still name the device', () => {
+    const r = decodeBatch('19ACMI 1', MAP)
+    assert.equal(r.ok, false)
+    assert.match(r.reason, /no device letter/)
+  })
+
+  test('a first code that is also the old format gets the old-format answer', () => {
+    // "26HC1MT" fits the shorthand AND the retired grammar exactly. Someone
+    // typing it is far likelier to be using the old format than to have
+    // forgotten a device letter, so that reading leads — but both are named.
+    const r = decodeBatch('26HC1MT 1', MAP)
+    assert.equal(r.ok, false)
+    assert.match(r.reason, /old code format/)
+    assert.match(r.reason, /H26AC1MT/)
+    assert.match(r.reason, /SECOND code onward/)
+  })
+
+  test('a company may be written with one letter', () => {
+    const full = decodeBatch('H43AC1MT H19AC2MI 1', MAP)
+    const short = decodeBatch('H43AC1T 19AC2I 1', MAP)
+    assert.ok(short.ok, short.reason)
+    assert.deepEqual(short.batch.groups, full.batch.groups)
+  })
+
+  test('the shorthand is canonicalised to the full company code', () => {
+    const f = one('H43AC1T 1')
+    assert.equal(f.companyCode, 'MT')
+    assert.equal(f.companyName, 'MOTECO')
+  })
+
+  test('a one-letter company that names no company is refused', () => {
+    // "M" starts both MI and MT but ends neither, so it identifies nothing.
+    assert.match(decodeBatch('H43AC1M 1', MAP).reason, /company code "M"/)
+  })
+
+  test('an ambiguous one-letter company is refused rather than guessed', () => {
+    const map = { ...MAP, companies: { MT: 'MOTECO', PT: 'PROJECT 2' } }
+    const r = decodeBatch('H43AC1T 1', map)
+    assert.equal(r.ok, false)
+    assert.match(r.reason, /could mean MT or PT/)
+  })
+
+  test('quantity stays optional in every shorthand combination', () => {
+    for (const text of ['H43ACMT 19ACMI 1', 'H43ACT 19ACI 1', 'H43AC1MT 19ACI 1']) {
+      const r = decodeBatch(text, MAP)
+      assert.ok(r.ok, `${text}: ${r.reason}`)
+      assert.deepEqual(r.batch.groups.flatMap((g) => g.faults).map((f) => f.quantity), [1, 1], text)
+    }
+  })
+})

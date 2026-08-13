@@ -151,9 +151,36 @@ const primaryAction = (name) => up(String(name ?? '').split('/')[0])
 export const denseCode = (text) => up(text).replace(/[\s\-_:.]+/g, '')
 
 //                          type   parts  variant action  qty    company
-const FAULT_RE = /^([A-Z])(\d{2})([A-Z])([A-Z])(\d*)([A-Z]{2})/
+const FAULT_RE = /^([A-Z])(\d{2})([A-Z])([A-Z])(\d*)([A-Z]{1,2})/
+// The same token with the device letter left off — legal from the SECOND fault
+// on, inheriting the device from the one before it. One report is one device
+// (enforced below), so repeating the letter was only ever a restatement.
+const SHORT_FAULT_RE = /^(\d{2})([A-Z])([A-Z])(\d*)([A-Z]{1,2})/
 // tel(4) issi(4) technician(1+)
 const TAIL_RE = /^(\d{4})(\d{4})(\d+)$/
+
+/**
+ * Resolve a company code, accepting a one-letter shorthand: "I" is MOI, "T" is
+ * MOTECO. Both real codes start with M, so the second letter is the one that
+ * carries the meaning — hence a single letter matches whichever two-letter code
+ * ENDS in it, rather than a hardcoded pair. Add "PX" to the Code Map and "X"
+ * works immediately.
+ *
+ * Deliberately duplicated from the WhatsApp decoder rather than shared: this
+ * module imports React, so the server cannot load it. codes.test.js runs the
+ * same cases through both, so a drift fails a test instead of quietly filing
+ * work against the wrong company.
+ *
+ * @returns {{code, name} | {ambiguous: string[]} | null}
+ */
+export function resolveCompany(code, companies = {}) {
+  if (companies[code]) return { code, name: companies[code] }
+  if (code.length !== 1) return null
+  const hits = Object.keys(companies).filter((c) => c.length === 2 && c[1] === code)
+  if (hits.length === 1) return { code: hits[0], name: companies[hits[0]] }
+  if (hits.length > 1) return { ambiguous: hits }
+  return null
+}
 
 /**
  * Decode a full code report.
@@ -185,9 +212,34 @@ export function parseCodeReport(text, map = FALLBACK, options = {}) {
   // ---- Scan fault tokens off the front ----
   const faults = []
   let rest = src
+  // Device carried forward for a token that omits it (second fault onward).
+  let lastDevice = null
   let m
-  while ((m = FAULT_RE.exec(rest))) {
-    const [whole, device, partNo, variant, action, qty, company] = m
+  for (;;) {
+    let device
+    let whole, partNo, variant, action, qty, company
+
+    if ((m = FAULT_RE.exec(rest))) {
+      ;[whole, device, partNo, variant, action, qty, company] = m
+      lastDevice = device
+    } else if (lastDevice && (m = SHORT_FAULT_RE.exec(rest))) {
+      ;[whole, partNo, variant, action, qty, company] = m
+      device = lastDevice
+    } else {
+      break
+    }
+
+    // Separators are stripped before scanning, so a one-letter company sitting
+    // in front of a full code is ambiguous: in "H11AC1T" + "H43AC1MT" the
+    // greedy company match takes "TH" and eats the next token's device letter.
+    // If two letters name no company but the first one does, give the second
+    // character back to the input rather than failing on a code the technician
+    // wrote correctly.
+    if (company.length === 2 && !resolveCompany(company, companies) && resolveCompany(company[0], companies)) {
+      company = company[0]
+      whole = whole.slice(0, -1)
+    }
+
     rest = rest.slice(whole.length)
 
     const code = `${device}${partNo}${variant}`
@@ -197,11 +249,18 @@ export function parseCodeReport(text, map = FALLBACK, options = {}) {
 
     const deviceName = devices[device]
     const actionName = actions[action]
-    const companyName = companies[company]
+
+    const resolved = resolveCompany(company, companies)
+    if (resolved?.ambiguous) {
+      errors.push(`"${company}" in ${whole} could be ${resolved.ambiguous.join(' or ')} — write the company code in full.`)
+    }
+    // Canonicalise, so a shorthand is stored and displayed as the full code.
+    const companyCode = resolved?.code ?? company
+    const companyName = resolved?.name
 
     if (!deviceName) errors.push(`Unknown type letter "${device}" in ${whole}.`)
     if (!actionName) errors.push(`Unknown action letter "${action}" in ${whole}.`)
-    if (!companyName) errors.push(`Unknown company "${company}" in ${whole}.`)
+    if (!companyName && !resolved?.ambiguous) errors.push(`Unknown company "${company}" in ${whole}.`)
 
     let issue
     let variantLabel
@@ -246,12 +305,18 @@ export function parseCodeReport(text, map = FALLBACK, options = {}) {
       actionName,
       quantity: Math.max(1, Number(qty) || 1),
       company: matchOption(companyName, options.companies) ?? up(companyName),
-      companyCode: company,
+      companyCode,
     })
   }
 
   if (!faults.length) {
-    errors.push('No fault code found. Expected a 4-character CDS code then the action, e.g. H43A C 1 MT.')
+    // Distinguish "nothing recognisable" from "started with the shorthand",
+    // which is a near miss and otherwise reads as the whole code being wrong.
+    errors.push(
+      SHORT_FAULT_RE.test(src)
+        ? 'The first code must start with the device letter, e.g. H43A C 1 MT. Later codes in the same report may leave it off.'
+        : 'No fault code found. Expected a 4-character CDS code then the action, e.g. H43A C 1 MT.',
+    )
   }
 
   // ---- Whatever is left must be the tel / issi / technician tail ----

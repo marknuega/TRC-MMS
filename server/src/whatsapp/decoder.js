@@ -20,6 +20,19 @@
 // "H43AC1MT" = device H (Airbus TH1n), parts 43, variant A, action C (Change),
 // qty 1, company MT. The first FOUR characters are the CDS code proper.
 //
+// Two parts of a token may be left out:
+//
+//   QUANTITY, anywhere — "H11ACMT" is one piece, same as "H11AC1MT".
+//
+//   DEVICE, from the second fault on — "H11AC1MT 11AC1MI 2221 6666 1" repeats
+//     the H. One batch is one radio (a mix of brands is refused below), so the
+//     letter after the first is only ever a restatement. The first token must
+//     still carry it: without a device already in hand the shorthand is
+//     indistinguishable from the retired format — see LEGACY_PATTERN.
+//
+// And the COMPANY may be written with one letter: "11ACI" is MOI, "11AC1T" is
+// MOTECO. See resolveCompany() for why it is the second letter that counts.
+//
 // This replaced the 3-character "26HC1MT" form, which led with the component
 // number and had no variant, so it could not tell an original side grip from a
 // 3D-printed one. That form is rejected rather than decoded — "26H" and "H26A"
@@ -28,10 +41,49 @@
 // Both decoders (this and client/src/codes.js) must agree; codemap.test.js
 // pins the fault-claim half of that together.
 
-// (device)(2-digit parts)(variant)(action)(optional qty)(2-letter company)
-const FAULT_PATTERN = /^([A-Z])(\d{2})([A-Z])([A-Z])(\d*)([A-Z]{2})$/i
+// (device)(2-digit parts)(variant)(action)(optional qty)(company, 1 or 2 letters)
+const FAULT_PATTERN = /^([A-Z])(\d{2})([A-Z])([A-Z])(\d*)([A-Z]{1,2})$/i
+// The same token with the device letter left off, which is allowed from the
+// SECOND fault on — it inherits the device from the token before it. A batch
+// is one radio anyway (mixing brands is refused below), so repeating the letter
+// on every code was pure typing.
+const SHORT_FAULT_PATTERN = /^(\d{2})([A-Z])([A-Z])(\d*)([A-Z]{1,2})$/i
 // The superseded form, recognised ONLY to explain itself — never decoded.
+//
+// Note this is character-for-character the same shape as SHORT_FAULT_PATTERN:
+// old "26HC1MT" reads equally well as parts 26, variant H, action C, qty 1, MT.
+// The two are told apart by POSITION and nothing else — the shorthand is only
+// legal after a token that named a device, so a message written entirely in the
+// old format still fails on its first token and gets the explanation below.
+// This is the whole reason the shorthand cannot be allowed on the first token.
 const LEGACY_PATTERN = /^(\d+)([A-Z])([A-Z])(\d+)([A-Z]{2})$/i
+
+/**
+ * Resolve a company code, accepting a one-letter shorthand.
+ *
+ * Company codes are two letters (MI = MOI, MT = MOTECO) and both begin with M,
+ * so the letter that actually carries the meaning is the SECOND one — which is
+ * why "I" and "T" are the shorthands rather than "M". Rather than hardcode that
+ * pair, a single letter matches whichever two-letter code ends in it.
+ *
+ * Derived instead of stored so the Code Map stays the one place companies are
+ * defined: add "PX" there and "X" works immediately, with no second list to
+ * keep in step. An exact match always wins, so a genuine one-letter code in the
+ * map is never shadowed by this.
+ *
+ * @returns {{code: string, name: string} | {ambiguous: string[]} | null}
+ */
+export function resolveCompany(code, companies = {}) {
+  if (companies[code]) return { code, name: companies[code] }
+  if (code.length !== 1) return null
+
+  const hits = Object.keys(companies).filter((c) => c.length === 2 && c[1] === code)
+  if (hits.length === 1) return { code: hits[0], name: companies[hits[0]] }
+  // Two companies ending in the same letter: the shorthand cannot mean both, and
+  // picking one would file work against the wrong company silently.
+  if (hits.length > 1) return { ambiguous: hits }
+  return null
+}
 
 /**
  * Decode a batch of fault items + optional tel/issi + technician id.
@@ -84,10 +136,48 @@ export function decodeBatch(rawText, map) {
   if (working.length === 0) return { ok: false, reason: 'No fault/component code detected in the message.' }
 
   const faultsRaw = []
+  // The device carried forward for a token that omits it. Set by every token
+  // that names one, so the shorthand always refers to the most recent letter.
+  let lastDevice = null
+
   for (const token of working) {
     const upper = token.toUpperCase()
+    let deviceLetter, partsNum, variantLetter, actionCode, quantityRaw, companyCode
+
     const match = upper.match(FAULT_PATTERN)
-    if (!match) {
+    const short = match ? null : upper.match(SHORT_FAULT_PATTERN)
+
+    if (match) {
+      ;[, deviceLetter, partsNum, variantLetter, actionCode, quantityRaw, companyCode] = match
+      lastDevice = deviceLetter
+    } else if (short && lastDevice) {
+      ;[, partsNum, variantLetter, actionCode, quantityRaw, companyCode] = short
+      deviceLetter = lastDevice
+    } else if (short) {
+      // Shorthand with nothing to inherit from. On its own this shape is
+      // genuinely ambiguous: it is also the retired format. When it reads as
+      // BOTH — "26HC1MT" does — answer both, leading with the old format, since
+      // that is what someone typing it is far more likely to have meant.
+      const legacy = upper.match(LEGACY_PATTERN)
+      if (legacy) {
+        const [, num, dev, act, qty, co] = legacy
+        return {
+          ok: false,
+          reason:
+            `"${token}" is the old code format, which is no longer accepted.\n` +
+            `The device letter now comes FIRST and a variant letter follows the parts number:\n` +
+            `  ${dev}${num.padStart(2, '0')}A${act}${qty}${co}   (was ${token})\n` +
+            `The variant is usually A. See the Code Reference in TRC-MMS.\n` +
+            `(If you meant to leave the device letter off, that only works from the SECOND code onward.)`,
+        }
+      }
+      return {
+        ok: false,
+        reason:
+          `"${token}" has no device letter, and it is the first code in the message so there is nothing to carry it from.\n` +
+          `Start with the full code, e.g. H${token}. Later codes in the same message may drop the letter.`,
+      }
+    } else {
       // Name the old form specifically. "26HC1MT" is a code people typed for
       // months; a bare "not recognized" would read as the bot being broken.
       const legacy = upper.match(LEGACY_PATTERN)
@@ -108,12 +198,24 @@ export function decodeBatch(rawText, map) {
       }
     }
 
-    const [, deviceLetter, partsNum, variantLetter, actionCode, quantityRaw, companyCode] = match
     const quantity = quantityRaw === '' ? 1 : Number(quantityRaw)
 
     const equipmentLabel = equipmentCodes[deviceLetter]
     const actionName = actions[actionCode]
-    const companyName = companies[companyCode]
+
+    const company = resolveCompany(companyCode, companies)
+    if (company?.ambiguous) {
+      return {
+        ok: false,
+        reason:
+          `In "${token}": "${companyCode}" could mean ${company.ambiguous.join(' or ')}, so it is not clear which company this is.\n` +
+          `Write the company code in full.`,
+      }
+    }
+    // The canonical two-letter code, so a shorthand is recorded and echoed back
+    // exactly as if it had been typed out.
+    const companyName = company?.name
+    if (company) companyCode = company.code
 
     const missing = []
     if (!equipmentLabel) missing.push(`device letter "${deviceLetter}"`)

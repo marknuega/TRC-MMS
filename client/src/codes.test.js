@@ -227,3 +227,105 @@ test('issueNames reads legacy strings and coded objects alike', () => {
     'CHARGER 818',
   ])
 })
+
+// ---------------------------------------------------------------------------
+// Shorthand: the device letter after the first code, and the one-letter company
+// ---------------------------------------------------------------------------
+
+const dec = (text, opts = OPTS) => parseCodeReport(text, FALLBACK, opts)
+
+test('the device letter may be dropped from the second code onward', () => {
+  const full = dec('H11AC1MT H11AC1MI 2221 6666 1')
+  const short = dec('H11AC1MT 11AC1MI 2221 6666 1')
+  assert.ok(short.ok, short.errors.join('; '))
+  // Not merely "it parses" — it must produce the SAME report as writing it out.
+  assert.deepEqual(short.faults, full.faults)
+  assert.deepEqual(short.entry, full.entry)
+})
+
+test('the inherited device carries down a whole chain of codes', () => {
+  const r = dec('H43AC1MT 11AC2MI 41ARMT 2221 6666 1')
+  assert.ok(r.ok, r.errors.join('; '))
+  assert.deepEqual(r.faults.map((f) => f.code), ['H43A', 'H11A', 'H41A'])
+})
+
+test('the first code must still name the device', () => {
+  const r = dec('11AC1MI 2221 6666 1')
+  assert.equal(r.ok, false)
+  // The near-miss message, not the generic "no fault code found".
+  assert.match(r.errors[0], /first code must start with the device letter/)
+})
+
+test('a company may be written with one letter — I is MOI, T is MOTECO', () => {
+  const full = dec('H11AC1MT H11AC2MI 2221 6666 1')
+  const short = dec('H11AC1T 11AC2I 2221 6666 1')
+  assert.ok(short.ok, short.errors.join('; '))
+  assert.deepEqual(short.faults, full.faults)
+  // The shorthand is canonicalised, so what is stored never depends on how it
+  // was typed.
+  assert.deepEqual(short.faults.map((f) => f.companyCode), ['MT', 'MI'])
+})
+
+test('a one-letter company does not swallow the next code’s device letter', () => {
+  // Separators are stripped before scanning, so "H11AC1T" + "H43AC1MT" runs
+  // together as "...C1TH43A..." and the greedy company match grabs "TH".
+  const r = dec('H11AC1T H43AC1MT 2221 6666 1')
+  assert.ok(r.ok, r.errors.join('; '))
+  assert.deepEqual(r.faults.map((f) => f.code), ['H11A', 'H43A'])
+  assert.deepEqual(r.faults.map((f) => f.companyCode), ['MT', 'MT'])
+})
+
+test('quantity stays optional in every shorthand combination', () => {
+  for (const text of [
+    'H11ACMT 11ACMI 2221 6666 1',
+    'H11ACT 11ACI 2221 6666 1',
+    'H11AC1MT 11ACI 2221 6666 1',
+  ]) {
+    const r = dec(text)
+    assert.ok(r.ok, `${text}: ${r.errors.join('; ')}`)
+    assert.deepEqual(r.faults.map((f) => f.quantity), [1, 1], text)
+  }
+})
+
+// The WhatsApp decoder is a separate implementation of this same grammar — it
+// cannot import this module, which pulls in React. It has no imports of its own,
+// so this direction works, and pins the two together: a change to one grammar
+// that is not made to the other fails here rather than in the field, where the
+// app and the bot would quietly read the same code two different ways.
+test('the WhatsApp decoder reads the shorthand identically', async () => {
+  const { decodeBatch, resolveCompany } = await import('../../server/src/whatsapp/decoder.js')
+
+  const map = {
+    ...FALLBACK,
+    faults: {},
+    technicians: { 1: 'Amir' },
+  }
+
+  for (const [code, expected] of [
+    ['MT', 'MT'],
+    ['MI', 'MI'],
+    ['T', 'MT'],
+    ['I', 'MI'],
+    ['M', null],
+    ['ZZ', null],
+  ]) {
+    const mine = resolveCompany(code, FALLBACK.companies)
+    assert.equal(mine?.code ?? null, expected, `server resolveCompany("${code}")`)
+    const theirs = (await import('./codes.js')).resolveCompany(code, FALLBACK.companies)
+    assert.equal(theirs?.code ?? null, expected, `client resolveCompany("${code}")`)
+  }
+
+  // Same message, both decoders, same parts / quantities / companies.
+  const text = 'H11AC1MT 11AC2I 41ARMT'
+  const bot = decodeBatch(`${text} 1`, map)
+  assert.ok(bot.ok, bot.reason)
+  const botFaults = bot.batch.groups.flatMap((g) => g.faults)
+
+  const app = parseCodeReport(`${text} 2221 6666 1`, FALLBACK, OPTS)
+  assert.ok(app.ok, app.errors.join('; '))
+
+  assert.deepEqual(
+    botFaults.map((f) => [f.componentCode, f.quantity, f.companyCode]),
+    app.faults.map((f) => [f.code, f.quantity, f.companyCode]),
+  )
+})

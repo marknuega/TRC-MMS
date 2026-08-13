@@ -55,6 +55,11 @@ export default function CodeEntry({ options, agencies = [], reportDate, onCreate
             Example: <code>{EXAMPLE}</code>
             {status === 'offline' && ' · using built-in codes (code map unreachable)'}
           </p>
+          <p className="manage-hint">
+            Short cuts: drop the quantity for 1 (<code>H43ACMT</code>), drop the type letter on every
+            code after the first (<code>H11AC1MT 11AC1MI …</code>), and write the company with one
+            letter — <code>T</code> for MOTECO, <code>I</code> for MOI (<code>H11AC1T</code>).
+          </p>
 
           <textarea
             className="code-input"
