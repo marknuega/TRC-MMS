@@ -4,10 +4,11 @@
  */
 
 import { useMemo, useState } from 'react'
-import { monthEntries, dashboardSummary, technicianTotals, topParts, monthlyTrend, agencyTransactions, buildSparePartsReport } from './report'
+import { periodEntries, dashboardSummary, technicianTotals, topParts, monthlyTrend, agencyTransactions, buildSparePartsReport } from './report'
 import { Pie } from './Pie'
 import { toPie } from './chartUtils'
 import { ALL_BRANCHES } from './options'
+import { PeriodPicker, makePeriod, periodValue, periodLabel } from './period'
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 const monthShort = (mk) => {
@@ -19,14 +20,19 @@ const monthLong = (mk) => {
   return y && m ? `${['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][m - 1]} ${y}` : ''
 }
 
+// Does a 'YYYY-MM' month overlap a period key ('YYYY' | 'YYYY-MM' | 'YYYY-MM-DD')?
+// One of the two is always a prefix of the other, whichever way round.
+const inPeriod = (monthKey, key) => monthKey.startsWith(key) || key.startsWith(monthKey)
+
 export default function Dashboard({ saved, branches, embedded = false, lockBranch = null, charts = {}, branchSel = '', onBranch }) {
   const [openState, setOpen] = useState(false)
   const open = embedded || openState
-  const [monthValue, setMonthValue] = useState(() => new Date().toISOString().slice(0, 7))
+  const [period, setPeriod] = useState(() => makePeriod('month'))
+  const periodKey = periodValue(period)
   // Branch selection is shared app-wide (controlled by the parent).
   const branch = lockBranch != null ? lockBranch : branchSel === ALL_BRANCHES ? '' : branchSel
 
-  const entries = useMemo(() => monthEntries(saved, monthValue, branch), [saved, monthValue, branch])
+  const entries = useMemo(() => periodEntries(saved, periodKey, branch), [saved, periodKey, branch])
   const summary = useMemo(() => dashboardSummary(entries), [entries])
   const techs = useMemo(() => technicianTotals(entries), [entries])
   const agencies = useMemo(() => agencyTransactions(entries), [entries])
@@ -77,7 +83,7 @@ export default function Dashboard({ saved, branches, embedded = false, lockBranc
   return (
     <section className="dashboard">
       {embedded ? (
-        <h2 className="page-title">📊 Dashboard <span className="hint">· {monthLong(monthValue)}{branch ? ` · ${branch}` : ' · all branches'}</span></h2>
+        <h2 className="page-title">📊 Dashboard <span className="hint">· {periodLabel(period)}{branch ? ` · ${branch}` : ' · all branches'}</span></h2>
       ) : (
         <button type="button" className="manage-toggle" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
           <span>📊 Dashboard</span>
@@ -88,10 +94,7 @@ export default function Dashboard({ saved, branches, embedded = false, lockBranc
       {open && (
         <div className="dash-body">
           <div className="monthly-controls">
-            <label>
-              Month
-              <input type="month" value={monthValue} onChange={(e) => setMonthValue(e.target.value)} />
-            </label>
+            <PeriodPicker period={period} onChange={setPeriod} />
             <label>
               Branch
               {lockBranch != null ? (
@@ -208,7 +211,7 @@ export default function Dashboard({ saved, branches, embedded = false, lockBranc
               </div>
 
               <div className="dash-card">
-                <h3 className="sp-brand-h">Agency performance <span className="hint">· transactions · {monthLong(monthValue)}</span></h3>
+                <h3 className="sp-brand-h">Agency performance <span className="hint">· transactions · {periodLabel(period)}</span></h3>
                 <div className="inv-scroll">
                   <table className="inv-table sp-table">
                     <thead>
@@ -262,8 +265,11 @@ export default function Dashboard({ saved, branches, embedded = false, lockBranc
                       </tr>
                     </thead>
                     <tbody>
+                      {/* The trend is always month-by-month, so a row reads as
+                          "active" when it overlaps the selected period: a Year
+                          period lights all 12, a Day period lights its month. */}
                       {trend.map((t) => (
-                        <tr key={t.monthKey} className={t.monthKey === monthValue ? 'row-active' : ''}>
+                        <tr key={t.monthKey} className={inPeriod(t.monthKey, periodKey) ? 'row-active' : ''}>
                           <td className="nowrap">{monthLong(t.monthKey)}</td>
                           <td className="num avail">{t.devices}</td>
                           <td className="num">{t.maintenance || ''}</td>

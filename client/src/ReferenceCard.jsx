@@ -5,45 +5,24 @@
 
 // Short-Code Reference Card.
 //
-// A printable cheat-sheet for the WhatsApp fault-reporting short codes. A fault
-// token is [component#][device letter][action][quantity][company], e.g.
-// "26HC1MT" = component 26 (LCD Display) on device H (Airbus TH1n), action C
-// (Change), qty 1, company MT (MOTECO). The component NUMBER and the DEVICE
-// LETTER are looked up independently — one device letter is reused across every
-// component.
+// A printable cheat-sheet for the CDS fault-reporting short codes. A fault token
+// is [TYPE][PARTS][VARIANT] + [ACTION][QTY][COMPANY], e.g. "H43AC1MT" = type H
+// (Airbus TH1n), parts 43 (Side Grip), variant A (Original), action C (Change),
+// qty 1, company MT (MOTECO).
+//
+// The first FOUR characters are the CDS code proper. This replaced the older
+// 3-character "26HC1MT" form, which led with the component number and had no
+// variant, so it could not tell an original side grip from a 3D-printed one.
 //
 // The lists below are pulled LIVE from the whatsapp app's public code map
 // (/codemap) so this page stays in sync with edits made on its admin.html.
 // The bundled constants are only a fallback for when that fetch fails (offline).
+// Both the map and the fallback live in codes.js, shared with the decoder that
+// actually parses these codes — one vocabulary, described in exactly one place.
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo } from 'react'
 import { COPYRIGHT_HTML } from './copyright'
-
-// Public, read-only mirror of the whatsapp code map (no PIN, CORS-open).
-const CODEMAP_URL = 'https://trcmmswhatsapp-production.up.railway.app/codemap'
-// Poll briskly so admin.html edits show up here almost immediately; a refetch
-// also fires whenever this tab regains focus.
-const POLL_MS = 4000
-
-// ---- Fallback data (used only until the live map loads / if it fails) ----
-const FALLBACK = {
-  equipmentCodes: {
-    H: 'Airbus TH1n', R: 'Airbus THR9', M: 'Airbus TMR880i', T: 'Sepura STP9000',
-    C: 'Sepura SRG Carkit', D: 'Sepura SRG Desktop', B: 'Sepura SRG Bike',
-    S: 'Hytera MT680', E: 'Hytera PT580H', N: 'Hytera PT590',
-  },
-  components: {
-    10: 'Antenna Short (/S)', 11: 'Antenna Big (/B)', 12: 'Front Cover A', 13: 'Rear Cover B',
-    14: 'Belt Clip', 15: 'UI Frame', 20: 'Main Board PCB', 25: 'Keypad', 26: 'LCD Display',
-    27: 'Keypad / Keymate', 41: 'Rotary Knob', 42: 'Rotary Switch', 43: 'PTT Button',
-    44: 'Microphone', 45: 'Speaker Low', 46: 'Speaker Mid', 95: 'Battery Pack',
-    97: 'Charging Pin', 98: 'Charger', 99: 'Power Supply Unit',
-  },
-  actions: { C: 'Change', N: 'New', R: 'Repair', I: 'Install/Re-Install', P: 'Program/Re-program', D: 'Dismantle' },
-  companies: { MI: 'MOI', MT: 'MOTECO' },
-  agencies: { PSD: 'PSD', CD: 'CD', PRI: 'PRI', MEWA: 'MEWA', KINGDOM: 'KINGDOM' },
-  technicians: { 1: 'Amir', 2: 'Muhammad Rashid', 3: 'Imran', 4: 'Rasheedullah', 5: 'Maroof', 6: 'Baghdad', 7: 'Engr. Khalid', 8: 'Engr. Hamed' },
-}
+import { FALLBACK, VARIANTS, useCodeMap } from './codes'
 
 // Component-number buckets, so the numbers still read in tidy groups.
 const COMPONENT_BUCKETS = [
@@ -96,6 +75,10 @@ function printReference(data) {
   const componentTables = componentGroups
     .map((g) => `<div class="grp"><h3>${esc(g.title)}</h3><table>${codeRows(g.items)}</table></div>`)
     .join('')
+  // "A = Original, B = 3D" — read from the same map the decoder uses.
+  const variantList = Object.entries(VARIANTS)
+    .map(([k, v]) => `<b>${esc(k)}</b> = ${esc(v.label)}`)
+    .join(', ')
 
   const html = `<!doctype html><html><head><meta charset="utf-8" />
 <title>TRC-MMS Short-Code Reference</title>
@@ -120,40 +103,43 @@ function printReference(data) {
   .foot { margin-top: 18px; padding-top: 6px; border-top: 1px solid #ccc; color: #666; font-size: 10px; }
   @page { margin: 0; }
 </style></head><body>
-  <h1>TRC-MMS · Short-Code Reference</h1>
-  <p class="sub">WhatsApp fault-reporting codes. A fault = <b>[Component#][Device][Action][Qty][Company]</b>.</p>
+  <h1>TRC-MMS · CDS Short-Code Reference</h1>
+  <p class="sub">Fault-reporting codes. A fault = <b>[Type][Parts][Variant]</b> + <b>[Action][Qty][Company]</b>.</p>
 
   <div class="ex">
-    <div class="syntax">26H&nbsp;·&nbsp;C&nbsp;·&nbsp;1&nbsp;·&nbsp;MT&nbsp;&nbsp;→&nbsp;&nbsp;<code>26HC1MT</code></div>
-    <div>26 (LCD Display) + H (Airbus TH1n) + C (Change) + 1 (qty) + MT (MOTECO)</div>
-    <div class="sub">Batch example: <code>26HC1MT 44HR2MT 1234 4567 1</code> &nbsp;(faults · tel · issi · technician&nbsp;ID). Then send the agency code alone, e.g. <code>PSD</code>, to confirm.</div>
+    <div class="syntax">H&nbsp;·&nbsp;43&nbsp;·&nbsp;A&nbsp;&nbsp;·&nbsp;&nbsp;C&nbsp;·&nbsp;1&nbsp;·&nbsp;MT&nbsp;&nbsp;→&nbsp;&nbsp;<code>H43AC1MT</code></div>
+    <div>H (Airbus TH1n) + 43 (Side Grip) + A (Original) + C (Change) + 1 (qty) + MT (MOTECO)</div>
+    <div class="sub">Full report: <code>H43A C 1 MT 2221 6575 1</code> &nbsp;(code · action · qty · company · last 4 of tel · last 4 of ISSI · technician&nbsp;ID). Then send the agency code alone, e.g. <code>PSD</code>, to verify.</div>
+    <div class="sub">Separators are free: <code>H43AC1MT222165751</code>, <code>H43A-C-1-MT-2221-6575-1</code>, <code>H43A_C_1_MT_2221_6575_1</code> and <code>H43A:C:1:MT:2221:6575:1</code> all read the same.</div>
   </div>
 
   <h2>Complete code creation details</h2>
   <div class="ex">
-    <div class="syntax">44HR2MT&nbsp;·&nbsp;1234&nbsp;4567&nbsp;1&nbsp;·&nbsp;<code>PSD</code></div>
-    <div>The report has three fields: <b>1)</b> one or more fault tokens, <b>2)</b> TEL · ISSI · Technician ID (three numbers), then <b>3)</b> the agency code sent alone to confirm.</div>
+    <div class="syntax">H43A&nbsp;C&nbsp;1&nbsp;MT&nbsp;·&nbsp;2221&nbsp;6575&nbsp;1&nbsp;·&nbsp;<code>PSD</code></div>
+    <div>The report has three fields: <b>1)</b> one or more fault tokens, <b>2)</b> TEL · ISSI · Technician ID (three numbers), then <b>3)</b> the agency code sent alone to verify.</div>
   </div>
   <table>
     <tr><th class="c">Part</th><th>Example</th><th>What it is</th></tr>
-    <tr><td colspan="3" class="grp">Field 1 · Fault token — one or more, space-separated (e.g. 26HC1MT 44HR2MT)</td></tr>
-    <tr><td class="c">Component</td><td>44</td><td>The part being reported (see Component Numbers).</td></tr>
-    <tr><td class="c">Device</td><td>H</td><td>The equipment model the part belongs to (see Device Letters).</td></tr>
-    <tr><td class="c">Action</td><td>R</td><td>What was done — Change / Repair / New… (see Actions).</td></tr>
-    <tr><td class="c">Quantity</td><td>2</td><td>How many of that component/action, right after the Action. Omit for a single unit.</td></tr>
+    <tr><td colspan="3" class="grp">Field 1a · CDS code — the first 4 characters (e.g. H43A)</td></tr>
+    <tr><td class="c">Type</td><td>H</td><td>The equipment model being worked on (see Type Letters).</td></tr>
+    <tr><td class="c">Parts</td><td>43</td><td>The part being reported (see Parts Numbers).</td></tr>
+    <tr><td class="c">Variant</td><td>A</td><td>Which build of that part — ${variantList}. So H43A is the TH1n side grip (Original) and H43B the 3D one.</td></tr>
+    <tr><td colspan="3" class="grp">Field 1b · Action, quantity, company — straight after the code (e.g. C 1 MT)</td></tr>
+    <tr><td class="c">Action</td><td>C</td><td>What was done — Change / Repair / New… (see Actions).</td></tr>
+    <tr><td class="c">Quantity</td><td>1</td><td>How many of that part/action, right after the Action. Omit for a single unit.</td></tr>
     <tr><td class="c">Company</td><td>MT</td><td>Who owns / funds the work (see Companies).</td></tr>
-    <tr><td colspan="3" class="grp">Field 2 · TEL · ISSI · Technician ID — three numbers (e.g. 1234 4567 1)</td></tr>
-    <tr><td class="c">TEL</td><td>1234</td><td>The radio's telephone number, sent after the last fault token.</td></tr>
-    <tr><td class="c">ISSI</td><td>4567</td><td>The radio's Individual Short Subscriber Identity, sent right after TEL.</td></tr>
+    <tr><td colspan="3" class="grp">Field 2 · TEL · ISSI · Technician ID — three numbers (e.g. 2221 6575 1)</td></tr>
+    <tr><td class="c">TEL</td><td>2221</td><td>The <b>last 4 digits</b> of the radio's telephone number, after the last fault token.</td></tr>
+    <tr><td class="c">ISSI</td><td>6575</td><td>The <b>last 4 digits</b> of the radio's ISSI, right after TEL.</td></tr>
     <tr><td class="c">Tech ID</td><td>1</td><td>Who did the work, sent after ISSI (see Technician ID).</td></tr>
-    <tr><td colspan="3" class="grp">Field 3 · Agency (confirmation) — sent alone afterwards (e.g. PSD)</td></tr>
-    <tr><td class="c">Agency</td><td>PSD</td><td>Sent on its own after the report to confirm it (see Agencies).</td></tr>
+    <tr><td colspan="3" class="grp">Field 3 · Agency (verification) — sent alone afterwards (e.g. PSD)</td></tr>
+    <tr><td class="c">Agency</td><td>PSD</td><td>Sent on its own after the report to verify it (see Agencies).</td></tr>
   </table>
 
-  <h2>Component Numbers</h2>
+  <h2>Parts Numbers</h2>
   <div class="cols">${componentTables}</div>
 
-  <h2>Device Letters</h2>
+  <h2>Type Letters</h2>
   <div class="cols">
     <table>${deviceRows(devices.slice(0, half))}</table>
     <table>${deviceRows(devices.slice(half))}</table>
@@ -171,7 +157,7 @@ function printReference(data) {
   <h2>Technician ID</h2>
   <table>${codeRows(technicians)}</table>
 
-  <h2>Agencies (confirmation)</h2>
+  <h2>Agencies (verification)</h2>
   <table>${codeRows(agencies)}</table>
 
   <div class="foot">${COPYRIGHT_HTML}</div>
@@ -272,44 +258,7 @@ function DeviceTable({ rows }) {
 }
 
 export default function ReferenceCard() {
-  const [map, setMap] = useState(null) // live code map, or null until first load
-  const [status, setStatus] = useState('loading') // 'loading' | 'live' | 'offline'
-  const [updatedAt, setUpdatedAt] = useState(null)
-  const timer = useRef(null)
-  const sig = useRef('') // last payload seen, so we only re-render on real changes
-
-  useEffect(() => {
-    let alive = true
-    const load = async () => {
-      try {
-        const res = await fetch(CODEMAP_URL, { cache: 'no-store' })
-        if (!res.ok) throw new Error(String(res.status))
-        const data = await res.json()
-        if (!alive) return
-        const next = JSON.stringify(data)
-        setStatus('live')
-        if (next !== sig.current) {
-          sig.current = next
-          setMap(data)
-          setUpdatedAt(new Date())
-        }
-      } catch {
-        if (!alive) return
-        setStatus((s) => (s === 'live' ? 'live' : 'offline')) // keep last good data if we had it
-      }
-    }
-    load()
-    timer.current = setInterval(load, POLL_MS)
-    const onFocus = () => load()
-    window.addEventListener('focus', onFocus)
-    document.addEventListener('visibilitychange', onFocus)
-    return () => {
-      alive = false
-      clearInterval(timer.current)
-      window.removeEventListener('focus', onFocus)
-      document.removeEventListener('visibilitychange', onFocus)
-    }
-  }, [])
+  const { map, status, updatedAt } = useCodeMap()
 
   // Derive display lists from the live map, falling back to bundled data.
   const data = useMemo(() => {
@@ -344,10 +293,10 @@ export default function ReferenceCard() {
       </div>
 
       <p className="muted ref-intro">
-        WhatsApp fault-reporting short codes. A fault is{' '}
-        <strong>[Component#][Device][Action][Qty][Company]</strong> — the component number and the
-        device letter are looked up separately, so one device letter is reused across every
-        component.
+        CDS fault-reporting short codes. A fault is{' '}
+        <strong>[Type][Parts][Variant]</strong> — the 4-character CDS code — followed by{' '}
+        <strong>[Action][Qty][Company]</strong>. Type, parts and variant are looked up separately, so
+        one type letter is reused across every part.
       </p>
 
       <p className={`ref-status ${status}`}>
@@ -356,12 +305,20 @@ export default function ReferenceCard() {
 
       <div className="ref-example">
         <div className="ref-syntax">
-          26H · C · 1 · MT &nbsp;→&nbsp; <code>26HC1MT</code>
+          H · 43 · A &nbsp;·&nbsp; C · 1 · MT &nbsp;→&nbsp; <code>H43AC1MT</code>
         </div>
-        <div>26 (LCD Display) + H (Airbus TH1n) + C (Change) + 1 (qty) + MT (MOTECO)</div>
+        <div>
+          H (Airbus TH1n) + 43 (Side Grip) + A (Original) + C (Change) + 1 (qty) + MT (MOTECO)
+        </div>
         <div className="muted">
-          Batch: <code>26HC1MT 44HR2MT 1234 4567 1</code> — faults · tel · issi · technician ID.
-          Then send the agency code alone (e.g. <code>PSD</code>) to confirm.
+          Full report: <code>H43A C 1 MT 2221 6575 1</code> — code · action · qty · company · last 4
+          of tel · last 4 of ISSI · technician ID. Then send the agency code alone (e.g.{' '}
+          <code>PSD</code>) to verify.
+        </div>
+        <div className="muted">
+          Separators are free — <code>H43AC1MT222165751</code>, <code>H43A-C-1-MT-2221-6575-1</code>,{' '}
+          <code>H43A_C_1_MT_2221_6575_1</code> and <code>H43A:C:1:MT:2221:6575:1</code> all read the
+          same.
         </div>
       </div>
 
@@ -389,28 +346,48 @@ export default function ReferenceCard() {
             <tbody>
               <tr className="ref-grp-row">
                 <td colSpan={3}>
-                  Field 1 · Fault token — one or more, space-separated (e.g. <code>26HC1MT 44HR2MT</code>)
+                  Field 1a · CDS code — the first 4 characters (e.g. <code>H43A</code>)
                 </td>
               </tr>
               <tr>
-                <td className="ref-code">Component</td>
-                <td>44</td>
-                <td>The part being reported (see <strong>Component Numbers</strong>).</td>
+                <td className="ref-code">Type</td>
+                <td>H</td>
+                <td>The equipment model being worked on (see <strong>Type Letters</strong>).</td>
               </tr>
               <tr>
-                <td className="ref-code">Device</td>
-                <td>H</td>
-                <td>The equipment model the part belongs to (see <strong>Device Letters</strong>).</td>
+                <td className="ref-code">Parts</td>
+                <td>43</td>
+                <td>The part being reported (see <strong>Parts Numbers</strong>).</td>
+              </tr>
+              <tr>
+                <td className="ref-code">Variant</td>
+                <td>A</td>
+                <td>
+                  Which build of that part —{' '}
+                  {Object.entries(VARIANTS).map(([k, v], i) => (
+                    <span key={k}>
+                      {i ? ', ' : ''}
+                      <strong>{k}</strong> = {v.label}
+                    </span>
+                  ))}
+                  . So <code>H43A</code> is the TH1n side grip (Original) and <code>H43B</code> the 3D one.
+                </td>
+              </tr>
+
+              <tr className="ref-grp-row">
+                <td colSpan={3}>
+                  Field 1b · Action, quantity, company — straight after the code (e.g. <code>C 1 MT</code>)
+                </td>
               </tr>
               <tr>
                 <td className="ref-code">Action</td>
-                <td>R</td>
+                <td>C</td>
                 <td>What was done — Change / Repair / New… (see <strong>Actions</strong>).</td>
               </tr>
               <tr>
                 <td className="ref-code">Quantity</td>
-                <td>2</td>
-                <td>How many of that component/action, right after the Action. Omit for a single unit.</td>
+                <td>1</td>
+                <td>How many of that part/action, right after the Action. Omit for a single unit.</td>
               </tr>
               <tr>
                 <td className="ref-code">Company</td>
@@ -419,17 +396,17 @@ export default function ReferenceCard() {
               </tr>
 
               <tr className="ref-grp-row">
-                <td colSpan={3}>Field 2 · TEL · ISSI · Technician ID — three numbers (e.g. <code>1234 4567 1</code>)</td>
+                <td colSpan={3}>Field 2 · TEL · ISSI · Technician ID — three numbers (e.g. <code>2221 6575 1</code>)</td>
               </tr>
               <tr>
                 <td className="ref-code">TEL</td>
-                <td>1234</td>
-                <td>The radio's telephone number, sent after the last fault token.</td>
+                <td>2221</td>
+                <td>The <strong>last 4 digits</strong> of the radio's telephone number, after the last fault token.</td>
               </tr>
               <tr>
                 <td className="ref-code">ISSI</td>
-                <td>4567</td>
-                <td>The radio's Individual Short Subscriber Identity, sent right after TEL.</td>
+                <td>6575</td>
+                <td>The <strong>last 4 digits</strong> of the radio's ISSI, right after TEL.</td>
               </tr>
               <tr>
                 <td className="ref-code">Tech&nbsp;ID</td>
@@ -438,12 +415,12 @@ export default function ReferenceCard() {
               </tr>
 
               <tr className="ref-grp-row">
-                <td colSpan={3}>Field 3 · Agency (confirmation) — sent alone afterwards (e.g. <code>PSD</code>)</td>
+                <td colSpan={3}>Field 3 · Agency (verification) — sent alone afterwards (e.g. <code>PSD</code>)</td>
               </tr>
               <tr>
                 <td className="ref-code">Agency</td>
                 <td>PSD</td>
-                <td>Sent on its own after the report to confirm it (see <strong>Agencies</strong>).</td>
+                <td>Sent on its own after the report to verify it (see <strong>Agencies</strong>).</td>
               </tr>
             </tbody>
           </table>
@@ -451,7 +428,7 @@ export default function ReferenceCard() {
       </details>
 
       <details className="ref-sec">
-        <summary className="ref-section">Component Numbers</summary>
+        <summary className="ref-section">Parts Numbers</summary>
         <div className="ref-sec-body">
           <div className="ref-grid">
             {data.componentGroups.map((g) => (
@@ -465,7 +442,7 @@ export default function ReferenceCard() {
       </details>
 
       <details className="ref-sec">
-        <summary className="ref-section">Device Letters</summary>
+        <summary className="ref-section">Type Letters</summary>
         <div className="ref-sec-body">
           <div className="ref-grid">
             <div className="ref-block">
@@ -515,7 +492,7 @@ export default function ReferenceCard() {
       </details>
 
       <details className="ref-sec">
-        <summary className="ref-section">Agencies (confirmation)</summary>
+        <summary className="ref-section">Agencies (verification)</summary>
         <div className="ref-sec-body">
           <div className="ref-grid">
             <div className="ref-block">

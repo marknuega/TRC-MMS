@@ -60,8 +60,16 @@
   color: var(--text-h);
   padding: 0.4rem 0.6rem 1rem;
 }
+/* The mark is artwork on a white ground, so it sits on its own white plate —
+   otherwise it reads as a stray white square against the dark theme. */
 .brand-ico {
-  font-size: 1.35rem;
+  width: 1.85rem;
+  height: 1.85rem;
+  flex: none;
+  object-fit: contain;
+  background: #fff;
+  border-radius: var(--radius-sm);
+  padding: 1px;
 }
 .brand .brand-theme {
   margin-left: auto;
@@ -833,8 +841,81 @@ h2 {
   gap: 0.6rem;
   margin-top: 0.9rem;
 }
+/* Frozen headings: the wrapper — not the page — has to be the scrollport, so it
+   gets a height cap. Short tables never reach it, so they look unchanged; long
+   ones scroll inside while `thead` stays pinned to the top of this box. */
+/* ---- Quick code entry (CDS short codes) ---- */
+.code-input {
+  width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.code-preview {
+  margin-top: 0.8rem;
+}
+.code-msg {
+  margin: 0.3rem 0;
+  padding: 0.45rem 0.7rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+/* Same treatment as .error elsewhere — both --danger tokens are theme-aware. */
+.code-msg.error {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, var(--surface));
+}
+.code-msg.warn {
+  color: #92400e;
+  background: #fef3c7;
+}
+:root[data-theme='dark'] .code-msg.warn {
+  color: #fde68a;
+  background: #422006;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .code-msg.warn {
+    color: #fde68a;
+    background: #422006;
+  }
+}
+.code-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.8rem;
+  margin-top: 1rem;
+}
+.code-legend {
+  margin-top: 1rem;
+}
+
+/* File-picker styled as a toolbar button. The input has to stay in the DOM and
+   focusable (display:none would drop it out of the tab order), so it is clipped
+   to nothing instead of hidden. */
+.inv-file-btn {
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+}
+.inv-file-btn input[type='file'] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  inset: 0;
+}
+.inv-file-btn:focus-within {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
 .inv-scroll {
-  overflow-x: auto;
+  overflow: auto;
+  max-height: calc(100vh - 8rem);
+  overscroll-behavior: contain;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
 }
@@ -851,10 +932,24 @@ h2 {
   vertical-align: top;
 }
 .inv-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
   background: var(--surface-3);
   color: var(--text-h);
   font-weight: 700;
   white-space: nowrap;
+}
+/* border-bottom is painted on the cell, which scrolls under a sticky header, so
+   the rule under the heading is drawn as a shadow instead. */
+.inv-table thead th::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  background: var(--border);
 }
 .inv-table .num {
   text-align: right;
@@ -1030,18 +1125,28 @@ h2 {
   padding: 1.6rem 1.5rem 1.8rem;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
 }
+/* Full wordmark — the sign-in card is the one place with room to read it. */
+.auth-logo {
+  display: block;
+  width: 8.5rem;
+  max-width: 60%;
+  height: auto;
+  margin: 0 auto 0.9rem;
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 0.35rem;
+}
 .auth-brand {
   font-size: 1.5rem;
   font-weight: 800;
   color: var(--text-h);
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  text-align: center;
 }
 .auth-sub {
   margin: 0.2rem 0 1.1rem;
   font-size: 0.8rem;
   color: var(--muted);
+  text-align: center;
 }
 .auth-tabs {
   display: flex;
@@ -1273,31 +1378,6 @@ h2 {
   }
 }
 
-/* Agency summary shown as an on-screen comment (not exported). */
-.agency-comment {
-  margin-top: 0.9rem;
-  border: 1px dashed var(--border-strong);
-  border-radius: var(--radius-sm);
-  background: var(--surface-3);
-  padding: 0.6rem 0.8rem;
-}
-.agency-comment-tag {
-  font-size: 0.7rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-  margin-bottom: 0.3rem;
-}
-.agency-comment pre {
-  margin: 0;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.82rem;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  color: var(--text-h);
-}
-
 .paste-box {
   margin: 0 0 0.75rem;
 }
@@ -1315,7 +1395,9 @@ h2 {
   margin-top: 0.6rem;
 }
 .monthly-scroll {
-  overflow-x: auto;
+  overflow: auto;
+  max-height: calc(100vh - 8rem);
+  overscroll-behavior: contain;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
 }
@@ -1351,6 +1433,28 @@ h2 {
   background: var(--surface-3);
   color: var(--text-h);
   font-weight: 700;
+}
+/* Freeze the three header rows on vertical scroll. Each row is pinned below the
+   one above it, so the offsets have to be known up front — hence the explicit
+   heights. They are set ABOVE the natural content height of each row so the
+   browser always honours them and the stack can never drift out of alignment. */
+.monthly-table thead tr:nth-child(1) th {
+  position: sticky;
+  top: 0;
+  height: 2rem;
+}
+.monthly-table thead tr:nth-child(2) th {
+  position: sticky;
+  top: 2rem;
+  height: 1.8rem;
+}
+.monthly-table thead tr:nth-child(3) th {
+  position: sticky;
+  top: 3.8rem;
+  height: 1.8rem;
+}
+.monthly-table thead th {
+  z-index: 4;
 }
 .monthly-table .grp {
   font-size: 0.74rem;
@@ -1411,10 +1515,12 @@ h2 {
   width: 7rem;
   min-width: 7rem;
 }
+/* Sticky in BOTH axes (top + left), so these must outrank the header row (4)
+   and the left-frozen body cells (2) they cross over. */
 .monthly-table thead .col-date,
 .monthly-table thead .col-day,
 .monthly-table .corner {
-  z-index: 3;
+  z-index: 6;
   background: var(--surface-3);
 }
 /* Sticky body cells need an opaque background so content doesn't show through. */
@@ -1822,6 +1928,14 @@ h2 {
   border-color: var(--primary);
   background: var(--surface-3);
 }
+/* Tablet/mobile only. The WhatsApp code-map admin is a phone-side workflow —
+   on a desktop it is a dead end, so it is hidden there rather than removed.
+   1024px is the tablet-landscape ceiling; anything wider counts as desktop. */
+@media (min-width: 1025px) {
+  .touch-only {
+    display: none;
+  }
+}
 
 /* Chart visibility toggles in Manage inputs. */
 .manage-charts {
@@ -1946,6 +2060,19 @@ h2 {
 @media print {
   .no-print {
     display: none !important;
+  }
+  /* Sticky headers are a screen affordance. On paper they would print pinned in
+     place over the rows, so the frozen headings and height caps are undone here
+     — print sheets repeat their header via `display: table-header-group`. */
+  .inv-table thead th,
+  .monthly-table thead th,
+  .ref-table th {
+    position: static;
+  }
+  .inv-scroll,
+  .monthly-scroll {
+    max-height: none;
+    overflow: visible;
   }
   .print-only {
     display: block;
@@ -2428,6 +2555,11 @@ h2 {
   white-space: nowrap;
 }
 .ref-table th {
+  /* No scroll wrapper here — the page itself is the scrollport, so this pins to
+     the top of the window as you read down the reference card. */
+  position: sticky;
+  top: 0;
+  z-index: 3;
   border: 1px solid var(--border);
   padding: 0.3rem 0.6rem;
   text-align: left;

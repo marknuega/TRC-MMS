@@ -4,16 +4,12 @@
  */
 
 import { useMemo, useState } from 'react'
-import { monthEntries, buildSparePartsReport } from './report'
+import { periodEntries, buildSparePartsReport } from './report'
 import { Pie } from './Pie'
 import { COPYRIGHT_HTML } from './copyright'
 import { ALL_BRANCHES } from './options'
+import { PeriodPicker, makePeriod, periodValue, periodLabel } from './period'
 
-const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
-const monthLabel = (mk) => {
-  const [y, m] = String(mk || '').split('-').map(Number)
-  return y && m ? `${MONTHS[m - 1]} ${y}` : ''
-}
 const ACT_COLS = [
   ['maintenance', 'Maintenance'],
   ['programming', 'Programming'],
@@ -55,7 +51,8 @@ function splitByCompany(models) {
 export default function SparePartsReport({ saved, branches, embedded = false, lockBranch = null, charts = {}, branchSel = '', onBranch }) {
   const [openState, setOpen] = useState(false)
   const open = embedded || openState
-  const [monthValue, setMonthValue] = useState(() => new Date().toISOString().slice(0, 7))
+  const [period, setPeriod] = useState(() => makePeriod('month'))
+  const rangeLabel = periodLabel(period)
   // Branch selection is shared app-wide (controlled by the parent). '' = every
   // branch merged (admin "All Branches"); non-admins are pinned to their own.
   const branch = lockBranch != null ? lockBranch : branchSel === ALL_BRANCHES ? '' : branchSel
@@ -69,7 +66,7 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
       return next
     })
 
-  const entries = useMemo(() => monthEntries(saved, monthValue, branch), [saved, monthValue, branch])
+  const entries = useMemo(() => periodEntries(saved, periodValue(period), branch), [saved, period, branch])
   const report = useMemo(() => buildSparePartsReport(entries), [entries])
   // Per-brand, per-company groups for the collapsible cards + Excel export.
   const grouped = useMemo(
@@ -111,7 +108,7 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
   const hasData = report.grandParts > 0 || report.activity.length > 0 || report.agencies.length > 0
 
   const title = `TRC ${branch || 'All'} - Spare Parts`
-  const fileBase = `${title} ${monthLabel(monthValue)}`.trim()
+  const fileBase = `${title} ${rangeLabel}`.trim()
 
   const agencyGet = (b, label) => b.cats.find(([l]) => l === label)?.[1] || 0
   const agencyGrand = report.agencies.reduce(
@@ -142,7 +139,7 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
     const tot = `${b}background:#fff3bf;font-weight:bold;`
     const num = `${b}text-align:center;`
     let h = `<meta charset="utf-8"><table style="border-collapse:collapse;font-family:Arial;font-size:11px;">`
-    h += `<tr><td colspan="4" style="${b}background:#2563eb;color:#fff;font-weight:bold;font-size:14px;">${esc(title)} — ${esc(monthLabel(monthValue))}</td></tr>`
+    h += `<tr><td colspan="4" style="${b}background:#2563eb;color:#fff;font-weight:bold;font-size:14px;">${esc(title)} — ${esc(rangeLabel)}</td></tr>`
     // Parts by brand -> company -> model
     for (const { type, groups } of grouped) {
       for (const grp of groups) {
@@ -231,7 +228,7 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
         `th{background:#dfe3ee}td.c,th.c{text-align:center}td.sec{background:#2563eb;color:#fff;font-weight:bold}` +
         `td.sub{background:#eef;font-weight:bold}td.tot{background:#fff3bf;font-weight:bold}tfoot{color:#777}` +
         `@media print{h2{page-break-after:avoid}tr{page-break-inside:avoid}}</style></head><body>` +
-        `<h1>${e(title)}</h1><p class="meta">${e(monthLabel(monthValue))} · consolidated · printed ${e(new Date().toLocaleString('en-GB'))}</p>` +
+        `<h1>${e(title)}</h1><p class="meta">${e(rangeLabel)} · consolidated · printed ${e(new Date().toLocaleString('en-GB'))}</p>` +
         (b ? `<h2>Parts by brand</h2><table><tbody>${b}</tbody></table>` : '') +
         companyTbl +
         (actRows
@@ -264,10 +261,7 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
       {open && (
         <div className="sp-body">
           <div className="monthly-controls">
-            <label>
-              Month
-              <input type="month" value={monthValue} onChange={(e) => setMonthValue(e.target.value)} />
-            </label>
+            <PeriodPicker period={period} onChange={setPeriod} />
             <label>
               Branch
               {lockBranch != null ? (
@@ -290,7 +284,7 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
           </div>
           <p className="saved-hint">
             Spare parts used and activity for <strong>{branch || 'All branches'}</strong>, built from saved <strong>reports</strong> in{' '}
-            <strong>{monthLabel(monthValue)}</strong>. Parts merge by name + company; totals are highlighted.
+            <strong>{rangeLabel}</strong>. Parts merge by name + company; totals are highlighted.
           </p>
 
           {!hasData ? (

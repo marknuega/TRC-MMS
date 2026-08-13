@@ -1,12 +1,14 @@
 import { test, before, after, describe } from 'node:test'
 import assert from 'node:assert/strict'
+import { randomBytes } from 'node:crypto'
 import { app } from '../src/app.js'
 import { prisma } from '../src/db.js'
-import { seedAdmin } from '../src/auth.js'
+import { hashPassword } from '../src/auth.js'
 
 let server
 let baseUrl
 let cookie = '' // session cookie for the authed data routes
+let testUserId
 
 // Like fetch, but carries the session cookie + JSON content-type.
 const authFetch = (path, opts = {}) =>
@@ -20,16 +22,32 @@ before(async () => {
   server = app.listen(0)
   await new Promise((resolve) => server.once('listening', resolve))
   baseUrl = `http://localhost:${server.address().port}`
-  await seedAdmin()
+  // The tests own their admin instead of leaning on seedAdmin(), which no-ops
+  // as soon as any admin exists — so seeding would silently skip on every real
+  // database and every authed request below would 401. Password is random per
+  // run and never leaves this process, so there is nothing to hardcode.
+  const password = randomBytes(12).toString('base64url')
+  const user = await prisma.user.create({
+    data: {
+      username: `test-admin-${randomBytes(6).toString('hex')}`,
+      passwordHash: await hashPassword(password),
+      role: 'admin',
+      branch: '',
+    },
+  })
+  testUserId = user.id
+
   const res = await fetch(`${baseUrl}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: 'Amir', password: '4645' }),
+    body: JSON.stringify({ username: user.username, password }),
   })
+  assert.equal(res.status, 200, 'test admin login failed — the authed tests cannot run')
   cookie = (res.headers.get('set-cookie') || '').split(';')[0]
 })
 
 after(async () => {
+  if (testUserId) await prisma.user.delete({ where: { id: testUserId } })
   await prisma.$disconnect()
   server.close()
 })

@@ -363,12 +363,14 @@ export function agencyBlocks(entries) {
     .filter((b) => b.cats.length)
 }
 
-// Compact on-screen comment (NOT part of the exported report):
+// Compact agency roll-up, e.g.
 //   Agency Summary
 //   ------------------------------
 //   KINGDOM [MAIN 7]
 //   ------------------------------
 //   PSD [INS 1]
+// Part of the exported/copied report text (see buildTxt) — daily reports only,
+// since a transmittal moves materials and has no agency of its own.
 const AGENCY_ABBR = { MAINTENANCE: 'MAIN', PROGRAMMING: 'PROG', INSTALLATION: 'INS', DISMANTLE: 'DISM' }
 export function agencyComment(entries) {
   const blocks = agencyBlocks(entries)
@@ -383,9 +385,16 @@ export function agencyComment(entries) {
 // sheet). All aggregations are pure so they can be unit-tested.
 // ---------------------------------------------------------------------------
 
-// Latest saved 'report' per date within monthKey (YYYY-MM) + optional branch,
-// flattened to entries. Mirrors the monthly-matrix / agency-totals selection.
-export function monthEntries(savedReports, monthKey, branch = '') {
+// Saved 'report' entries whose own service date falls in `key`, + optional
+// branch, flattened to entries.
+//
+// `key` is a date PREFIX, so one function covers all three granularities:
+//   '2026-08-13' -> that day    '2026-08' -> that month    '2026' -> that year
+// Entry dates are ISO (YYYY-MM-DD), which sorts and truncates lexically, so a
+// prefix compare is exactly a range compare here.
+export function periodEntries(savedReports, key, branch = '') {
+  const want = String(key ?? '')
+  if (!want) return []
   const wantBranch = up(branch)
   const out = []
   // Every saved report is a disjoint snapshot (saving auto-clears the working
@@ -395,11 +404,16 @@ export function monthEntries(savedReports, monthKey, branch = '') {
     if (up(r.mode) === 'TRANSMITTAL') continue
     if (wantBranch && up(r.branch) !== wantBranch) continue
     for (const e of Array.isArray(r.entries) ? r.entries : []) {
-      if (String(e.reportDate || '').slice(0, 7) === monthKey) out.push(e)
+      if (String(e.reportDate || '').slice(0, want.length) === want) out.push(e)
     }
   }
   return out
 }
+
+// Month-only shorthand, kept because monthKey reads clearer at the call sites
+// that genuinely mean "this month".
+export const monthEntries = (savedReports, monthKey, branch = '') =>
+  periodEntries(savedReports, monthKey, branch)
 
 // Parts consumed per brand -> device model. A "part" is a Change/New/PCB fault
 // with a named issue (Repair reuses the part, so it is excluded); same part + same company
@@ -726,6 +740,10 @@ export function buildTxt(report) {
     DIVIDER,
     ...join(report.deviceSummary),
   ]
+  // Agency roll-up, scoped to THIS report's own entries so a multi-date export
+  // gets one tally per date rather than one merged tally for the whole file.
+  const agency = agencyComment(report.entries)
+  if (agency) lines.push(DIVIDER, agency)
   if (notes.length) lines.push(DIVIDER, 'Notes', DIVIDER, ...notes)
   return lines.join('\n')
 }
@@ -900,7 +918,74 @@ export function buildMonthlyMatrix(savedReports, opts = {}) {
     })
   }
 
-  return { year, month, monthName: MONTH_NAMES[month], branch, columns, groups, rows, totals }
+  return {
+    year,
+    month,
+    monthName: MONTH_NAMES[month],
+    branch,
+    columns,
+    groups,
+    rows,
+    totals,
+    kind: 'month',
+    rowHeads: ['Date', 'Day'],
+  }
+}
+
+// ---- Day / Year views over the same column layout ----
+//
+// Both reuse buildMonthlyMatrix rather than re-deriving the counting rules, so
+// there is exactly one place where "what counts as a maintenance" is decided.
+
+// One month's matrix narrowed to a single day. `day` is 1-31.
+export function buildDayMatrix(savedReports, opts = {}) {
+  const { day, ...rest } = opts
+  const m = buildMonthlyMatrix(savedReports, rest)
+  const rows = m.rows.filter((r) => r.day === day)
+  const totals = {}
+  for (const c of m.columns) totals[c.key] = rows.reduce((s, r) => s + (r.counts[c.key] || 0), 0)
+  return { ...m, rows, totals, kind: 'day' }
+}
+
+// Twelve rows, one per month, each row holding that month's column totals.
+// `manualByMonth` is { [month 0-11]: pastedSheet } so a pasted month still wins
+// inside its own totals — the year view is a roll-up, never a second source.
+export function buildYearMatrix(savedReports, opts = {}) {
+  const { year, branch = '', manualByMonth = null } = opts
+  const months = MONTH_NAMES.map((_, month) =>
+    buildMonthlyMatrix(savedReports, { year, month, branch, manual: manualByMonth?.[month] ?? null }),
+  )
+  const columns = months[0].columns
+  const totals = {}
+  for (const c of columns) totals[c.key] = 0
+
+  const rows = months.map((m, month) => {
+    for (const c of columns) totals[c.key] += m.totals[c.key]
+    return {
+      day: month + 1,
+      date: `${MONTH_NAMES[month]} ${year}`,
+      // The activity narrative is written per day; a whole month of it would be
+      // unreadable in one cell, so the year view leaves that column empty.
+      dayName: '',
+      isWeekend: false,
+      counts: m.totals,
+      description: '',
+      hasData: m.rows.some((r) => r.hasData),
+    }
+  })
+
+  return {
+    year,
+    month: null,
+    monthName: String(year),
+    branch,
+    columns,
+    groups: months[0].groups,
+    rows,
+    totals,
+    kind: 'year',
+    rowHeads: ['Month', ''],
+  }
 }
 
 // Column keys in matrix order (18), for parsing pasted rows.

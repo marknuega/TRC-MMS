@@ -9,13 +9,61 @@ const stamp = (d) => new Date(d).toLocaleString('en-GB')
 
 const BLANK = { sku: '', store: '', shelf: '', itemCode: '', begin: 0, out: 0, lowStock: 0, remarks: '' }
 
-// Expected paste columns (Excel TSV / CSV), matching the inventory sheet:
-// SKU, Store, Shelf, Item Code, Begin, Out, Avail(ignored), Remarks
+// Tab if the data actually uses tabs (an Excel copy-paste), else comma. Decided
+// from the whole text, not the first line, because a leading header row can look
+// tab-free while the rows below are not.
+const pickDelimiter = (src) => (src.includes('\t') ? '\t' : ',')
+
+// Full CSV/TSV reader: honours "quoted fields", which may themselves contain the
+// delimiter, a newline, or a doubled "" escape. This is the dialect Excel writes
+// AND the one downloadCsv below emits, so an Export → Import round-trip only
+// survives a remark like `BATTERY, 8 PCS` if the quotes are respected. A naive
+// split on "," silently shifts every column after such a field.
+function parseDelimited(text) {
+  const src = String(text || '').replace(/\r\n?/g, '\n')
+  const delim = pickDelimiter(src)
+  const rows = []
+  let row = []
+  let cur = ''
+  let quoted = false
+
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i]
+    if (quoted) {
+      if (ch !== '"') {
+        cur += ch
+      } else if (src[i + 1] === '"') {
+        cur += '"' // "" inside a quoted field is one literal quote
+        i += 1
+      } else {
+        quoted = false
+      }
+      continue
+    }
+    if (ch === '"') {
+      quoted = true
+    } else if (ch === delim) {
+      row.push(cur)
+      cur = ''
+    } else if (ch === '\n') {
+      row.push(cur)
+      rows.push(row)
+      row = []
+      cur = ''
+    } else {
+      cur += ch
+    }
+  }
+  row.push(cur)
+  rows.push(row)
+  return rows.filter((r) => r.some((c) => c.trim()))
+}
+
+// Expected columns (Excel TSV / CSV), matching the inventory sheet:
+// SKU, Store, Shelf, Item Code, Begin, Out, Avail(ignored — it is derived), Remarks
 function parsePaste(text) {
   const rows = []
-  for (const line of String(text || '').split(/\r?\n/)) {
-    if (!line.trim()) continue
-    const f = line.includes('\t') ? line.split('\t') : line.split(',')
+  for (const f of parseDelimited(text)) {
     const sku = (f[0] || '').trim()
     if (!sku || sku.toUpperCase() === 'SKU') continue // skip header / blanks
     rows.push({
@@ -182,15 +230,17 @@ export default function Inventory({ embedded = false, branch = '' }) {
       setError(err.message)
     }
   }
-  async function doImport() {
-    const rows = parsePaste(pasteText)
+  // Shared by both import routes (pasted text and a picked .csv file) so the two
+  // can never drift apart in how they parse or report.
+  async function importText(text, source) {
+    const rows = parsePaste(text)
     if (!rows.length) {
-      setError('No rows recognised — paste SKU, Store, Shelf, Item Code, Begin, Out, Avail, Remarks (tab-separated).')
+      setError(`No rows recognised in ${source} — expected SKU, Store, Shelf, Item Code, Begin, Out, Avail, Remarks.`)
       return
     }
     try {
       const r = await importInventory(rows, branch)
-      setNotice(`Imported: ${r.created} new, ${r.updated} updated${r.skipped ? `, ${r.skipped} skipped` : ''}.`)
+      setNotice(`Imported ${rows.length} row${rows.length === 1 ? '' : 's'} from ${source}: ${r.created} new, ${r.updated} updated${r.skipped ? `, ${r.skipped} skipped` : ''}.`)
       setPasteText('')
       setPasteOpen(false)
       setError(null)
@@ -198,6 +248,21 @@ export default function Inventory({ embedded = false, branch = '' }) {
       setTimeout(() => setNotice(''), 6000)
     } catch (err) {
       setError(err.message)
+    }
+  }
+
+  const doImport = () => importText(pasteText, 'the pasted rows')
+
+  async function importFile(e) {
+    const file = e.target.files?.[0]
+    // Reset first: picking the SAME file twice in a row fires no change event
+    // otherwise, which looks like a broken button.
+    e.target.value = ''
+    if (!file) return
+    try {
+      await importText(await file.text(), file.name)
+    } catch {
+      setError('Could not read that file — pick a .csv or .txt export.')
     }
   }
 
@@ -238,11 +303,23 @@ export default function Inventory({ embedded = false, branch = '' }) {
             <button type="button" className="submit" onClick={openAdd}>
               + Add item
             </button>
+            {/* CSV in, CSV out. The label on the file input is a <label>, not a
+                button, because a hidden file input is the only way to style the
+                browser's picker consistently with the rest of the toolbar. */}
+            <label className="add-fault inv-file-btn">
+              ⭱ Import CSV
+              <input type="file" accept=".csv,.tsv,.txt,text/csv,text/tab-separated-values" onChange={importFile} />
+            </label>
             <button type="button" className="add-fault" onClick={() => setPasteOpen((o) => !o)}>
-              📋 Import
+              📋 Paste
             </button>
-            <button type="button" className="btn-txt" onClick={() => downloadCsv('inventory.csv', filtered)} disabled={!filtered.length}>
-              ⭳ CSV
+            <button
+              type="button"
+              className="btn-txt"
+              onClick={() => downloadCsv(`inventory-${branch || 'all'}-${new Date().toISOString().slice(0, 10)}.csv`, filtered)}
+              disabled={!filtered.length}
+            >
+              ⭳ Export CSV
             </button>
           </div>
 

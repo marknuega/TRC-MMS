@@ -31,7 +31,9 @@ import SparePartsReport from './SparePartsReport'
 import Dashboard from './Dashboard'
 import AdminUsers from './AdminUsers'
 import ReferenceCard from './ReferenceCard'
+import CodeEntry from './CodeEntry'
 import { Credit, Copyright, COPYRIGHT_HTML } from './copyright'
+import { BrandMark } from './brand'
 import {
   groupReports,
   buildDateReport,
@@ -42,11 +44,13 @@ import {
   deviceBlocksByType,
   transmittalRows,
   reportNotes,
-  agencyComment,
   buildMonthlyMatrix,
+  buildDayMatrix,
+  buildYearMatrix,
   parseMonthlyPaste,
   TYPE_ORDER,
 } from './report'
+import { PeriodPicker, makePeriod, periodLabel } from './period'
 import './App.css'
 
 // Actions whose "fault" is the whole device — no component issue needed.
@@ -356,7 +360,11 @@ function App({ user, onLogout }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(loadSidebar)
   const [monthExpanded, setMonthExpanded] = useState(false) // false = show 7 days only
   const [collapsedGroups, setCollapsedGroups] = useState(() => new Set()) // horizontally-collapsed groups
-  const [monthValue, setMonthValue] = useState(() => today().slice(0, 7)) // YYYY-MM
+  // Monthly page granularity. The pasted-sheet feature is month-scoped by
+  // design, so it always works against the anchor's month whatever the view.
+  const [monthPeriod, setMonthPeriod] = useState(() => makePeriod('month'))
+  const monthValue = monthPeriod.anchor.slice(0, 7) // YYYY-MM
+  const [manualYear, setManualYear] = useState(null) // year view: { [month 0-11]: sheet }
   const [manualSheet, setManualSheet] = useState(null) // pasted override for current month+branch
   const [pasteOpen, setPasteOpen] = useState(false)
   const [pasteText, setPasteText] = useState('')
@@ -366,6 +374,7 @@ function App({ user, onLogout }) {
   const [branch, setBranch] = useState(loadBranch)
   const [deviceOpen, setDeviceOpen] = useState(true)
   const [faultsOpen, setFaultsOpen] = useState(true)
+  const [lastAgency, setLastAgency] = useState(() => loadLast().agency ?? '')
   const isAllBranches = isAdmin && branch === ALL_BRANCHES
   // Monthly follows the same shared branch selection ('' = all branches).
   const monthBranch = isAllBranches ? '' : branch
@@ -757,6 +766,9 @@ function App({ user, onLogout }) {
       await createEntry(payload)
       // Remember Model/Type/Agency so the next entry pre-selects them.
       saveLast({ model: form.model, type: form.type, agency: form.agency })
+      // Mirrored into state so the Agency dropdown re-sorts straight away —
+      // localStorage on its own would not re-render anything.
+      setLastAgency(form.agency)
       setForm((f) => ({ ...emptyForm(), reportDate: f.reportDate, technician: f.technician }))
       setError(null)
       refresh()
@@ -772,6 +784,28 @@ function App({ user, onLogout }) {
       refresh()
     } catch (err) {
       setError(err.message)
+    }
+  }
+
+  // Create an entry decoded from a CDS code. Goes through the same createEntry
+  // call and the same branch/mode tagging as handleSubmit — the code box is a
+  // faster way to fill the form, never a second way to write a report.
+  async function handleCodeCreate(decoded) {
+    setBusy(true)
+    try {
+      await createEntry({
+        ...decoded,
+        mode,
+        branch: isAllBranches ? '' : branch,
+      })
+      saveLast({ model: decoded.model, type: decoded.type, agency: decoded.agency })
+      setLastAgency(decoded.agency)
+      setError(null)
+      refresh()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -890,12 +924,30 @@ function App({ user, onLogout }) {
       }),
     )
   }, [isAllBranches, form.reportDate, saved, entries, nextDocId, branch, mode, reportTransmittedBy, reportReceivedBy])
+  // buildTxt folds the Agency Summary in (daily reports only), so this single
+  // string is what the box shows, what ⭳ Text writes, and what a copy yields.
   const combinedTxt = useMemo(() => reports.map(buildTxt).join('\n\n\n'), [reports])
-  // Agency summary is a daily-report concept only — never on transmittals.
-  const agencyCmt = useMemo(
-    () => (isTransmittal ? '' : agencyComment(reports.flatMap((r) => r.entries))),
-    [reports, isTransmittal],
-  )
+
+  // Agency dropdown order: the one picked last sits on top, then the rest by how
+  // often they have actually been used (saved reports + the working set), with
+  // A–Z breaking ties. Usage is counted from real entries rather than a separate
+  // tally, so the list can never drift out of step with the data.
+  const agencyOptions = useMemo(() => {
+    const counts = new Map()
+    const bump = (v) => {
+      const a = String(v ?? '').trim().toUpperCase()
+      if (a && a !== '-') counts.set(a, (counts.get(a) ?? 0) + 1)
+    }
+    for (const r of saved ?? []) for (const e of r.entries ?? []) bump(e.agency)
+    for (const e of entries ?? []) bump(e.agency)
+
+    const all = options.agencies ?? []
+    const uses = (a) => counts.get(String(a).trim().toUpperCase()) ?? 0
+    const rest = all.filter((a) => a !== lastAgency).sort((a, b) => uses(b) - uses(a) || a.localeCompare(b))
+    // Only pin the last pick if it is still an option — a renamed or deleted
+    // agency must not resurrect itself at the top of the list.
+    return all.includes(lastAgency) ? [lastAgency, ...rest] : rest
+  }, [options.agencies, saved, entries, lastAgency])
 
   // Collapse the Device/Faults cards in All-Branches (read-only merged) mode.
   useEffect(() => {
@@ -903,12 +955,20 @@ function App({ user, onLogout }) {
     setFaultsOpen(!isAllBranches)
   }, [isAllBranches])
 
-  // Monthly activity matrix (dates × terminal columns) from saved reports.
+  // Activity matrix (rows × terminal columns) from saved reports. All three
+  // views share one column layout — only the row axis changes: a single date,
+  // the days of a month, or the twelve months of a year.
   const matrix = useMemo(() => {
-    const [y, m] = monthValue.split('-').map(Number)
+    const [y, m, d] = monthPeriod.anchor.split('-').map(Number)
     if (!y || !m) return null
-    return buildMonthlyMatrix(saved, { year: y, month: m - 1, branch: monthBranch, manual: manualSheet })
-  }, [saved, monthValue, monthBranch, manualSheet])
+    if (monthPeriod.kind === 'year') {
+      return buildYearMatrix(saved, { year: y, branch: monthBranch, manualByMonth: manualYear })
+    }
+    const opts = { year: y, month: m - 1, branch: monthBranch, manual: manualSheet }
+    return monthPeriod.kind === 'day'
+      ? buildDayMatrix(saved, { ...opts, day: d })
+      : buildMonthlyMatrix(saved, opts)
+  }, [saved, monthPeriod, monthBranch, manualSheet, manualYear])
 
   // Columns grouped by their brand header, for horizontal collapse.
   const groupCols = useMemo(
@@ -926,9 +986,10 @@ function App({ user, onLogout }) {
 
   // Collapsed matrix shows a 7-day window (the week of today when viewing the
   // current month, otherwise the first 7 days); expanded shows the whole month.
+  // Day (1 row) and Year (12 rows) are already short enough to show whole.
   const visibleRows = useMemo(() => {
     if (!matrix) return []
-    if (monthExpanded) return matrix.rows
+    if (monthExpanded || matrix.kind !== 'month') return matrix.rows
     const daysInMonth = matrix.rows.length
     let start = 1
     const t = new Date()
@@ -949,6 +1010,32 @@ function App({ user, onLogout }) {
       active = false
     }
   }, [monthValue, monthBranch])
+
+  // Year view needs all twelve months' pasted sheets to roll them up. Fetched
+  // only while that view is open, and every response is cached by the offline
+  // layer, so flipping back and forth costs nothing after the first load.
+  useEffect(() => {
+    if (monthPeriod.kind !== 'year') {
+      setManualYear(null)
+      return undefined
+    }
+    let active = true
+    const year = monthPeriod.anchor.slice(0, 4)
+    const months = Array.from({ length: 12 }, (_, m) => `${year}-${String(m + 1).padStart(2, '0')}`)
+    Promise.all(months.map((mk) => getMonthly(mk, monthBranch).catch(() => null)))
+      .then((results) => {
+        if (!active) return
+        const byMonth = {}
+        results.forEach((r, m) => {
+          if (r?.data) byMonth[m] = r.data
+        })
+        setManualYear(byMonth)
+      })
+      .catch(() => active && setManualYear(null))
+    return () => {
+      active = false
+    }
+  }, [monthPeriod.kind, monthPeriod.anchor, monthBranch])
 
   async function handleLoadPaste() {
     const data = parseMonthlyPaste(pasteText)
@@ -977,16 +1064,22 @@ function App({ user, onLogout }) {
     }
   }
 
+  // One naming scheme across all three granularities, e.g.
+  // "Activity-13-August-2026-MAKKAH" / "Activity-August-2026" / "Activity-2026".
+  const matrixTitle = () => `Activity ${periodLabel(monthPeriod)}${matrix?.branch ? ` · ${matrix.branch}` : ''}`
+  const matrixSlug = () =>
+    `Activity-${periodLabel(monthPeriod).replace(/\s+/g, '-')}${matrix?.branch ? `-${matrix.branch}` : ''}`
+
   function handleExportMonthlyCsv() {
     if (!matrix) return
     const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
-    const header = ['Date', 'Day', ...matrix.columns.map((c) => `${c.group} ${c.label}`), 'Activity / spare parts']
+    const header = [...matrix.rowHeads, ...matrix.columns.map((c) => `${c.group} ${c.label}`), 'Activity / spare parts']
     const lines = [header.map(esc).join(',')]
     for (const r of matrix.rows) {
       lines.push([r.date, r.dayName, ...matrix.columns.map((c) => r.counts[c.key] || 0), r.description].map(esc).join(','))
     }
     lines.push(['Total', '', ...matrix.columns.map((c) => matrix.totals[c.key] || 0), ''].map(esc).join(','))
-    downloadText(`Monthly-${matrix.monthName}-${matrix.year}${matrix.branch ? `-${matrix.branch}` : ''}.csv`, lines.join('\n'))
+    downloadText(`${matrixSlug()}.csv`, lines.join('\n'))
   }
 
   // Excel export that mirrors the on-screen table (grouped headers, green
@@ -1010,7 +1103,7 @@ function App({ user, onLogout }) {
     h += '<tr>'
     for (const c of matrix.columns) h += `<th class="dev" style="${hb}"><div><span>${esc(c.label)}</span></div></th>`
     h += '</tr><tr>'
-    h += `<th style="${hb}">Date</th><th style="${hb}">Day</th>`
+    h += `<th style="${hb}">${esc(matrix.rowHeads[0])}</th><th style="${hb}">${esc(matrix.rowHeads[1])}</th>`
     for (const _c of matrix.columns) h += `<th style="${b}background:#dfe3ee;"></th>`
     h += '</tr></thead><tbody>'
     for (const r of matrix.rows) {
@@ -1035,7 +1128,7 @@ function App({ user, onLogout }) {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `Monthly-${matrix.monthName}-${matrix.year}${matrix.branch ? `-${matrix.branch}` : ''}.xls`
+    a.download = `${matrixSlug()}.xls`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -1044,7 +1137,7 @@ function App({ user, onLogout }) {
   // green weekends, grouped headers — matching the desktop exported file.
   function handleExportMonthlyPdf() {
     if (!matrix) return
-    const title = `Monthly ${matrix.monthName} ${matrix.year}${matrix.branch ? ` · ${matrix.branch}` : ''}`
+    const title = matrixTitle()
     // Fixed column widths: Date/Day wide enough to read on one line, the terminal
     // columns stay slim (single digits — their names sit on a diagonal header), and
     // the activity description gets the remaining space.
@@ -1209,7 +1302,7 @@ function App({ user, onLogout }) {
             >
               ☰
             </button>
-            <span className="brand-ico">🛠️</span>
+            <BrandMark />
             <span className="brand-text">TRC-MMS</span>
             <button
               type="button"
@@ -1328,6 +1421,18 @@ function App({ user, onLogout }) {
           </section>
         )}
 
+        {/* Code entry is a shortcut into the SAME create path as the form below.
+            Transmittals move materials and have no CDS code, so it is hidden there. */}
+        {!isTransmittal && (
+          <CodeEntry
+            options={options}
+            agencies={agencyOptions}
+            reportDate={form.reportDate}
+            onCreate={handleCodeCreate}
+            busy={busy}
+          />
+        )}
+
         <form onSubmit={handleSubmit} className="entry-form">
           {!isTransmittal && (
           <div className="form-card">
@@ -1364,7 +1469,7 @@ function App({ user, onLogout }) {
                 Agency
                 <select value={form.agency} onChange={set('agency')} required>
                   <option value="">— select —</option>
-                  {options.agencies.map((a) => (
+                  {agencyOptions.map((a) => (
                     <option key={a}>{a}</option>
                   ))}
                 </select>
@@ -1615,7 +1720,7 @@ function App({ user, onLogout }) {
                       Agency
                       <select value={editForm.agency} onChange={eSet('agency')} required>
                         <option value="">— select —</option>
-                        {options.agencies.map((a) => (
+                        {agencyOptions.map((a) => (
                           <option key={a}>{a}</option>
                         ))}
                       </select>
@@ -1779,13 +1884,10 @@ function App({ user, onLogout }) {
               </button>
             </div>
           </div>
-          <textarea readOnly value={combinedTxt || 'No entries yet.'} rows={18} />
-          {agencyCmt && (
-            <div className="agency-comment">
-              <div className="agency-comment-tag">comment · not exported</div>
-              <pre>{agencyCmt}</pre>
-            </div>
-          )}
+          {/* One box: the Agency Summary is now part of the report text itself,
+              so what you read here is exactly what Text/PDF export and what a
+              select-all copy puts on the clipboard. */}
+          <textarea readOnly value={combinedTxt || 'No entries yet.'} rows={22} />
         </section>
 
         {/* Show only the saved card matching the current mode (no mixing). */}
@@ -1824,15 +1926,14 @@ function App({ user, onLogout }) {
 
           {page === 'monthly' && (
             <section className="monthly">
-              <h2 className="page-title">📅 Monthly report</h2>
+              <h2 className="page-title">
+                📅 Activity report <span className="hint">· {periodLabel(monthPeriod)}</span>
+              </h2>
 
               {matrix && (
             <div className="monthly-body">
               <div className="monthly-controls">
-                <label>
-                  Month
-                  <input type="month" value={monthValue} onChange={(e) => setMonthValue(e.target.value)} />
-                </label>
+                <PeriodPicker period={monthPeriod} onChange={setMonthPeriod} />
                 <label>
                   Branch
                   {isAdmin ? (
@@ -1855,10 +1956,15 @@ function App({ user, onLogout }) {
                 <button type="button" className="btn-txt" onClick={handleExportMonthlyCsv}>
                   ⭳ CSV
                 </button>
-                <button type="button" className="add-fault" onClick={() => setPasteOpen((o) => !o)}>
-                  📋 Paste data
-                </button>
-                {manualSheet && (
+                {/* A pasted sheet is stored per month, so it is edited from the
+                    month view. Day and Year still READ it — Year rolls all
+                    twelve months' sheets into its totals. */}
+                {matrix.kind === 'month' && (
+                  <button type="button" className="add-fault" onClick={() => setPasteOpen((o) => !o)}>
+                    📋 Paste data
+                  </button>
+                )}
+                {matrix.kind === 'month' && manualSheet && (
                   <button type="button" className="clear-all" onClick={handleClearManual}>
                     Clear pasted data
                   </button>
@@ -1869,8 +1975,7 @@ function App({ user, onLogout }) {
                 <div className="paste-box">
                   <p className="saved-hint">
                     Paste rows from your sheet (copy from Excel = tab-separated): <strong>Date, Day, the 18 columns
-                    in order, then Description</strong>. Empty cells stay blank. Saved for {matrix.monthName}{' '}
-                    {matrix.year}
+                    in order, then Description</strong>. Empty cells stay blank. Saved for {periodLabel(monthPeriod)}
                     {monthBranch ? ` · ${monthBranch}` : ' · all branches'}.
                   </p>
                   <textarea
@@ -1881,7 +1986,7 @@ function App({ user, onLogout }) {
                   />
                   <div className="paste-actions">
                     <button type="button" className="submit" onClick={handleLoadPaste} disabled={!pasteText.trim()}>
-                      Load into {matrix.monthName} {matrix.year}
+                      Load into {periodLabel(monthPeriod)}
                     </button>
                     <button type="button" className="add-fault" onClick={() => setPasteOpen(false)}>
                       Cancel
@@ -1891,15 +1996,16 @@ function App({ user, onLogout }) {
               )}
 
               <p className="saved-hint">
-                {manualSheet ? (
+                {matrix.kind === 'month' && manualSheet ? (
                   <>
-                    📌 Showing <strong>pasted data</strong> for {matrix.monthName} {matrix.year}
+                    📌 Showing <strong>pasted data</strong> for {periodLabel(monthPeriod)}
                     {monthBranch ? ` · ${monthBranch}` : ''}. Paste again to replace, or Clear to revert to live.
                   </>
                 ) : (
                   <>
-                    Activity counts per terminal, built from your saved <strong>reports</strong> for {matrix.monthName}{' '}
-                    {matrix.year}. Model cells = total part quantity; Install/Dismantle are per brand.
+                    Activity counts per terminal, built from your saved <strong>reports</strong> for{' '}
+                    {periodLabel(monthPeriod)}. Model cells = total part quantity; Install/Dismantle are per brand.
+                    {matrix.kind === 'year' && ' One row per month; the activity-description column is per-day, so it is blank here.'}
                   </>
                 )}
               </p>
@@ -1935,8 +2041,10 @@ function App({ user, onLogout }) {
                       )}
                     </tr>
                     <tr>
-                      <th className="dh col-date">Date</th>
-                      <th className="dh col-day">Day</th>
+                      {/* "Date / Day" in the month and day views, "Month" in the
+                          year view — the matrix carries its own row headings. */}
+                      <th className="dh col-date">{matrix.rowHeads[0]}</th>
+                      <th className="dh col-day">{matrix.rowHeads[1]}</th>
                       {groupCols.flatMap(({ group, cols }) =>
                         collapsedGroups.has(group)
                           ? [<th key={group} className="col-blank collapsed-col" />]
@@ -1985,7 +2093,9 @@ function App({ user, onLogout }) {
                   </tbody>
                 </table>
               </div>
-              {matrix.rows.length > 7 && (
+              {/* Only the month view is windowed — Day is one row and Year is
+                  twelve, both already shown whole. */}
+              {matrix.kind === 'month' && matrix.rows.length > 7 && (
                 <button type="button" className="month-expand" onClick={() => setMonthExpanded((o) => !o)}>
                   {monthExpanded ? '▲ Show 7 days only' : `▼ View whole month (${matrix.rows.length} days)`}
                 </button>

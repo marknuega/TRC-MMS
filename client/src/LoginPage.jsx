@@ -7,6 +7,7 @@ import { useState } from 'react'
 import { login, requestCredentials } from './api'
 import { BRANCHES } from './options'
 import { Credit } from './copyright'
+import { LOGO_FULL, BRAND_NAME } from './brand'
 
 export default function LoginPage({ onAuthed }) {
   const [tab, setTab] = useState('login') // login | request
@@ -51,9 +52,8 @@ export default function LoginPage({ onAuthed }) {
   return (
     <div className="auth-wrap app">
       <div className="auth-card">
-        <div className="auth-brand">
-          <span className="brand-ico">🛠️</span> TRC-MMS
-        </div>
+        <img className="auth-logo" src={LOGO_FULL} alt={BRAND_NAME} />
+        <div className="auth-brand">TRC-MMS</div>
         <p className="auth-sub">Tetra Repair Center · Maintenance Management System</p>
 
         <div className="auth-tabs">

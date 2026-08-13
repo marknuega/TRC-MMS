@@ -6,9 +6,17 @@
  */
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
+import { randomBytes } from 'node:crypto'
 import { prisma } from './db.js'
 
-const SECRET = process.env.JWT_SECRET || 'trc-mms-dev-secret-change-me'
+// No fallback on purpose. A default secret here is a silent way to hand out
+// forgeable admin sessions: anyone who has read this file could sign their own
+// token. Fail at boot instead — the same way db.js does for DATABASE_URL.
+const SECRET = process.env.JWT_SECRET
+if (!SECRET) {
+  throw new Error('JWT_SECRET is not set. Copy .env.example to .env and fill it in.')
+}
+
 const COOKIE = 'trc_session'
 const MAX_AGE = 7 * 24 * 60 * 60 * 1000 // 7 days
 
@@ -60,17 +68,40 @@ export function adminRequired(req, res, next) {
   next()
 }
 
-// Ensure a starting admin exists (username Amir / password 4645) on boot.
+// Ensure a starting admin exists on boot, so a fresh database is never locked
+// out. Does nothing once any admin exists — so this never runs in production
+// after the first deploy.
+//
+// The password is NEVER hardcoded: it comes from SEED_ADMIN_PASSWORD, and if
+// that isn't set we generate a random one and print it once. A committed
+// default password is a published password.
 export async function seedAdmin() {
   const admins = await prisma.user.count({ where: { role: 'admin' } })
   if (admins > 0) return
-  const existing = await prisma.user.findUnique({ where: { username: 'Amir' } })
+
+  const username = process.env.SEED_ADMIN_USERNAME || 'admin'
+
+  // Recovery path: an existing user by that name gets promoted rather than
+  // colliding, so a database that lost its last admin can be repaired.
+  const existing = await prisma.user.findUnique({ where: { username } })
   if (existing) {
     await prisma.user.update({ where: { id: existing.id }, data: { role: 'admin', active: true } })
+    console.log(`Promoted existing user to admin: ${username}`)
     return
   }
+
+  const generated = !process.env.SEED_ADMIN_PASSWORD
+  const password = process.env.SEED_ADMIN_PASSWORD || randomBytes(12).toString('base64url')
+
   await prisma.user.create({
-    data: { username: 'Amir', passwordHash: await hashPassword('4645'), role: 'admin', branch: '' },
+    data: { username, passwordHash: await hashPassword(password), role: 'admin', branch: '' },
   })
-  console.log('Seeded default admin: Amir')
+
+  if (generated) {
+    // Only appears in the boot log, once. Sign in and change it immediately.
+    console.log(`Seeded admin "${username}" with generated password: ${password}`)
+    console.log('Sign in and change this password now — it will not be shown again.')
+  } else {
+    console.log(`Seeded admin: ${username}`)
+  }
 }

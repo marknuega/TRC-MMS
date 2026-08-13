@@ -21,6 +21,9 @@ function periodRange(refDate, period) {
   const d = new Date(refDate)
   if (period === 'year') return [new Date(d.getFullYear(), 0, 1), new Date(d.getFullYear(), 11, 31)]
   if (period === 'month') return [new Date(d.getFullYear(), d.getMonth(), 1), new Date(d.getFullYear(), d.getMonth() + 1, 0)]
+  // day: the single date itself — start and end are the same midnight, which the
+  // caller's `d < start || d > end` test treats as inclusive.
+  if (period === 'day') return [new Date(d.getFullYear(), d.getMonth(), d.getDate()), new Date(d.getFullYear(), d.getMonth(), d.getDate())]
   // week: Sunday–Saturday containing refDate
   const start = new Date(d)
   start.setDate(d.getDate() - d.getDay())
@@ -104,6 +107,7 @@ export default function AgencyTotals({ saved, branches, embedded = false, lockBr
             <label>
               Period
               <select value={period} onChange={(e) => setPeriod(e.target.value)}>
+                <option value="day">Day / Date</option>
                 <option value="week">Week</option>
                 <option value="month">Month</option>
                 <option value="year">Year</option>
@@ -131,8 +135,15 @@ export default function AgencyTotals({ saved, branches, embedded = false, lockBr
             </button>
           </div>
           <p className="saved-hint">
-            Action counts per agency across saved <strong>reports</strong>, {period === 'week' ? 'for the week' : period === 'year' ? 'for the year' : 'for the month'} of{' '}
-            <strong>{fmt(start)}</strong> – <strong>{fmt(end)}</strong>
+            Action counts per agency across saved <strong>reports</strong>,{' '}
+            {period === 'day' ? 'for' : period === 'week' ? 'for the week of' : period === 'year' ? 'for the year of' : 'for the month of'}{' '}
+            <strong>{fmt(start)}</strong>
+            {period !== 'day' && (
+              <>
+                {' – '}
+                <strong>{fmt(end)}</strong>
+              </>
+            )}
             {branch ? ` · ${branch}` : ''}.
           </p>
 
