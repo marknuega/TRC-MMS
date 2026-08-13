@@ -71,12 +71,60 @@ export function validateCodeMap(data) {
   return null
 }
 
-/** Public, read-only, CORS-open mirror — mounted at GET /codemap. */
+/**
+ * Fault codes claimed by an issue type, as { '19B': 'Fistmic' }.
+ *
+ * These live in AppOptions (Manage inputs -> Issue types), not in the code map,
+ * because they are the app's own vocabulary rather than the shared one. But the
+ * WhatsApp bot has no session and so cannot read /api/options, and a code it
+ * cannot resolve is a report it cannot file. Publishing them on the public
+ * mirror is what lets the bot decode the same 19B the app does.
+ *
+ * Keyed on parts + variant WITHOUT the device letter: the technician supplies
+ * that, and 19B is the same fault whichever radio it came off.
+ *
+ * Mirrors issueCode() / issueName() in client/src/options.js — the two are
+ * pinned together by codemap.test.js, which runs the same rows through both.
+ */
+const PARTS_RE = /^\d{2}$/
+const VARIANT_RE = /^[A-Z]$/
+const upTrim = (v) => String(v ?? '').trim().toUpperCase()
+
+export function faultCodes(issueTypes) {
+  const out = {}
+  for (const it of issueTypes ?? []) {
+    // Plain strings are issue types with no code — nothing to publish.
+    if (!it || typeof it !== 'object') continue
+    // `base` is the superseded shape (a combined "43A"); read it so rows saved
+    // by that version still publish.
+    const parts = upTrim(it.parts ?? upTrim(it.base).slice(0, 2))
+    const variant = upTrim(it.variant ?? upTrim(it.base).slice(2, 3))
+    const name = String(it.name ?? '').trim()
+    if (!name || !PARTS_RE.test(parts) || !VARIANT_RE.test(variant)) continue
+    const code = parts + variant
+    // First claim wins, matching the client — order must not flip a meaning.
+    if (!out[code]) out[code] = name
+  }
+  return out
+}
+
+/**
+ * Public, read-only, CORS-open mirror — mounted at GET /codemap.
+ *
+ * `faults` is derived on read, never stored: it is a projection of AppOptions,
+ * so persisting it here would create a second copy free to disagree with the
+ * list the app actually edits. It is also absent from CODEMAP_CATEGORIES, so a
+ * PUT can never write it back and turn the projection into state.
+ */
 export async function publicCodeMap(req, res, next) {
   try {
     res.set('Access-Control-Allow-Origin', '*')
     res.set('Cache-Control', 'no-store')
-    res.json(await readCodeMap())
+    const [map, opts] = await Promise.all([
+      readCodeMap(),
+      prisma.appOptions.findUnique({ where: { id: 1 } }),
+    ])
+    res.json({ ...map, faults: faultCodes(opts?.data?.issueTypes) })
   } catch (err) {
     next(err)
   }
