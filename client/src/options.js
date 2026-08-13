@@ -32,11 +32,6 @@ export const DEFAULT_OPTIONS = {
     'TEMPORARY DISABLED', 'TOP BOARD', 'UI FRAME',
   ],
 
-  // Parts Number list for the admin-managed catalog of shared hardware IDs.
-  // Each item is { number, name }. (Legacy plain strings are still read — as
-  // the name, with no number.)
-  partsNumbers: [],
-
   // The report engine knows the codes for these built-ins (C/R/N/PCB/P/RP/I/RI/D).
   // Adding a custom action is fine — it just prints its own name as the code.
   actions: ['CHANGE', 'REPAIR', 'NEW', 'PCB', 'PROGRAM', 'RE-PROGRAM', 'INSTALL', 'RE-INSTALL', 'DISMANTLE'],
@@ -112,7 +107,6 @@ export const CATEGORIES = [
   { key: 'agencies', label: 'Agencies' },
   { key: 'types', label: 'Types' },
   { key: 'models', label: 'Models' },
-  { key: 'partsNumbers', label: 'Parts Number' },
   { key: 'issueTypes', label: 'Faulty / Parts' },
   { key: 'actions', label: 'Actions' },
   { key: 'companies', label: 'Companies' },
@@ -134,11 +128,6 @@ export function materialDescMap(materials) {
   }
   return map
 }
-
-// A parts-number item may be a plain string (legacy — read as the name, with
-// no number) or { number, name }.
-export const partsNumberName = (v) => (typeof v === 'string' ? v : String(v?.name ?? ''))
-export const partsNumberCode = (v) => (typeof v === 'string' ? '' : String(v?.number ?? ''))
 
 // ---------------------------------------------------------------------------
 // Issue types
