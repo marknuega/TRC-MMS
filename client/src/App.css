@@ -1934,17 +1934,13 @@ h2 {
   flex: 1;
   min-width: 0;
 }
-/* Code + Device sit beside the Description as their own labelled fields. The
-   code is short and fixed-width; the device select must be wide enough for the
-   longest "T — Sepura STP9000" rather than clipping it mid-word. */
+/* Parts Code + Variant sit beside the Description as their own labelled fields:
+   both short, both fixed-width, so they read as the matched pair they are. */
 .field-code input {
   width: 5.5rem;
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  text-align: center;
   text-transform: uppercase;
-}
-.field-device select {
-  width: 14rem;
-  max-width: 100%;
 }
 /* In the edit row the two code fields share a line above the description. */
 .edit-code-row {
@@ -1966,12 +1962,10 @@ h2 {
   font-weight: 600;
 }
 @media (max-width: 640px) {
-  .field-code,
-  .field-device {
-    flex: 1 1 8rem;
+  .field-code {
+    flex: 1 1 6rem;
   }
-  .field-code input,
-  .field-device select {
+  .field-code input {
     width: 100%;
   }
 }

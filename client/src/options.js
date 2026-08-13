@@ -133,40 +133,50 @@ export function materialDescMap(materials) {
 // Issue types
 //
 // An issue type may be a plain string (legacy) or
-//   { name, device, base }
-// where `device` is the equipment letter and `base` is the 2-digit + 1-letter
-// base code. Together they spell the 4-character CDS code: H + 43A = H43A.
+//   { name, parts, variant }
+// where `parts` is the 2-digit component number and `variant` the letter after
+// it — together the fault code, e.g. 19 + B = 19B.
+//
+// NO device letter. The technician supplies that when reporting, and it points
+// at the actual radio: H19B and T19B are the same fault on two different
+// devices. Binding an issue type to one device would mean re-entering the same
+// part once per radio, and every one of those rows could drift from the others.
 //
 // There is no separate description: for an issue type the description IS the
-// name — "Belt Clip" is both what the row describes and what gets written on
-// the entry — so a second field could only ever disagree with the first.
+// name — "Fistmic" is both what the row describes and what gets written on the
+// entry — so a second field could only ever disagree with the first.
 //
-// The base code carries its own trailing letter because that letter is part of
-// the part's identity here, not a build selector: 99A is the Charger-818 and
-// 99B the Charger-DEY — two different chargers, not two builds of one.
+// The variant letter is part of the part's identity here, not a build
+// selector: 99A is the Charger-818 and 99B the Charger-DEY — two different
+// chargers, not two builds of one.
 // ---------------------------------------------------------------------------
 
-// 2 digits then 1 letter, e.g. 43A. Anchored: a partial code decodes to nothing.
-export const BASE_CODE_RE = /^\d{2}[A-Z]$/
+export const PARTS_RE = /^\d{2}$/
+export const VARIANT_RE = /^[A-Z]$/
 const asObj = (v) => (typeof v === 'string' ? null : v)
+const upTrim = (v) => String(v ?? '').trim().toUpperCase()
 
 export const issueName = (v) => (typeof v === 'string' ? v : String(v?.name ?? ''))
-export const issueDevice = (v) => String(asObj(v)?.device ?? '').trim().toUpperCase()
-export const issueBase = (v) => String(asObj(v)?.base ?? '').trim().toUpperCase()
+// `base` is the superseded shape (a combined "43A" written alongside a device
+// letter). Read it so rows saved by that version still resolve.
+export const issueParts = (v) => upTrim(asObj(v)?.parts ?? upTrim(asObj(v)?.base).slice(0, 2))
+export const issueVariant = (v) => upTrim(asObj(v)?.variant ?? upTrim(asObj(v)?.base).slice(2, 3))
 
-/** The full CDS code, or '' when either half is missing — half a code is not a
+/** The fault code, or '' when either half is missing — half a code is not a
  *  code, and must never be indexed as one. */
 export function issueCode(v) {
-  const device = issueDevice(v)
-  const base = issueBase(v)
-  return device.length === 1 && BASE_CODE_RE.test(base) ? device + base : ''
+  const parts = issueParts(v)
+  const variant = issueVariant(v)
+  return PARTS_RE.test(parts) && VARIANT_RE.test(variant) ? parts + variant : ''
 }
 
 /** Just the names, for the dropdowns and for matchOption. */
 export const issueNames = (list) => (list ?? []).map(issueName).filter(Boolean)
 
 /**
- * Index of CDS code -> issue name, for the decoder's exact-code path.
+ * Index of fault code (parts + variant) -> issue name, for the decoder's
+ * exact-code path. Keyed WITHOUT the device letter, so one entry covers the
+ * same part on every radio.
  * First claim wins, so a duplicated code can never flip meaning by list order.
  * A nameless row is skipped: there would be nothing to decode the code TO.
  */

@@ -15,9 +15,11 @@
  * grip, H43B the 3D-printed one. It replaces the older 3-char 26H form, which
  * put the component first and had no variant at all.
  *
- * An Issue type (Manage inputs) may CLAIM a whole 4-char code by carrying a
- * device letter + base code. That claim wins over the parts+variant lookup, so
- * H99A and H99B can be two different chargers rather than two builds of one.
+ * An Issue type (Manage inputs) may CLAIM a fault code — the parts number plus
+ * the variant letter, e.g. 99B — and that claim wins over the code map's
+ * parts + variant lookup, so 99A and 99B can be two different chargers rather
+ * than two builds of one. It is keyed without the device letter, since that
+ * letter is the technician's and the same part appears on every radio.
  *
  * Every element may be run together or separated by a space, hyphen, underscore
  * or colon, so all of these are the same report:
@@ -189,7 +191,9 @@ export function parseCodeReport(text, map = FALLBACK, options = {}) {
     rest = rest.slice(whole.length)
 
     const code = `${device}${partNo}${variant}`
-    const owner = claimed[code]
+    // Claims are keyed on parts + variant only: the device letter is the
+    // technician's, and 19B is the same fault whichever radio it came off.
+    const owner = claimed[`${partNo}${variant}`]
 
     const deviceName = devices[device]
     const actionName = actions[action]

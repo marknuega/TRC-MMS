@@ -16,8 +16,8 @@ const CODED = {
   ...OPTS,
   issueTypes: [
     ...OPTS.issueTypes.filter((t) => t !== 'CHARGER'),
-    { name: 'CHARGER 818', device: 'H', base: '99A' },
-    { name: 'CHARGER DEY', device: 'H', base: '99B' },
+    { name: 'CHARGER 818', parts: '99', variant: 'A' },
+    { name: 'CHARGER DEY', parts: '99', variant: 'B' },
   ],
 }
 
@@ -150,12 +150,25 @@ test('a code claimed by an issue type outranks the parts + variant lookup', () =
 
 test('a claimed code needs no entry in the code map at all', () => {
   // 71 is not a component and Q is not a variant, so this only decodes because
-  // an issue type says what H71Q is.
-  const opts = { ...OPTS, issueTypes: [{ name: 'UI FRAME', device: 'H', base: '71Q' }] }
+  // an issue type says what 71Q is.
+  const opts = { ...OPTS, issueTypes: [{ name: 'UI FRAME', parts: '71', variant: 'Q' }] }
   const r = parseCodeReport('H71Q C 1 MT 2221 6575 1', FALLBACK, opts)
   assert.equal(r.ok, true, r.errors.join('; '))
   assert.equal(r.entry.faults[0].issue, 'UI FRAME')
   assert.equal(r.faults[0].variantLabel, '—')
+})
+
+test('a claim is device-agnostic — the technician supplies the device letter', () => {
+  // The same fault reported off an Airbus TH1n and a Sepura STP9000 resolves to
+  // the one issue type, but each keeps its own device on the entry.
+  const h = parseCodeReport('H99B C 1 MT 2221 6575 1', FALLBACK, CODED)
+  const t = parseCodeReport('T99B C 1 MT 2221 6575 1', FALLBACK, CODED)
+  assert.equal(h.entry.faults[0].issue, 'CHARGER DEY')
+  assert.equal(t.entry.faults[0].issue, 'CHARGER DEY')
+  assert.equal(h.entry.type, 'AIRBUS')
+  assert.equal(t.entry.type, 'SEPURA')
+  assert.equal(h.faults[0].code, 'H99B')
+  assert.equal(t.faults[0].code, 'T99B')
 })
 
 test('an unclaimed code still fails loudly on an unknown part or variant', () => {
@@ -173,29 +186,43 @@ test('uncoded issue types decode exactly as before', () => {
 })
 
 test('half a code is not a code', () => {
-  assert.equal(issueCode({ name: 'X', device: 'H', base: '' }), '')
-  assert.equal(issueCode({ name: 'X', device: '', base: '43A' }), '')
-  assert.equal(issueCode({ name: 'X', device: 'H', base: '43' }), '')
-  assert.equal(issueCode({ name: 'X', device: 'H', base: '4AA' }), '')
-  assert.equal(issueCode({ name: 'X', device: 'H', base: '43a' }), 'H43A')
+  assert.equal(issueCode({ name: 'X', parts: '43', variant: '' }), '')
+  assert.equal(issueCode({ name: 'X', parts: '', variant: 'A' }), '')
+  assert.equal(issueCode({ name: 'X', parts: '4', variant: 'A' }), '')
+  assert.equal(issueCode({ name: 'X', parts: '431', variant: 'A' }), '')
+  assert.equal(issueCode({ name: 'X', parts: '43', variant: 'AB' }), '')
+  assert.equal(issueCode({ name: 'X', parts: '43', variant: 'a' }), '43A')
   assert.equal(issueCode('SIDE GRIP'), '')
+})
+
+// The superseded shape carried a device letter and a combined "43A" base.
+test('rows saved in the old device + base shape still resolve', () => {
+  assert.equal(issueCode({ name: 'X', device: 'H', base: '43A' }), '43A')
+  assert.equal(issueCode({ name: 'X', device: 'H', base: '43' }), '')
+  const r = parseCodeReport('T43A C 1 MT 2221 6575 1', FALLBACK, {
+    ...OPTS,
+    issueTypes: [{ name: 'LEGACY GRIP', device: 'H', base: '43A' }],
+  })
+  // Claimed on 43A alone, so it resolves off a Sepura too — the stored device
+  // letter was never what the decoder matched on.
+  assert.equal(r.entry.faults[0].issue, 'LEGACY GRIP')
 })
 
 test('a duplicated code keeps its first meaning, whatever the list order', () => {
   const index = issueCodeIndex([
-    { name: 'FIRST', device: 'H', base: '43A' },
-    { name: 'SECOND', device: 'H', base: '43A' },
+    { name: 'FIRST', parts: '43', variant: 'A' },
+    { name: 'SECOND', parts: '43', variant: 'A' },
   ])
-  assert.equal(index.H43A, 'FIRST')
+  assert.equal(index['43A'], 'FIRST')
 })
 
 test('a code with no description claims nothing — there is nothing to decode to', () => {
-  const index = issueCodeIndex([{ name: '  ', device: 'H', base: '43A' }])
+  const index = issueCodeIndex([{ name: '  ', parts: '43', variant: 'A' }])
   assert.deepEqual(index, {})
 })
 
 test('issueNames reads legacy strings and coded objects alike', () => {
-  assert.deepEqual(issueNames(['LCD', { name: 'CHARGER 818', device: 'H', base: '99A' }]), [
+  assert.deepEqual(issueNames(['LCD', { name: 'CHARGER 818', parts: '99', variant: 'A' }]), [
     'LCD',
     'CHARGER 818',
   ])
