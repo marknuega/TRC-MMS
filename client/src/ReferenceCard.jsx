@@ -14,43 +14,33 @@
 // 3-character "26HC1MT" form, which led with the component number and had no
 // variant, so it could not tell an original side grip from a 3D-printed one.
 //
-// The lists below are pulled LIVE from the whatsapp app's public code map
-// (/codemap) so this page stays in sync with edits made on its admin.html.
-// The bundled constants are only a fallback for when that fetch fails (offline).
-// Both the map and the fallback live in codes.js, shared with the decoder that
-// actually parses these codes — one vocabulary, described in exactly one place.
+// The lists below are pulled LIVE from this app's own /codemap, so the page
+// stays in step with edits made under Code Map. The bundled constants are only
+// a fallback for when that fetch fails (offline). Both the map and the fallback
+// live in codes.js, shared with the decoder that actually parses these codes —
+// one vocabulary, described in exactly one place.
+//
+// TWO sections describe how a code resolves, and their order is the resolution
+// order: a Claimed Code (an Issue type in Manage inputs) wins outright, and only
+// where there is no claim do Parts Numbers + Variants apply. The card used to
+// show the second without the first, which made it a partial description of a
+// vocabulary technicians rely on being complete.
 
 import { useMemo } from 'react'
 import { COPYRIGHT_HTML } from './copyright'
 import { FALLBACK, VARIANTS, useCodeMap } from './codes'
-
-// Component-number buckets, so the numbers still read in tidy groups.
-const COMPONENT_BUCKETS = [
-  { title: 'Housing & Antenna', min: 10, max: 19 },
-  { title: 'Electronics & UI', min: 20, max: 39 },
-  { title: 'Audio & Controls', min: 40, max: 49 },
-  { title: 'Power & Charging', min: 90, max: 99 },
-]
+import { groupComponents } from './refGroups'
 
 const numericSort = ([a], [b]) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
+// Split a list into n roughly equal columns, keeping reading order down each one.
+const chunk = (rows, n) => {
+  const size = Math.ceil(rows.length / n) || 1
+  return Array.from({ length: Math.ceil(rows.length / size) }, (_, i) => rows.slice(i * size, i * size + size))
+}
 // Preserve the curated brand grouping from the source map (insertion order).
 const asPairs = (obj) => Object.entries(obj || {}).map(([k, v]) => [String(k), String(v)])
 const sortedPairs = (obj) => asPairs(obj).sort(numericSort)
 
-function groupComponents(components) {
-  const pairs = sortedPairs(components)
-  const buckets = COMPONENT_BUCKETS.map((b) => ({ title: b.title, items: [] }))
-  const other = { title: 'Other', items: [] }
-  for (const [code, name] of pairs) {
-    const n = parseInt(code, 10)
-    const idx = Number.isFinite(n) ? COMPONENT_BUCKETS.findIndex((b) => n >= b.min && n <= b.max) : -1
-    if (idx >= 0) buckets[idx].items.push([code, name])
-    else other.items.push([code, name])
-  }
-  const groups = buckets.filter((g) => g.items.length)
-  if (other.items.length) groups.push(other)
-  return groups
-}
 
 const esc = (s) =>
   String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
@@ -58,7 +48,7 @@ const esc = (s) =>
 // Build a clean, standalone printable document (independent of the app layout)
 // and print it through a hidden iframe — reliable for Chrome "Save as PDF".
 function printReference(data) {
-  const { devices, componentGroups, actions, companies, agencies, technicians } = data
+  const { devices, componentGroups, claims, actions, companies, agencies, technicians } = data
   const codeRows = (pairs) =>
     pairs.map(([c, n]) => `<tr><td class="c">${esc(c)}</td><td>${esc(n)}</td></tr>`).join('')
   // Device rows bold the source char in the model name and add an explanation column.
@@ -74,6 +64,11 @@ function printReference(data) {
 
   const componentTables = componentGroups
     .map((g) => `<div class="grp"><h3>${esc(g.title)}</h3><table>${codeRows(g.items)}</table></div>`)
+    .join('')
+  // Claims print as plain columns — they are one flat list, not bucketed by
+  // number, because what groups them is the issue they name, not the part range.
+  const claimTables = chunk(claims, 3)
+    .map((rows) => `<div class="grp"><table>${codeRows(rows)}</table></div>`)
     .join('')
   // "A = Original, B = 3D" — read from the same map the decoder uses.
   const variantList = Object.entries(VARIANTS)
@@ -101,6 +96,7 @@ function printReference(data) {
   td.grp { background: #eef; font-weight: 700; margin: 0; }
   .syntax { font-family: ui-monospace, Consolas, monospace; font-size: 14px; font-weight: 700; }
   .ex { background: #f4f4f4; border: 1px solid #ddd; padding: 8px 10px; border-radius: 6px; margin: 6px 0; }
+  code { font-family: ui-monospace, Consolas, monospace; font-weight: 700; }
   .ex code { font-family: ui-monospace, Consolas, monospace; font-weight: 700; }
   .foot { margin-top: 18px; padding-top: 6px; border-top: 1px solid #ccc; color: #666; font-size: 10px; }
   @page { margin: 0; }
@@ -139,7 +135,16 @@ function printReference(data) {
     <tr><td class="c">Agency</td><td>PSD</td><td>Sent on its own after the report to verify it (see Agencies).</td></tr>
   </table>
 
+  ${
+    claims.length
+      ? `<h2>Claimed Codes — these win over Parts + Variant</h2>
+  <p class="sub">An Issue type can claim a parts+variant pair outright. Where it does, the claim decides the issue and the Parts Numbers / Variants tables are not consulted — which is how <code>99A</code> and <code>99B</code> can be two different chargers rather than two builds of one. Still type the device letter: <code>H43A</code>.</p>
+  <div class="cols">${claimTables}</div>`
+      : ''
+  }
+
   <h2>Parts Numbers</h2>
+  <p class="sub">Used only when no claim above covers the code. A parts number is always exactly two digits.</p>
   <div class="cols">${componentTables}</div>
 
   <h2>Type Letters</h2>
@@ -266,9 +271,16 @@ export default function ReferenceCard() {
   // Derive display lists from the live map, falling back to bundled data.
   const data = useMemo(() => {
     const src = map || FALLBACK
+    const { groups, unusable } = groupComponents(src.components || FALLBACK.components)
     return {
       devices: asPairs(src.equipmentCodes || FALLBACK.equipmentCodes),
-      componentGroups: groupComponents(src.components || FALLBACK.components),
+      componentGroups: groups,
+      unusableComponents: unusable,
+      // Codes claimed by an Issue type (Manage inputs). Published on /codemap as
+      // `faults`, derived from the issue list — so this section IS that list,
+      // seen from the technician's side. Absent from the bundled fallback,
+      // which predates claims, hence the ?? {}.
+      claims: sortedPairs(src.faults ?? {}),
       actions: asPairs(src.actions || FALLBACK.actions),
       companies: asPairs(src.companies || FALLBACK.companies),
       agencies: sortedPairs(src.agencies || FALLBACK.agencies),
@@ -438,9 +450,44 @@ export default function ReferenceCard() {
         </div>
       </details>
 
+      {data.claims.length > 0 && (
+        <details className="ref-sec" open>
+          <summary className="ref-section">Claimed Codes — these win</summary>
+          <div className="ref-sec-body">
+            <p className="muted">
+              An <strong>Issue type</strong> (Manage inputs) can claim a parts+variant pair outright.
+              Where it does, the claim decides the issue and the Parts Numbers and Variants tables
+              below are not consulted at all — which is how <code>99A</code> and <code>99B</code> can
+              be two different chargers rather than two builds of one. Still type the device letter:{' '}
+              <code>H43A</code>, <code>T43A</code>.
+            </p>
+            <div className="ref-grid">
+              {chunk(data.claims, 3).map((rows, i) => (
+                // eslint-disable-next-line react/no-array-index-key
+                <div className="ref-block" key={i}>
+                  <CodeTable rows={rows} />
+                </div>
+              ))}
+            </div>
+          </div>
+        </details>
+      )}
+
       <details className="ref-sec">
         <summary className="ref-section">Parts Numbers</summary>
         <div className="ref-sec-body">
+          {data.unusableComponents.length > 0 && (
+            <p className="ref-warn">
+              ⚠️ {data.unusableComponents.length} entr
+              {data.unusableComponents.length === 1 ? 'y' : 'ies'} in the code map{' '}
+              {data.unusableComponents.length === 1 ? 'is' : 'are'} not usable and{' '}
+              {data.unusableComponents.length === 1 ? 'is' : 'are'} hidden here — a parts number must
+              be exactly two digits, so nothing can reach{' '}
+              <code>{data.unusableComponents.map(([c]) => c).join(', ')}</code>. Remove them under{' '}
+              <strong>Code Map</strong>; if one names a real part, give it an Issue type instead so it
+              decodes.
+            </p>
+          )}
           <div className="ref-grid">
             {data.componentGroups.map((g) => (
               <div className="ref-block" key={g.title}>

@@ -2560,6 +2560,24 @@ h2 {
   max-width: 60rem;
   margin: 0 0 1rem;
 }
+/* Code-map entries the decoder can never reach. Addressed to the admin reading
+   this page, not the technician printing it — so it is on screen only, and the
+   printed card simply omits them. */
+.ref-warn {
+  max-width: 60rem;
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--warn);
+  border-left-width: 3px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--warn) 8%, transparent);
+  color: var(--text);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+.ref-warn code {
+  font-weight: 700;
+}
 .ref-example {
   background: var(--surface-2);
   border: 1px solid var(--border);

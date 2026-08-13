@@ -234,9 +234,18 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
               <strong>Parts Code</strong> (2 digits) and a <strong>Variant</strong> (1 letter) and the decoder
               resolves that fault straight to it: <code>19</code> + <code>B</code> = <code>19B</code>. No device
               here — the technician's code supplies that, so <code>H19B</code> and <code>T19B</code> both land on
-              this one entry. The variant is part of the part's identity, not just a build, so <code>99A</code>{' '}
-              can be the Charger-818 and <code>99B</code> the Charger-DEY. Leave both blank for an issue with no
-              code.
+              this one entry. The variant is part of the part's identity, not just a build, so two variants of
+              one parts number can be two genuinely different items rather than two builds of one. Leave both
+              blank for an issue with no code.
+            </p>
+          )}
+          {isIssues && (
+            <p className="manage-hint">
+              A code given here <strong>outranks</strong> the Parts Numbers and Variants lists in{' '}
+              <strong>Code Map</strong>: where a claim exists, those are not consulted at all. That is what makes
+              this the place to define a code, and Code Map the place for the shared vocabulary underneath it.
+              Everything claimed here appears on the <strong>Code Reference</strong> under{' '}
+              <em>Claimed Codes</em>, which is what technicians read.
               {newParts.trim() && (
                 <span className="manage-code-hint"> {codeMapHint(newParts, newVariant)}</span>
               )}
