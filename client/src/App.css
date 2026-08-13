@@ -1450,23 +1450,25 @@ h2 {
   color: var(--text-h);
   font-weight: 700;
 }
-/* Freeze BOTH header rows on vertical scroll. Row 2 is pinned directly below
-   row 1, so its offset must equal row 1's height exactly — one variable owns
-   both, so they cannot drift apart.
-   The height is set on .grp only, NOT on every row-1 cell: Date/Day/Activity
-   span both rows, and a height on a row-spanning cell is distributed across
-   the rows it covers, which lets row 1 render taller than the offset. Row 2
-   would then pin too high and disappear behind row 1. Only the single-row
-   group cells are allowed to define row 1's height. */
+/* Freeze BOTH header rows on vertical scroll. Row 2 pins directly below row 1,
+   so its offset must equal row 1's height EXACTLY: too small and row 2 sits on
+   top of row 1, too large and a strip of scrolling rows shows between them.
+
+   Row 1's height is therefore not asserted here at all — it is measured from
+   the live element and written back as --hdr-row1 (see monthHeadRef in
+   App.jsx). Pinning it to a fixed rem only held at one font size and one zoom
+   level; anywhere else the assumption and the reality drifted apart and the
+   header overlapped itself. The value below is just the fallback used for the
+   first paint, and where ResizeObserver is unavailable.
+
+   Nothing may consume --hdr-row1 as a HEIGHT: that would feed the measurement
+   back into the thing being measured. It positions row 2 and nothing else. */
 .monthly-table {
   --hdr-row1: 2rem;
 }
 .monthly-table thead tr:nth-child(1) th {
   position: sticky;
   top: 0;
-}
-.monthly-table thead tr:nth-child(1) .grp {
-  height: var(--hdr-row1);
 }
 .monthly-table thead tr:nth-child(2) th {
   position: sticky;
@@ -1932,33 +1934,45 @@ h2 {
   flex: 1;
   min-width: 0;
 }
-/* Type + base code are short and fixed-width, so they must not stretch like the
-   name and description fields do. */
-.add-row .code-device,
-.edit-fields .code-device {
-  flex: 0 0 auto;
-  width: 9.5rem;
-  min-width: 0;
-}
-.add-row input.code-base,
-.edit-fields input.code-base {
-  flex: 0 0 auto;
-  width: 5rem;
+/* Code + Device sit beside the Description as their own labelled fields. The
+   code is short and fixed-width; the device select must be wide enough for the
+   longest "T — Sepura STP9000" rather than clipping it mid-word. */
+.field-code input {
+  width: 5.5rem;
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
   text-transform: uppercase;
+}
+.field-device select {
+  width: 14rem;
+  max-width: 100%;
+}
+/* In the edit row the two code fields share a line above the description. */
+.edit-code-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+.edit-code-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
 }
 .manage-code-hint {
   color: var(--primary);
   font-weight: 600;
 }
 @media (max-width: 640px) {
-  .add-row {
-    flex-wrap: wrap;
-  }
-  .add-row .code-device,
-  .add-row input.code-base {
+  .field-code,
+  .field-device {
     flex: 1 1 8rem;
-    width: auto;
+  }
+  .field-code input,
+  .field-device select {
+    width: 100%;
   }
 }
 /* External link buttons in Manage inputs (e.g. WhatsApp code-map admin). */
@@ -2570,8 +2584,17 @@ h2 {
   gap: 0.9rem 1.2rem;
   align-items: start;
 }
+/* Device letters are a 3-column table (code · model · why), which does not fit
+   the default track — it used to overflow its cell and paint over the table
+   beside it. Give it a wider minimum and let it drop to one column sooner. */
+.ref-grid-devices {
+  grid-template-columns: repeat(auto-fill, minmax(21rem, 1fr));
+}
 .ref-block {
   min-width: 0;
+  /* Last-resort guard: a table that still cannot shrink scrolls inside its own
+     block rather than bleeding into the next one. */
+  overflow-x: auto;
 }
 .ref-grp-title {
   margin: 0 0 0.4rem;
@@ -2603,11 +2626,11 @@ h2 {
   font-weight: 800;
   color: var(--primary);
 }
-/* Explanation column for device letters. */
+/* Explanation column for device letters. It wraps: pinning it to one line is
+   what made the table wider than its column in the first place. */
 .ref-table .ref-note {
   color: var(--muted);
   font-size: 0.85em;
-  white-space: nowrap;
 }
 /* Keep the model name on one line to save vertical space. */
 .ref-table .ref-dev-name {

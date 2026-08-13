@@ -5,7 +5,6 @@ import {
   CHART_TOGGLES,
   issueBase,
   issueCode,
-  issueDesc,
   issueDevice,
   issueName,
   materialName,
@@ -36,18 +35,15 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
   const { map } = useCodeMap()
   const devices = map?.equipmentCodes ?? FALLBACK.equipmentCodes
 
-  // Materials carry a Description, Issue types a Type + base code + Description;
-  // every other list is a plain string.
+  // Materials carry a separate Description; Issue types carry a Device + base
+  // code, and their description IS their name; every other list is a string.
   const isMaterials = cat === 'materials'
   const isIssues = cat === 'issueTypes'
-  const hasDesc = isMaterials || isIssues
   const list = options[cat] ?? []
   const nameOf = (v) => (isMaterials ? materialName(v) : isIssues ? issueName(v) : String(v))
-  const descOf = (v) => (isMaterials ? materialDesc(v) : isIssues ? issueDesc(v) : '')
+  const descOf = (v) => (isMaterials ? materialDesc(v) : '')
   const makeItem = (name, desc, device, base) => {
-    if (isIssues) {
-      return { name, device: device.trim().toUpperCase(), base: base.trim().toUpperCase(), description: desc.trim() }
-    }
+    if (isIssues) return { name, device: device.trim().toUpperCase(), base: base.trim().toUpperCase() }
     return isMaterials ? { name, description: desc.trim() } : name
   }
   const exists = (value, exceptIndex = -1) =>
@@ -60,9 +56,9 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
     const d = device.trim().toUpperCase()
     const b = base.trim().toUpperCase()
     if (!d && !b) return ''
-    if (!d) return 'Pick the device Type for this code, or clear the base code.'
-    if (!b) return 'Add the base code (2 digits + 1 letter, e.g. 43A), or clear the Type.'
-    if (!BASE_CODE_RE.test(b)) return `"${b}" is not a base code — it must be 2 digits then 1 letter, e.g. 43A.`
+    if (!d) return 'Pick the Device for this code, or clear the Code.'
+    if (!b) return 'Add the Code (2 digits + 1 letter, e.g. 55A), or clear the Device.'
+    if (!BASE_CODE_RE.test(b)) return `"${b}" is not a code — it must be 2 digits then 1 letter, e.g. 55A.`
     const code = d + b
     const clash = list.findIndex((v, i) => i !== exceptIndex && issueCode(v) === code)
     if (clash >= 0) return `${code} is already used by "${nameOf(list[clash])}".`
@@ -189,42 +185,46 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                 ))}
               </select>
             </label>
+            {/* Each field is its own label — one "Add new" over a row of boxes
+                left you guessing which box was which. */}
+            {isIssues && (
+              <>
+                <label className="field-code">
+                  Code
+                  <input
+                    value={newBase}
+                    onChange={(e) => setNewBase(e.target.value.toUpperCase())}
+                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), add())}
+                    placeholder="55A"
+                    maxLength={3}
+                    title="2 digits then 1 letter, e.g. 55A"
+                  />
+                </label>
+                <label className="field-device">
+                  Device
+                  <select value={newDevice} onChange={(e) => setNewDevice(e.target.value)}>
+                    <option value="">— none —</option>
+                    {Object.entries(devices).map(([letter, name]) => (
+                      <option key={letter} value={letter}>
+                        {letter} — {name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </>
+            )}
             <label className="grow">
-              Add new
+              {isIssues ? 'Description' : isMaterials ? 'Material name' : 'Add new'}
               <div className="add-row">
                 <input
                   value={newValue}
                   onChange={(e) => setNewValue(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), add())}
-                  placeholder={isMaterials ? 'Material name' : isIssues ? 'Issue name' : 'Type a value and press Add'}
+                  placeholder={
+                    isIssues ? 'Belt Clip' : isMaterials ? 'Material name' : 'Type a value and press Add'
+                  }
                 />
-                {isIssues && (
-                  <>
-                    <select
-                      className="code-device"
-                      value={newDevice}
-                      onChange={(e) => setNewDevice(e.target.value)}
-                      title="Device type — the first character of the CDS code"
-                    >
-                      <option value="">Type</option>
-                      {Object.entries(devices).map(([letter, name]) => (
-                        <option key={letter} value={letter}>
-                          {letter} — {name}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      className="code-base"
-                      value={newBase}
-                      onChange={(e) => setNewBase(e.target.value.toUpperCase())}
-                      onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), add())}
-                      placeholder="43A"
-                      maxLength={3}
-                      title="Base code — 2 digits then 1 letter"
-                    />
-                  </>
-                )}
-                {hasDesc && (
+                {isMaterials && (
                   <input
                     value={newDesc}
                     onChange={(e) => setNewDesc(e.target.value)}
@@ -241,11 +241,11 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
 
           {isIssues && (
             <p className="manage-hint">
-              An issue type can own a CDS code: pick the device <strong>Type</strong> and give it a{' '}
-              <strong>base code</strong> of 2 digits + 1 letter. Together they make the 4-character code the
-              decoder reads — <code>H</code> + <code>43A</code> = <code>H43A</code>. The trailing letter is part
-              of the part's identity, not a build, so <code>H99A</code> can be the Charger-818 and{' '}
-              <code>H99B</code> the Charger-DEY. Leave both blank for an issue that has no code.
+              The <strong>Description</strong> is the issue type — it is what gets written on the entry. Give it a{' '}
+              <strong>Code</strong> (2 digits + 1 letter) and a <strong>Device</strong> to make the 4-character
+              code the decoder reads: <code>55A</code> + <code>T</code> = <code>T55A</code>. The trailing letter
+              is part of the part's identity, not a build, so <code>99A</code> can be the Charger-818 and{' '}
+              <code>99B</code> the Charger-DEY. Leave Code and Device blank for an issue that has no code.
               {newBase.trim() && <span className="manage-code-hint"> {codeMapHint(newBase)}</span>}
             </p>
           )}
@@ -259,6 +259,42 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                 {editIndex === i ? (
                   <>
                     <div className="edit-fields">
+                      {isIssues && (
+                        <div className="edit-code-row">
+                          <label className="field-code">
+                            Code
+                            <input
+                              className="edit-input"
+                              value={editBase}
+                              onChange={(e) => setEditBase(e.target.value.toUpperCase())}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault()
+                                  saveEdit()
+                                }
+                                if (e.key === 'Escape') setEditIndex(-1)
+                              }}
+                              placeholder="55A"
+                              maxLength={3}
+                            />
+                          </label>
+                          <label className="field-device">
+                            Device
+                            <select
+                              className="edit-input"
+                              value={editDevice}
+                              onChange={(e) => setEditDevice(e.target.value)}
+                            >
+                              <option value="">— none —</option>
+                              {Object.entries(devices).map(([letter, name]) => (
+                                <option key={letter} value={letter}>
+                                  {letter} — {name}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        </div>
+                      )}
                       <input
                         className="edit-input"
                         value={editValue}
@@ -270,42 +306,10 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                           }
                           if (e.key === 'Escape') setEditIndex(-1)
                         }}
-                        placeholder={isMaterials ? 'Material name' : isIssues ? 'Issue name' : undefined}
+                        placeholder={isMaterials ? 'Material name' : isIssues ? 'Description' : undefined}
                         autoFocus
                       />
-                      {isIssues && (
-                        <>
-                          <select
-                            className="edit-input code-device"
-                            value={editDevice}
-                            onChange={(e) => setEditDevice(e.target.value)}
-                            title="Device type — the first character of the CDS code"
-                          >
-                            <option value="">Type</option>
-                            {Object.entries(devices).map(([letter, name]) => (
-                              <option key={letter} value={letter}>
-                                {letter} — {name}
-                              </option>
-                            ))}
-                          </select>
-                          <input
-                            className="edit-input code-base"
-                            value={editBase}
-                            onChange={(e) => setEditBase(e.target.value.toUpperCase())}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault()
-                                saveEdit()
-                              }
-                              if (e.key === 'Escape') setEditIndex(-1)
-                            }}
-                            placeholder="43A"
-                            maxLength={3}
-                            title="Base code — 2 digits then 1 letter"
-                          />
-                        </>
-                      )}
-                      {hasDesc && (
+                      {isMaterials && (
                         <input
                           className="edit-input"
                           value={editDesc}
@@ -335,7 +339,7 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                         <span className="manage-item-code">{issueCode(value)}</span>
                       )}
                       {nameOf(value)}
-                      {hasDesc && descOf(value) && <span className="manage-item-desc">{descOf(value)}</span>}
+                      {isMaterials && descOf(value) && <span className="manage-item-desc">{descOf(value)}</span>}
                     </span>
                     <div className="manage-item-actions">
                       <button type="button" className="ghost" onClick={() => startEdit(i)}>Edit</button>

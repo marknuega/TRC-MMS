@@ -133,9 +133,13 @@ export function materialDescMap(materials) {
 // Issue types
 //
 // An issue type may be a plain string (legacy) or
-//   { name, device, base, description }
+//   { name, device, base }
 // where `device` is the equipment letter and `base` is the 2-digit + 1-letter
 // base code. Together they spell the 4-character CDS code: H + 43A = H43A.
+//
+// There is no separate description: for an issue type the description IS the
+// name — "Belt Clip" is both what the row describes and what gets written on
+// the entry — so a second field could only ever disagree with the first.
 //
 // The base code carries its own trailing letter because that letter is part of
 // the part's identity here, not a build selector: 99A is the Charger-818 and
@@ -149,7 +153,6 @@ const asObj = (v) => (typeof v === 'string' ? null : v)
 export const issueName = (v) => (typeof v === 'string' ? v : String(v?.name ?? ''))
 export const issueDevice = (v) => String(asObj(v)?.device ?? '').trim().toUpperCase()
 export const issueBase = (v) => String(asObj(v)?.base ?? '').trim().toUpperCase()
-export const issueDesc = (v) => String(asObj(v)?.description ?? '')
 
 /** The full CDS code, or '' when either half is missing — half a code is not a
  *  code, and must never be indexed as one. */
@@ -163,14 +166,16 @@ export function issueCode(v) {
 export const issueNames = (list) => (list ?? []).map(issueName).filter(Boolean)
 
 /**
- * Index of CDS code -> issue type, for the decoder's exact-code path.
+ * Index of CDS code -> issue name, for the decoder's exact-code path.
  * First claim wins, so a duplicated code can never flip meaning by list order.
+ * A nameless row is skipped: there would be nothing to decode the code TO.
  */
 export function issueCodeIndex(list) {
   const index = {}
   for (const it of list ?? []) {
     const code = issueCode(it)
-    if (code && !index[code]) index[code] = { name: issueName(it), description: issueDesc(it) }
+    const name = issueName(it).trim()
+    if (code && name && !index[code]) index[code] = name
   }
   return index
 }

@@ -204,10 +204,10 @@ export function parseCodeReport(text, map = FALLBACK, options = {}) {
     if (owner) {
       // The code is spoken for, so parts and variant are never consulted — H99B
       // can be the Charger-DEY without 99 or B meaning anything on their own.
-      issue = owner.name
-      // Nothing to name in the Variant column when the trailing letter is part
-      // of the identity rather than a build, so it carries the description.
-      variantLabel = owner.description || '—'
+      issue = owner
+      // By the same token there is no build to name: the trailing letter is
+      // part of the identity, and the code itself is already its own column.
+      variantLabel = '—'
     } else {
       const componentName = components[partNo] ?? components[Number(partNo)]
       const v = variants[variant]

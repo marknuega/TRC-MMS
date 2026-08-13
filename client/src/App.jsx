@@ -3,7 +3,7 @@
  * © 2026 Muhammad Amir. All rights reserved.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   listEntries,
   createEntry,
@@ -25,7 +25,7 @@ import {
 import { onSyncChange } from './offline'
 import {
   DEFAULT_OPTIONS, mergeOptions, MODEL_TYPE, BRANCHES, ALL_BRANCHES,
-  materialName, materialDescMap, issueName, issueCode, issueDesc,
+  materialName, materialDescMap, issueName, issueCode,
 } from './options'
 import ManageInputs from './ManageInputs'
 import Inventory from './Inventory'
@@ -425,6 +425,29 @@ function App({ user, onLogout }) {
   const reportTransmittedBy = isAllBranches ? aggHandover('t') : transmittedBy
   const reportReceivedBy = isAllBranches ? aggHandover('r') : receivedBy
   const saveTimer = useRef(null)
+
+  // Monthly header: row 2 freezes at `top: --hdr-row1`, so that offset has to be
+  // row 1's REAL height. A hardcoded value only holds at one font size and one
+  // zoom level — anywhere else the two disagree and row 2 pins behind row 1,
+  // which reads as the header overlapping itself. Measure it instead, so the
+  // rows cannot drift apart no matter what changes the header's height.
+  //
+  // A callback ref rather than an effect: the table mounts and unmounts with the
+  // view, and this way the observer is attached exactly when the row exists
+  // instead of being torn down and rebuilt on every render of this component.
+  const headObserver = useRef(null)
+  const monthHeadRef = useCallback((row) => {
+    headObserver.current?.disconnect()
+    headObserver.current = null
+    const table = row?.closest('table')
+    if (!row || !table || typeof ResizeObserver === 'undefined') return
+    const sync = () => table.style.setProperty('--hdr-row1', `${row.getBoundingClientRect().height}px`)
+    sync()
+    const ro = new ResizeObserver(sync)
+    ro.observe(row)
+    headObserver.current = ro
+  }, [])
+
   const isTransmittal = mode === 'transmittal'
   // The browser's "Save as PDF" dialog seeds its filename from document.title,
   // so name it after the current document type. Transmittals also carry their
@@ -1592,12 +1615,12 @@ function App({ user, onLogout }) {
                 ))}
               {options.issueTypes.map((it, i) => {
                 const name = issueName(it)
-                // The description rides along as the option's label, so the CDS
-                // code an issue owns is visible while picking it by hand too.
-                const note = [issueCode(it), issueDesc(it)].filter(Boolean).join(' · ')
+                // The CDS code rides along as the option's label, so it is
+                // visible while picking the issue by hand too.
+                const code = issueCode(it)
                 return (
                   <option key={`iss-${name}-${i}`} value={name}>
-                    {note || undefined}
+                    {code || undefined}
                   </option>
                 )
               })}
@@ -2023,7 +2046,7 @@ function App({ user, onLogout }) {
               <div className="monthly-scroll">
                 <table className="monthly-table">
                   <thead>
-                    <tr>
+                    <tr ref={monthHeadRef}>
                       {/* "Date / Day" in the month and day views, "Month" in the
                           year view — the matrix carries its own row headings.
                           They span the whole header and top-align, so they read

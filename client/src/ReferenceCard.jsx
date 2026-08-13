@@ -92,7 +92,9 @@ function printReference(data) {
   table { border-collapse: collapse; width: 100%; }
   td, th { border: 1px solid #ccc; padding: 3px 6px; text-align: left; vertical-align: top; }
   td.c, th.c { font-weight: 700; font-family: ui-monospace, Consolas, monospace; white-space: nowrap; width: 3.2em; }
-  td.note { color: #555; font-size: 10px; white-space: nowrap; }
+  /* Wraps on purpose — one line per note made the 3-column device table wider
+     than its half of the page. */
+  td.note { color: #555; font-size: 10px; }
   td b { color: #111; }
   .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 18px; }
   .grp { break-inside: avoid; margin-bottom: 8px; }
@@ -444,7 +446,7 @@ export default function ReferenceCard() {
       <details className="ref-sec">
         <summary className="ref-section">Type Letters</summary>
         <div className="ref-sec-body">
-          <div className="ref-grid">
+          <div className="ref-grid ref-grid-devices">
             <div className="ref-block">
               <DeviceTable rows={data.devices.slice(0, half)} />
             </div>

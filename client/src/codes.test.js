@@ -16,8 +16,8 @@ const CODED = {
   ...OPTS,
   issueTypes: [
     ...OPTS.issueTypes.filter((t) => t !== 'CHARGER'),
-    { name: 'CHARGER 818', device: 'H', base: '99A', description: 'Charger-818' },
-    { name: 'CHARGER DEY', device: 'H', base: '99B', description: 'Charger-DEY' },
+    { name: 'CHARGER 818', device: 'H', base: '99A' },
+    { name: 'CHARGER DEY', device: 'H', base: '99B' },
   ],
 }
 
@@ -141,7 +141,8 @@ test('a code claimed by an issue type outranks the parts + variant lookup', () =
   const r = parseCodeReport('H99B C 1 MT 2221 6575 1', FALLBACK, CODED)
   assert.equal(r.ok, true, r.errors.join('; '))
   assert.equal(r.entry.faults[0].issue, 'CHARGER DEY')
-  assert.equal(r.faults[0].variantLabel, 'Charger-DEY')
+  // No build to name once the code is claimed whole.
+  assert.equal(r.faults[0].variantLabel, '—')
 
   const a = parseCodeReport('H99A C 1 MT 2221 6575 1', FALLBACK, CODED)
   assert.equal(a.entry.faults[0].issue, 'CHARGER 818')
@@ -185,7 +186,12 @@ test('a duplicated code keeps its first meaning, whatever the list order', () =>
     { name: 'FIRST', device: 'H', base: '43A' },
     { name: 'SECOND', device: 'H', base: '43A' },
   ])
-  assert.equal(index.H43A.name, 'FIRST')
+  assert.equal(index.H43A, 'FIRST')
+})
+
+test('a code with no description claims nothing — there is nothing to decode to', () => {
+  const index = issueCodeIndex([{ name: '  ', device: 'H', base: '43A' }])
+  assert.deepEqual(index, {})
 })
 
 test('issueNames reads legacy strings and coded objects alike', () => {
