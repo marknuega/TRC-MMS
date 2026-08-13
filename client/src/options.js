@@ -129,6 +129,52 @@ export function materialDescMap(materials) {
   return map
 }
 
+// ---------------------------------------------------------------------------
+// Issue types
+//
+// An issue type may be a plain string (legacy) or
+//   { name, device, base, description }
+// where `device` is the equipment letter and `base` is the 2-digit + 1-letter
+// base code. Together they spell the 4-character CDS code: H + 43A = H43A.
+//
+// The base code carries its own trailing letter because that letter is part of
+// the part's identity here, not a build selector: 99A is the Charger-818 and
+// 99B the Charger-DEY — two different chargers, not two builds of one.
+// ---------------------------------------------------------------------------
+
+// 2 digits then 1 letter, e.g. 43A. Anchored: a partial code decodes to nothing.
+export const BASE_CODE_RE = /^\d{2}[A-Z]$/
+const asObj = (v) => (typeof v === 'string' ? null : v)
+
+export const issueName = (v) => (typeof v === 'string' ? v : String(v?.name ?? ''))
+export const issueDevice = (v) => String(asObj(v)?.device ?? '').trim().toUpperCase()
+export const issueBase = (v) => String(asObj(v)?.base ?? '').trim().toUpperCase()
+export const issueDesc = (v) => String(asObj(v)?.description ?? '')
+
+/** The full CDS code, or '' when either half is missing — half a code is not a
+ *  code, and must never be indexed as one. */
+export function issueCode(v) {
+  const device = issueDevice(v)
+  const base = issueBase(v)
+  return device.length === 1 && BASE_CODE_RE.test(base) ? device + base : ''
+}
+
+/** Just the names, for the dropdowns and for matchOption. */
+export const issueNames = (list) => (list ?? []).map(issueName).filter(Boolean)
+
+/**
+ * Index of CDS code -> issue type, for the decoder's exact-code path.
+ * First claim wins, so a duplicated code can never flip meaning by list order.
+ */
+export function issueCodeIndex(list) {
+  const index = {}
+  for (const it of list ?? []) {
+    const code = issueCode(it)
+    if (code && !index[code]) index[code] = { name: issueName(it), description: issueDesc(it) }
+  }
+  return index
+}
+
 // Merge stored lists over the defaults (a saved category fully replaces its default).
 export function mergeOptions(stored) {
   const out = {}

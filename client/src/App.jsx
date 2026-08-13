@@ -23,7 +23,10 @@ import {
   syncNow,
 } from './api'
 import { onSyncChange } from './offline'
-import { DEFAULT_OPTIONS, mergeOptions, MODEL_TYPE, BRANCHES, ALL_BRANCHES, materialName, materialDescMap } from './options'
+import {
+  DEFAULT_OPTIONS, mergeOptions, MODEL_TYPE, BRANCHES, ALL_BRANCHES,
+  materialName, materialDescMap, issueName, issueCode, issueDesc,
+} from './options'
 import ManageInputs from './ManageInputs'
 import Inventory from './Inventory'
 import AgencyTotals from './AgencyTotals'
@@ -1587,9 +1590,17 @@ function App({ user, onLogout }) {
                 .map((a) => (
                   <option key={`act-${a}`} value={a} />
                 ))}
-              {options.issueTypes.map((it) => (
-                <option key={it} value={it} />
-              ))}
+              {options.issueTypes.map((it, i) => {
+                const name = issueName(it)
+                // The description rides along as the option's label, so the CDS
+                // code an issue owns is visible while picking it by hand too.
+                const note = [issueCode(it), issueDesc(it)].filter(Boolean).join(' · ')
+                return (
+                  <option key={`iss-${name}-${i}`} value={name}>
+                    {note || undefined}
+                  </option>
+                )
+              })}
               {/* Inventory items — picking one links it for auto stock deduction. */}
               {inventoryNames.map((n) => (
                 <option key={`inv-${n}`} value={n} />

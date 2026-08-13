@@ -1900,7 +1900,8 @@ h2 {
   border-style: dashed;
   justify-content: center;
 }
-/* Materials carry a name + description: stack them in the label and edit rows. */
+/* Materials carry a name + description, issue types a code as well: stack them
+   in the label and edit rows. */
 .manage-item-label {
   display: flex;
   flex-direction: column;
@@ -1912,12 +1913,53 @@ h2 {
   font-weight: 500;
   color: var(--muted);
 }
+/* The CDS code an issue type owns — monospaced so H43A / H43B read apart. */
+.manage-list li span.manage-item-code {
+  align-self: flex-start;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--primary);
+  background: var(--primary-soft, rgba(0, 0, 0, 0.06));
+  border-radius: 0.3rem;
+  padding: 0.05rem 0.35rem;
+}
 .edit-fields {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
   flex: 1;
   min-width: 0;
+}
+/* Type + base code are short and fixed-width, so they must not stretch like the
+   name and description fields do. */
+.add-row .code-device,
+.edit-fields .code-device {
+  flex: 0 0 auto;
+  width: 9.5rem;
+  min-width: 0;
+}
+.add-row input.code-base,
+.edit-fields input.code-base {
+  flex: 0 0 auto;
+  width: 5rem;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  text-transform: uppercase;
+}
+.manage-code-hint {
+  color: var(--primary);
+  font-weight: 600;
+}
+@media (max-width: 640px) {
+  .add-row {
+    flex-wrap: wrap;
+  }
+  .add-row .code-device,
+  .add-row input.code-base {
+    flex: 1 1 8rem;
+    width: auto;
+  }
 }
 /* External link buttons in Manage inputs (e.g. WhatsApp code-map admin). */
 .manage-links {

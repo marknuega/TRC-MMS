@@ -15,6 +15,10 @@
  * grip, H43B the 3D-printed one. It replaces the older 3-char 26H form, which
  * put the component first and had no variant at all.
  *
+ * An Issue type (Manage inputs) may CLAIM a whole 4-char code by carrying a
+ * device letter + base code. That claim wins over the parts+variant lookup, so
+ * H99A and H99B can be two different chargers rather than two builds of one.
+ *
  * Every element may be run together or separated by a space, hyphen, underscore
  * or colon, so all of these are the same report:
  *
@@ -30,10 +34,14 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
+// Extension-ful so `node --test` resolves it too, not just Vite.
+import { issueCodeIndex, issueNames } from './options.js'
 
-// Public, read-only mirror of the whatsapp code map (no PIN, CORS-open).
-export const CODEMAP_URL = 'https://trcmmswhatsapp-production.up.railway.app/codemap'
-// Poll briskly so admin.html edits show up almost immediately; a refetch also
+// This app now OWNS the code map, so the mirror is same-origin. It stays a
+// fetch rather than a bundled import because the map is edited at runtime and
+// every open tab should pick that up without a redeploy.
+export const CODEMAP_URL = '/codemap'
+// Poll briskly so Code Map edits show up almost immediately; a refetch also
 // fires whenever the tab regains focus.
 const POLL_MS = 4000
 
@@ -164,6 +172,11 @@ export function parseCodeReport(text, map = FALLBACK, options = {}) {
   const companies = map?.companies ?? FALLBACK.companies
   const technicians = map?.technicians ?? FALLBACK.technicians
   const variants = variantsOf(map)
+  // An Issue type may claim a whole 4-char code (Manage inputs -> Issue types).
+  // That claim OUTRANKS the parts+variant lookup: it is the app's own statement
+  // of what H99B means, so it never has to survive a name match to be honoured.
+  const claimed = issueCodeIndex(options.issueTypes)
+  const issueList = issueNames(options.issueTypes)
 
   if (!src) return { ok: false, errors: ['Nothing to decode.'], warnings, faults: [], entry: null }
 
@@ -175,35 +188,55 @@ export function parseCodeReport(text, map = FALLBACK, options = {}) {
     const [whole, device, partNo, variant, action, qty, company] = m
     rest = rest.slice(whole.length)
 
+    const code = `${device}${partNo}${variant}`
+    const owner = claimed[code]
+
     const deviceName = devices[device]
-    const componentName = components[partNo] ?? components[Number(partNo)]
     const actionName = actions[action]
     const companyName = companies[company]
-    const v = variants[variant]
 
     if (!deviceName) errors.push(`Unknown type letter "${device}" in ${whole}.`)
-    if (!componentName) errors.push(`Unknown parts number "${partNo}" in ${whole}.`)
     if (!actionName) errors.push(`Unknown action letter "${action}" in ${whole}.`)
     if (!companyName) errors.push(`Unknown company "${company}" in ${whole}.`)
-    if (!v) errors.push(`Unknown variant "${variant}" in ${whole} — expected ${Object.keys(variants).join(' or ')}.`)
 
-    const { type, model } = splitDevice(deviceName)
-    // The variant selects a build of the part, so it is folded into the issue
-    // name before matching — "Side Grip" + " 3D" -> the SIDE GRIP 3D option.
-    const issueName = `${componentName ?? ''}${v?.suffix ?? ''}`.trim()
-    const issue = matchOption(issueName, options.issueTypes) ?? up(issueName)
-    if (componentName && !matchOption(issueName, options.issueTypes)) {
-      warnings.push(`No issue type named "${issueName}" — it will be saved as typed.`)
+    let issue
+    let variantLabel
+    if (owner) {
+      // The code is spoken for, so parts and variant are never consulted — H99B
+      // can be the Charger-DEY without 99 or B meaning anything on their own.
+      issue = owner.name
+      // Nothing to name in the Variant column when the trailing letter is part
+      // of the identity rather than a build, so it carries the description.
+      variantLabel = owner.description || '—'
+    } else {
+      const componentName = components[partNo] ?? components[Number(partNo)]
+      const v = variants[variant]
+      if (!componentName) errors.push(`Unknown parts number "${partNo}" in ${whole}.`)
+      if (!v) errors.push(`Unknown variant "${variant}" in ${whole} — expected ${Object.keys(variants).join(' or ')}.`)
+
+      // The variant selects a build of the part, so it is folded into the issue
+      // name before matching — "Side Grip" + " 3D" -> the SIDE GRIP 3D option.
+      const partIssue = `${componentName ?? ''}${v?.suffix ?? ''}`.trim()
+      const hit = matchOption(partIssue, issueList)
+      issue = hit ?? up(partIssue)
+      variantLabel = v?.label ?? variant
+      if (componentName && !hit) {
+        warnings.push(
+          `No issue type named "${partIssue}" — it will be saved as typed. Give an issue type the code ${code} under Manage inputs to decode it exactly.`,
+        )
+      }
     }
 
+    const { type, model } = splitDevice(deviceName)
+
     faults.push({
-      code: `${device}${partNo}${variant}`,
+      code,
       device,
       deviceName,
       type: matchOption(type, options.types) ?? type,
       model: matchOption(model, options.models) ?? model,
       variant,
-      variantLabel: v?.label ?? variant,
+      variantLabel,
       issue,
       action: matchOption(primaryAction(actionName), options.actions) ?? primaryAction(actionName),
       actionName,

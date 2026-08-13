@@ -6,9 +6,20 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { parseCodeReport, matchOption, denseCode, FALLBACK } from './codes.js'
-import { DEFAULT_OPTIONS } from './options.js'
+import { DEFAULT_OPTIONS, issueCode, issueCodeIndex, issueNames } from './options.js'
 
 const OPTS = DEFAULT_OPTIONS
+
+// Issue types that own a CDS code outright — what Manage inputs now writes.
+// Plain strings stay in the list alongside them, as a real one always will.
+const CODED = {
+  ...OPTS,
+  issueTypes: [
+    ...OPTS.issueTypes.filter((t) => t !== 'CHARGER'),
+    { name: 'CHARGER 818', device: 'H', base: '99A', description: 'Charger-818' },
+    { name: 'CHARGER DEY', device: 'H', base: '99B', description: 'Charger-DEY' },
+  ],
+}
 
 // Every separator style from the spec must decode to the SAME report.
 const STYLES = [
@@ -117,4 +128,69 @@ test('a loose match takes the most specific option, not the first', () => {
 
 test('denseCode collapses every supported separator', () => {
   for (const s of STYLES) assert.equal(denseCode(s), 'H43AC1MT222165751')
+})
+
+// ---- Issue types that own a CDS code (Manage inputs -> Issue types) ----
+
+test('a code claimed by an issue type outranks the parts + variant lookup', () => {
+  // Without a claim, 99 + B reads as "Charger" + "3D" and lands on CHARGER.
+  const plain = parseCodeReport('H99B C 1 MT 2221 6575 1', FALLBACK, OPTS)
+  assert.equal(plain.entry.faults[0].issue, 'CHARGER')
+
+  // The claim makes B part of the identity, not a build of the same charger.
+  const r = parseCodeReport('H99B C 1 MT 2221 6575 1', FALLBACK, CODED)
+  assert.equal(r.ok, true, r.errors.join('; '))
+  assert.equal(r.entry.faults[0].issue, 'CHARGER DEY')
+  assert.equal(r.faults[0].variantLabel, 'Charger-DEY')
+
+  const a = parseCodeReport('H99A C 1 MT 2221 6575 1', FALLBACK, CODED)
+  assert.equal(a.entry.faults[0].issue, 'CHARGER 818')
+})
+
+test('a claimed code needs no entry in the code map at all', () => {
+  // 71 is not a component and Q is not a variant, so this only decodes because
+  // an issue type says what H71Q is.
+  const opts = { ...OPTS, issueTypes: [{ name: 'UI FRAME', device: 'H', base: '71Q' }] }
+  const r = parseCodeReport('H71Q C 1 MT 2221 6575 1', FALLBACK, opts)
+  assert.equal(r.ok, true, r.errors.join('; '))
+  assert.equal(r.entry.faults[0].issue, 'UI FRAME')
+  assert.equal(r.faults[0].variantLabel, '—')
+})
+
+test('an unclaimed code still fails loudly on an unknown part or variant', () => {
+  const r = parseCodeReport('H71Q C 1 MT 2221 6575 1', FALLBACK, CODED)
+  assert.equal(r.ok, false)
+  assert.match(r.errors.join(' '), /Unknown parts number "71"/)
+  assert.match(r.errors.join(' '), /Unknown variant "Q"/)
+})
+
+test('uncoded issue types decode exactly as before', () => {
+  const before = parseCodeReport('H43A C 1 MT 2221 6575 1', FALLBACK, OPTS)
+  const after = parseCodeReport('H43A C 1 MT 2221 6575 1', FALLBACK, CODED)
+  assert.equal(after.entry.faults[0].issue, 'SIDE GRIP')
+  assert.equal(JSON.stringify(after.entry), JSON.stringify(before.entry))
+})
+
+test('half a code is not a code', () => {
+  assert.equal(issueCode({ name: 'X', device: 'H', base: '' }), '')
+  assert.equal(issueCode({ name: 'X', device: '', base: '43A' }), '')
+  assert.equal(issueCode({ name: 'X', device: 'H', base: '43' }), '')
+  assert.equal(issueCode({ name: 'X', device: 'H', base: '4AA' }), '')
+  assert.equal(issueCode({ name: 'X', device: 'H', base: '43a' }), 'H43A')
+  assert.equal(issueCode('SIDE GRIP'), '')
+})
+
+test('a duplicated code keeps its first meaning, whatever the list order', () => {
+  const index = issueCodeIndex([
+    { name: 'FIRST', device: 'H', base: '43A' },
+    { name: 'SECOND', device: 'H', base: '43A' },
+  ])
+  assert.equal(index.H43A.name, 'FIRST')
+})
+
+test('issueNames reads legacy strings and coded objects alike', () => {
+  assert.deepEqual(issueNames(['LCD', { name: 'CHARGER 818', device: 'H', base: '99A' }]), [
+    'LCD',
+    'CHARGER 818',
+  ])
 })
