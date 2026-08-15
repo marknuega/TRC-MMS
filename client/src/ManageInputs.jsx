@@ -518,15 +518,12 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                       {isIssues && issueCode(value) && (
                         <span className="manage-item-code">{issueCode(value)}</span>
                       )}
-                      {isTechnicians && technicianId(value) && (
-                        <span className="manage-item-code">{technicianId(value)}</span>
-                      )}
-                      {isTechnicians && technicianInitials2(value) && (
-                        <span className="manage-item-code">{technicianInitials2(value)}</span>
-                      )}
-                      {isTechnicians && technicianInitials3(value) && (
-                        <span className="manage-item-code">{technicianInitials3(value)}</span>
-                      )}
+                      {isTechnicians &&
+                        [technicianId(value), technicianInitials2(value), technicianInitials3(value)].filter(Boolean).length > 0 && (
+                          <span className="manage-item-code">
+                            {[technicianId(value), technicianInitials2(value), technicianInitials3(value)].filter(Boolean).join(' / ')}
+                          </span>
+                        )}
                       {nameOf(value)}
                       {isMaterials && descOf(value) && <span className="manage-item-desc">{descOf(value)}</span>}
                     </span>
