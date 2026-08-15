@@ -28,8 +28,11 @@ const clientDist = path.resolve(here, '../../client/dist') // repo/client/dist
 // without binding a port. src/index.js is what actually listens.
 export const app = express()
 
-// Behind Railway's proxy — needed so rate-limit sees the real client IP.
-app.set('trust proxy', 1)
+// Behind Railway's proxy in production — needed so rate-limit sees the real
+// client IP. Locally there's no proxy in front, so trusting a forwarded-for
+// hop that was never set makes express-rate-limit see an undefined IP and
+// throw; leave trust proxy off outside production.
+app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : false)
 
 // Security headers. CSP is tuned for the Vite SPA this server also serves
 // (same-origin scripts/styles; data: URIs for the select chevron + images).
