@@ -1351,15 +1351,17 @@ function App({ user, onLogout }) {
           </nav>
           <button
             type="button"
-            className={`sync-pill ${syncStatus.cls}`}
-            title={sync.authExpired ? 'Your session expired — click to retry, then sign in again if needed. Nothing was lost.' : syncStatus.label}
+            className="sync-pill"
+            title={
+              sync.authExpired
+                ? `Sign in to sync — ${sync.pending} change${sync.pending === 1 ? '' : 's'} pending. Nothing was lost.`
+                : sync.pending > 0
+                  ? `${syncStatus.label} · ${sync.pending} change${sync.pending === 1 ? '' : 's'} pending`
+                  : syncStatus.label
+            }
             onClick={() => syncNow()}
           >
-            <span className={`side-ico sync-dot sync-dot-${syncStatus.cls}`} />
-            <span className="side-label">
-              {syncStatus.label}
-              {sync.pending > 0 && <small>{sync.pending} change{sync.pending === 1 ? '' : 's'} pending</small>}
-            </span>
+            <span className={`sync-dot sync-dot-${syncStatus.cls}`} />
           </button>
           <div className="side-user">
             <span className="side-user-info" title={`${user?.username} · ${isAdmin ? 'admin' : user?.branch || 'user'}`}>
