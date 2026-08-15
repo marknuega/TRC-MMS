@@ -69,7 +69,9 @@ const NAV = [
   { id: 'inventory', icon: '📦', label: 'Inventory' },
   { id: 'reference', icon: '🔤', label: 'Code Reference' },
   { id: 'manage', icon: '⚙️', label: 'Manage Inputs', adminOnly: true },
-  { id: 'admin', icon: '🔐', label: 'Users & Access', adminOnly: true },
+  // Reference data (Manage Inputs) stays global-admin-only; a director only
+  // manages accounts within their own region, hence directorOk here alone.
+  { id: 'admin', icon: '🔐', label: 'Users & Access', adminOnly: true, directorOk: true },
 ]
 // Data-heavy pages fill the available width (tables/charts); form-style pages
 // stay centred at a readable measure.
@@ -346,8 +348,9 @@ function downloadText(filename, text) {
 
 function App({ user, onLogout }) {
   const isAdmin = user?.role === 'admin'
-  const lockBranch = isAdmin ? null : user?.branch || '' // non-admins are pinned to their branch
-  const navItems = NAV.filter((n) => isAdmin || !n.adminOnly)
+  const isDirector = user?.role === 'director'
+  const lockBranch = isAdmin || isDirector ? null : user?.branch || '' // plain users are pinned to their branch
+  const navItems = NAV.filter((n) => !n.adminOnly || isAdmin || (isDirector && n.directorOk))
   const [entries, setEntries] = useState([])
   const [form, setForm] = useState(emptyForm)
   const [error, setError] = useState(null)
@@ -378,11 +381,12 @@ function App({ user, onLogout }) {
   const [deviceOpen, setDeviceOpen] = useState(true)
   const [faultsOpen, setFaultsOpen] = useState(true)
   const [lastAgency, setLastAgency] = useState(() => loadLast().agency ?? '')
-  const isAllBranches = isAdmin && branch === ALL_BRANCHES
+  const isAllBranches = (isAdmin || isDirector) && branch === ALL_BRANCHES
   // Monthly follows the same shared branch selection ('' = all branches).
   const monthBranch = isAllBranches ? '' : branch
   // Live, admin-managed branch list (falls back to the built-in defaults).
-  const branchList = options.branches?.length ? options.branches : BRANCHES
+  // A director's workspace is exactly their region's branches, not the full list.
+  const branchList = isDirector ? options.regions?.[user.region] ?? [] : options.branches?.length ? options.branches : BRANCHES
   const [theme, setTheme] = useState(loadTheme)
   const [mode, setMode] = useState(loadMode)
   // Each branch has its OWN document series — derive the next id for the branch
@@ -396,14 +400,21 @@ function App({ user, onLogout }) {
   const lastEntriesSig = useRef('') // baseline for the live-refresh poll
   const lastSavedSig = useRef('') // baseline for saved-report changes (any source)
 
-  // Non-admins are pinned to their own branch everywhere.
+  // Plain users are pinned to their own branch everywhere.
   useEffect(() => {
     if (lockBranch) setBranch(lockBranch)
   }, [lockBranch])
-  // Keep non-admins off admin-only pages.
+  // A director's persisted branch may be stale (region membership changed, or
+  // they still have another region's branch cached from a previous account) —
+  // fall back to the All-Branches region view rather than leak/deny silently.
   useEffect(() => {
-    if (!isAdmin && NAV.find((n) => n.id === page)?.adminOnly) setPage('report')
-  }, [isAdmin, page])
+    if (isDirector && branch !== ALL_BRANCHES && !branchList.includes(branch)) setBranch(ALL_BRANCHES)
+  }, [isDirector, branch, branchList])
+  // Keep users off pages their role can't reach.
+  useEffect(() => {
+    const item = NAV.find((n) => n.id === page)
+    if (item?.adminOnly && !isAdmin && !(isDirector && item.directorOk)) setPage('report')
+  }, [isAdmin, isDirector, page])
   // Handover is remembered per branch; the current fields reflect the selected one.
   const [handoverMap, setHandoverMap] = useState(loadHandover)
   const transmittedBy = handoverMap[branch]?.t ?? ''
@@ -539,9 +550,9 @@ function App({ user, onLogout }) {
       /* ignore storage errors */
     }
     // Re-fetch the working entries for the newly selected branch right away
-    // (All Branches = '' = every branch, admin only).
-    refresh(mode, isAdmin && b === ALL_BRANCHES ? '' : b)
-    getInventory(isAdmin && b === ALL_BRANCHES ? '' : b).then(setInventory).catch(() => {})
+    // (All Branches = '' = every branch — admin sees all, director their region).
+    refresh(mode, (isAdmin || isDirector) && b === ALL_BRANCHES ? '' : b)
+    getInventory((isAdmin || isDirector) && b === ALL_BRANCHES ? '' : b).then(setInventory).catch(() => {})
   }
   const changeBranch = (e) => selectBranch(e.target.value)
 
@@ -1357,11 +1368,14 @@ function App({ user, onLogout }) {
             </div>
           )}
           <div className="side-user">
-            <span className="side-user-info" title={`${user?.username} · ${isAdmin ? 'admin' : user?.branch || 'user'}`}>
-              <span className="side-ico">{isAdmin ? '👑' : '👤'}</span>
+            <span
+              className="side-user-info"
+              title={`${user?.username} · ${isAdmin ? 'admin' : isDirector ? `${user?.region} director` : user?.branch || 'user'}`}
+            >
+              <span className="side-ico">{isAdmin ? '👑' : isDirector ? '🧭' : '👤'}</span>
               <span className="side-label">
                 {user?.username}
-                <small>{isAdmin ? 'Admin · all branches' : user?.branch || 'User'}</small>
+                <small>{isAdmin ? 'Admin · all branches' : isDirector ? `${user?.region} · Director` : user?.branch || 'User'}</small>
               </span>
             </span>
             <button type="button" className="side-logout" onClick={onLogout} title="Sign out">
@@ -1388,7 +1402,7 @@ function App({ user, onLogout }) {
             </label>
             <label className="date-field">
               Branch
-              {isAdmin ? (
+              {lockBranch == null ? (
                 <select value={branch} onChange={changeBranch}>
                   {branchList.map((b) => (
                     <option key={b}>{b}</option>
@@ -1963,7 +1977,7 @@ function App({ user, onLogout }) {
                 <PeriodPicker period={monthPeriod} onChange={setMonthPeriod} />
                 <label>
                   Branch
-                  {isAdmin ? (
+                  {lockBranch == null ? (
                     <select value={branch} onChange={changeBranch}>
                       {branchList.map((b) => (
                         <option key={b}>{b}</option>
@@ -2143,7 +2157,9 @@ function App({ user, onLogout }) {
 
           {page === 'manage' && isAdmin && <ManageInputs options={options} onChange={setCategory} onToggleChart={setChart} embedded />}
 
-          {page === 'admin' && isAdmin && <AdminUsers currentUser={user} branches={branchList} onAddBranch={addBranch} embedded />}
+          {page === 'admin' && (isAdmin || isDirector) && (
+            <AdminUsers currentUser={user} branches={branchList} regions={options.regions} onAddBranch={addBranch} embedded />
+          )}
 
           <footer className="app-footer">
             <Credit />

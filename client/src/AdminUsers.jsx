@@ -1,6 +1,14 @@
 /*
  * Software Developed by Muhammad Amir  MT# MT1063
  * © 2026 Muhammad Amir. All rights reserved.
+ *
+ * Rendered for two different callers with different rights: a global admin
+ * (sees/manages every account, can create directors and assign regions) and
+ * a regional director (sees/manages only `user` accounts within their own
+ * region, cannot touch role or region at all). The server is the actual
+ * authority on what each caller may do — see server/src/routes/admin.js —
+ * this component just narrows the UI to match so a director never sees a
+ * control that would 403.
  */
 
 import { useEffect, useMemo, useState } from 'react'
@@ -10,12 +18,21 @@ import {
 } from './api'
 import { BRANCHES } from './options'
 
-const BLANK = { username: '', password: '', role: 'user', branch: BRANCHES[0] ?? '' }
+const BLANK = { username: '', password: '', role: 'user', branch: BRANCHES[0] ?? '', region: '' }
 
-export default function AdminUsers({ currentUser, embedded = false, branches = BRANCHES, onAddBranch }) {
+export default function AdminUsers({ currentUser, embedded = false, branches = BRANCHES, regions = {}, onAddBranch }) {
+  const isDirectorCaller = currentUser?.role === 'director'
+  const isAdminCaller = currentUser?.role === 'admin'
+  // A director only ever picks among their own region's branches; an admin
+  // picks from the full branch list (branches prop already carries either
+  // shape depending on who's logged in, but deriving from `regions` here too
+  // keeps this component correct regardless of what the caller passes).
+  const branchOptions = isDirectorCaller ? regions?.[currentUser.region] ?? [] : branches
+  const regionOptions = useMemo(() => Object.keys(regions ?? {}), [regions])
+
   const [users, setUsers] = useState([])
   const [requests, setRequests] = useState([])
-  const [form, setForm] = useState(BLANK)
+  const [form, setForm] = useState(() => ({ ...BLANK, branch: branchOptions[0] ?? '' }))
   const [newBranch, setNewBranch] = useState('')
   const [editId, setEditId] = useState(null) // user id being edited
   const [editForm, setEditForm] = useState({})
@@ -43,6 +60,8 @@ export default function AdminUsers({ currentUser, embedded = false, branches = B
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
 
   // Add a new branch to the managed list and select it for the new user.
+  // Admin only — a director's workspace is exactly their region's existing
+  // branches, so this control isn't offered to them at all.
   function addBranchInline() {
     const v = newBranch.trim()
     if (!v) return
@@ -56,8 +75,16 @@ export default function AdminUsers({ currentUser, embedded = false, branches = B
     e.preventDefault()
     setError('')
     try {
-      await createUser({ ...form, username: form.username.trim() })
-      setForm(BLANK)
+      const payload = { username: form.username.trim(), password: form.password }
+      if (isDirectorCaller) {
+        payload.branch = form.branch
+      } else {
+        payload.role = form.role
+        if (form.role === 'director') payload.region = form.region
+        else payload.branch = form.branch
+      }
+      await createUser(payload)
+      setForm({ ...BLANK, branch: branchOptions[0] ?? '' })
       flash('User created.')
       refresh()
     } catch (err) {
@@ -67,12 +94,19 @@ export default function AdminUsers({ currentUser, embedded = false, branches = B
 
   function startEdit(u) {
     setEditId(u.id)
-    setEditForm({ username: u.username, role: u.role, branch: u.branch, active: u.active, password: '' })
+    setEditForm({ username: u.username, role: u.role, branch: u.branch, region: u.region || '', active: u.active, password: '' })
     setError('')
   }
   async function saveEdit(id) {
     try {
-      const payload = { username: editForm.username.trim(), role: editForm.role, branch: editForm.branch, active: editForm.active }
+      const payload = { username: editForm.username.trim(), active: editForm.active }
+      if (isAdminCaller) {
+        payload.role = editForm.role
+        payload.branch = editForm.branch
+        payload.region = editForm.region
+      } else {
+        payload.branch = editForm.branch
+      }
       if (editForm.password) payload.password = editForm.password
       await updateUser(id, payload)
       setEditId(null)
@@ -109,7 +143,7 @@ export default function AdminUsers({ currentUser, embedded = false, branches = B
     }
   }
   function makeAccountFrom(r) {
-    setForm({ username: r.name.replace(/\s+/g, '').toLowerCase(), password: '', role: 'user', branch: r.branch || branches[0] || '' })
+    setForm({ username: r.name.replace(/\s+/g, '').toLowerCase(), password: '', role: 'user', branch: r.branch || branchOptions[0] || '', region: '' })
     setError('')
     document.getElementById('admin-new-user')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
@@ -163,34 +197,51 @@ export default function AdminUsers({ currentUser, embedded = false, branches = B
         <form className="admin-form" onSubmit={addUser}>
           <label>Username<input value={form.username} onChange={set('username')} required /></label>
           <label>Password<input value={form.password} onChange={set('password')} required /></label>
-          <label>Role
-            <select value={form.role} onChange={set('role')}>
-              <option value="user">User</option>
-              <option value="admin">Admin</option>
-            </select>
-          </label>
-          <label>Branch
-            <select value={form.branch} onChange={set('branch')} disabled={form.role === 'admin'}>
-              {branches.map((b) => <option key={b}>{b}</option>)}
-            </select>
-          </label>
-          <label>New branch
-            <div className="add-row">
-              <input
-                value={newBranch}
-                onChange={(e) => setNewBranch(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addBranchInline())}
-                placeholder="Add a future branch"
-                disabled={form.role === 'admin'}
-              />
-              <button type="button" onClick={addBranchInline} disabled={form.role === 'admin' || !newBranch.trim()}>
-                Add
-              </button>
-            </div>
-          </label>
+          {isAdminCaller && (
+            <label>Role
+              <select value={form.role} onChange={set('role')}>
+                <option value="user">User</option>
+                <option value="director">Director</option>
+                <option value="admin">Admin</option>
+              </select>
+            </label>
+          )}
+          {isAdminCaller && form.role === 'director' ? (
+            <label>Region
+              <select value={form.region} onChange={set('region')}>
+                {regionOptions.map((r) => <option key={r}>{r}</option>)}
+              </select>
+            </label>
+          ) : (
+            <label>Branch
+              <select value={form.branch} onChange={set('branch')} disabled={isAdminCaller && form.role === 'admin'}>
+                {branchOptions.map((b) => <option key={b}>{b}</option>)}
+              </select>
+            </label>
+          )}
+          {isAdminCaller && (
+            <label>New branch
+              <div className="add-row">
+                <input
+                  value={newBranch}
+                  onChange={(e) => setNewBranch(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addBranchInline())}
+                  placeholder="Add a future branch"
+                  disabled={form.role !== 'user'}
+                />
+                <button type="button" onClick={addBranchInline} disabled={form.role !== 'user' || !newBranch.trim()}>
+                  Add
+                </button>
+              </div>
+            </label>
+          )}
           <button type="submit" className="submit">Create</button>
         </form>
-        <p className="saved-hint">Admins see all branches. Users are limited to their branch. New branches are also editable under ⚙️ Manage inputs → Branches.</p>
+        <p className="saved-hint">
+          {isAdminCaller
+            ? 'Admins see all branches. Directors run one region. Users are limited to their branch. New branches are also editable under ⚙️ Manage inputs → Branches.'
+            : `You can create logins for branches in your region (${currentUser?.region || ''}).`}
+        </p>
       </div>
 
       {/* Users */}
@@ -207,16 +258,27 @@ export default function AdminUsers({ currentUser, embedded = false, branches = B
                   <tr key={u.id}>
                     <td><input value={editForm.username} onChange={eset('username')} /></td>
                     <td>
-                      <select value={editForm.role} onChange={eset('role')}>
-                        <option value="user">User</option>
-                        <option value="admin">Admin</option>
-                      </select>
+                      {isAdminCaller ? (
+                        <select value={editForm.role} onChange={eset('role')}>
+                          <option value="user">User</option>
+                          <option value="director">Director</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                      ) : (
+                        'user'
+                      )}
                     </td>
                     <td>
-                      <select value={editForm.branch} onChange={eset('branch')} disabled={editForm.role === 'admin'}>
-                        <option value=""></option>
-                        {branches.map((b) => <option key={b}>{b}</option>)}
-                      </select>
+                      {isAdminCaller && editForm.role === 'director' ? (
+                        <select value={editForm.region} onChange={eset('region')}>
+                          {regionOptions.map((r) => <option key={r}>{r}</option>)}
+                        </select>
+                      ) : (
+                        <select value={editForm.branch} onChange={eset('branch')} disabled={isAdminCaller && editForm.role === 'admin'}>
+                          <option value=""></option>
+                          {(isAdminCaller ? branches : branchOptions).map((b) => <option key={b}>{b}</option>)}
+                        </select>
+                      )}
                     </td>
                     <td>
                       <select value={String(editForm.active)} onChange={eset('active')}>
@@ -234,7 +296,7 @@ export default function AdminUsers({ currentUser, embedded = false, branches = B
                   <tr key={u.id}>
                     <td className="nowrap">{u.username}{u.id === currentUser?.id && <span className="hint"> · you</span>}</td>
                     <td>{u.role}</td>
-                    <td>{u.branch || (u.role === 'admin' ? 'all' : '—')}</td>
+                    <td>{u.branch || (u.role === 'admin' ? 'all' : u.role === 'director' ? u.region : '—')}</td>
                     <td>{u.active ? 'Yes' : 'No'}</td>
                     <td className="admin-actions">
                       <button type="button" onClick={() => startEdit(u)}>Edit</button>

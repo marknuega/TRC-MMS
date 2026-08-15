@@ -59,6 +59,11 @@ export const DEFAULT_OPTIONS = {
     spPartsCompany: true,
     spPartsBrand: true,
   },
+
+  // Region -> member branches, e.g. { "Western Region": ["Makkah", "Jeddah", "Taif"] }.
+  // Seeded via server/scripts/seed-regions.js, edited only by a global admin.
+  // A director's workspace is exactly the branches listed under their region.
+  regions: {},
 }
 
 // Default visibility for the pie charts; true = shown. Missing key = shown.
@@ -86,6 +91,10 @@ export const BRANCHES = DEFAULT_OPTIONS.branches
 // Admin-only "show every branch" selection. Shared across all pages so one
 // branch choice follows the whole app. Maps to '' (no filter) when querying.
 export const ALL_BRANCHES = 'All Branches'
+
+// Default regions. The live map is admin-managed and stored in AppOptions;
+// this is the seed / fallback when none are saved.
+export const REGIONS = DEFAULT_OPTIONS.regions
 
 // Selecting a model auto-fills the Type. Keyed by UPPERCASE model name.
 export const MODEL_TYPE = {
@@ -259,5 +268,8 @@ export function mergeOptions(stored) {
   // Chart toggles are a plain object, not a category list.
   const storedCharts = stored?.charts && typeof stored.charts === 'object' ? stored.charts : {}
   out.charts = { ...DEFAULT_CHARTS, ...storedCharts }
+  // Regions are a plain object (region name -> branch list), not a category list.
+  const storedRegions = stored?.regions && typeof stored.regions === 'object' ? stored.regions : {}
+  out.regions = { ...DEFAULT_OPTIONS.regions, ...storedRegions }
   return out
 }

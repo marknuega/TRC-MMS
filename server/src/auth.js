@@ -24,12 +24,15 @@ export const hashPassword = (pw) => bcrypt.hash(String(pw), 10)
 export const verifyPassword = (pw, hash) => bcrypt.compare(String(pw), String(hash || ''))
 
 // Shape a user for the client (never leak the hash).
-export const publicUser = (u) => (u ? { id: u.id, username: u.username, role: u.role, branch: u.branch, active: u.active } : null)
+export const publicUser = (u) =>
+  u ? { id: u.id, username: u.username, role: u.role, branch: u.branch, region: u.region, active: u.active } : null
 
 export function setSession(res, user) {
-  const token = jwt.sign({ id: user.id, username: user.username, role: user.role, branch: user.branch }, SECRET, {
-    expiresIn: '7d',
-  })
+  const token = jwt.sign(
+    { id: user.id, username: user.username, role: user.role, branch: user.branch, region: user.region },
+    SECRET,
+    { expiresIn: '7d' },
+  )
   res.cookie(COOKIE, token, {
     httpOnly: true,
     sameSite: 'lax',
@@ -42,14 +45,22 @@ export function clearSession(res) {
   res.clearCookie(COOKIE, { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' })
 }
 
-// Populate req.user from the cookie when present (never rejects).
+// Populate req.user from the cookie when present (never rejects). A director
+// also gets req.regionBranches resolved here — the single place every
+// director-scoped request picks up which branches their region covers.
 export async function loadUser(req, _res, next) {
   try {
     const token = req.cookies?.[COOKIE]
     if (token) {
       const claims = jwt.verify(token, SECRET)
       const user = await prisma.user.findUnique({ where: { id: claims.id } })
-      if (user && user.active) req.user = user
+      if (user && user.active) {
+        req.user = user
+        if (user.role === 'director' && user.region) {
+          const opts = await prisma.appOptions.findUnique({ where: { id: 1 } })
+          req.regionBranches = opts?.data?.regions?.[user.region] ?? []
+        }
+      }
     }
   } catch {
     /* invalid/expired token — treat as anonymous */
@@ -65,6 +76,15 @@ export function authRequired(req, res, next) {
 export function adminRequired(req, res, next) {
   if (!req.user) return res.status(401).json({ error: 'Sign in required' })
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Admin only' })
+  next()
+}
+
+// Global admin OR a regional director — used by account-management routes a
+// director may also reach. adminRequired above is left untouched for routes
+// that must stay admin-exclusive (Manage Inputs/AppOptions, Code Map).
+export function adminOrDirectorRequired(req, res, next) {
+  if (!req.user) return res.status(401).json({ error: 'Sign in required' })
+  if (!['admin', 'director'].includes(req.user.role)) return res.status(403).json({ error: 'Admin only' })
   next()
 }
 
