@@ -1326,6 +1326,10 @@ h2 {
   font-size: 0.82rem;
   font-weight: 600;
 }
+.admin-form input,
+.admin-form select {
+  min-width: 9rem;
+}
 .admin-actions {
   display: flex;
   flex-wrap: wrap;
