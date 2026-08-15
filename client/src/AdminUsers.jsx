@@ -39,6 +39,23 @@ export default function AdminUsers({ currentUser, embedded = false, branches = B
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
 
+  // A <select> with a value not among its <option>s still shows the first
+  // option visually while React's state stays whatever it was — so without
+  // this, choosing "Director" and submitting without ever touching the
+  // Region dropdown silently creates an account with a BLANK region (the
+  // picker looks filled in, but nothing was ever selected). Keep the
+  // tracked state in lockstep with what's on screen instead.
+  useEffect(() => {
+    if (form.role === 'director' && !form.region && regionOptions.length) {
+      setForm((f) => ({ ...f, region: regionOptions[0] }))
+    }
+  }, [form.role, form.region, regionOptions])
+  useEffect(() => {
+    if (editId != null && editForm.role === 'director' && !editForm.region && regionOptions.length) {
+      setEditForm((f) => ({ ...f, region: regionOptions[0] }))
+    }
+  }, [editId, editForm.role, editForm.region, regionOptions])
+
   async function refresh() {
     try {
       const [u, r] = await Promise.all([getUsers(), getCredentialRequests()])
