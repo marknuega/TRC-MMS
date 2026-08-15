@@ -240,13 +240,21 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
               </label>
             )}
             <label className="grow">
-              {isIssues ? 'Description' : isMaterials ? 'Material name' : 'Add new'}
+              {isIssues ? 'Description' : isMaterials ? 'Material name' : isTechnicians ? 'Technician name' : 'Add new'}
               <div className="add-row">
                 <input
                   value={newValue}
                   onChange={(e) => setNewValue(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), add())}
-                  placeholder={isIssues ? 'Belt Clip' : isMaterials ? 'Material name' : 'Type a value and press Add'}
+                  placeholder={
+                    isIssues
+                      ? 'Belt Clip'
+                      : isMaterials
+                        ? 'Material name'
+                        : isTechnicians
+                          ? 'Muhammad Amir'
+                          : 'Type a value and press Add'
+                  }
                 />
                 {isMaterials && (
                   <input
@@ -374,7 +382,9 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                           }
                           if (e.key === 'Escape') setEditIndex(-1)
                         }}
-                        placeholder={isMaterials ? 'Material name' : isIssues ? 'Description' : undefined}
+                        placeholder={
+                          isMaterials ? 'Material name' : isIssues ? 'Description' : isTechnicians ? 'Technician name' : undefined
+                        }
                         autoFocus
                       />
                       {isMaterials && (
