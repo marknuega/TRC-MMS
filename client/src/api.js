@@ -146,8 +146,10 @@ export const getInventoryTxns = (id) => request(`/api/inventory/${id}/transactio
 
 // ---- Auth ----
 export const getMe = () => request('/api/auth/me')
-export const login = (username, password) =>
-  request('/api/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) })
+// Never queued for offline replay: a failed login attempt isn't a durable
+// write to retry later (stale credentials would just retry forever and, on a
+// 401, stall the entire sync queue — see flushQueue's authExpired handling).
+export const login = (username, password) => netRequest('/api/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) })
 export const logout = () => request('/api/auth/logout', { method: 'POST' })
 export const requestCredentials = (data) =>
   request('/api/auth/request', { method: 'POST', body: JSON.stringify(data) })
