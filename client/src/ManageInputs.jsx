@@ -51,7 +51,7 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
   const makeItem = (name, desc, parts, variant, id) => {
     if (isIssues) return { name, parts: parts.trim(), variant: variant.trim().toUpperCase() }
     if (isMaterials) return { name, description: desc.trim() }
-    if (isTechnicians) return id.trim() ? { name, id: id.trim() } : name
+    if (isTechnicians) return id.trim() ? { name, id: id.trim().toUpperCase() } : name
     return name
   }
   const exists = (value, exceptIndex = -1) =>
@@ -61,9 +61,9 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
   // blank is allowed, for a technician who never files by WhatsApp).
   function techIdProblem(id, exceptIndex = -1) {
     if (!isTechnicians) return ''
-    const v = id.trim()
+    const v = id.trim().toUpperCase()
     if (!v) return ''
-    if (!TECH_ID_RE.test(v)) return `"${v}" is not a valid ID — digits only, e.g. 3.`
+    if (!TECH_ID_RE.test(v)) return `"${v}" is not a valid ID — letters/numbers only, e.g. 3 or MA.`
     const clash = list.findIndex((it, idx) => idx !== exceptIndex && technicianId(it) === v)
     if (clash >= 0) return `ID ${v} is already used by "${nameOf(list[clash])}".`
     return ''
@@ -231,11 +231,10 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                 ID
                 <input
                   value={newId}
-                  onChange={(e) => setNewId(e.target.value.replace(/\D/g, ''))}
+                  onChange={(e) => setNewId(e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase())}
                   onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), add())}
-                  placeholder="1"
-                  inputMode="numeric"
-                  title="The number this technician texts as the last part of a WhatsApp report, e.g. 1. Optional."
+                  placeholder="1 or MA"
+                  title="What this technician texts as the last part of a WhatsApp report, e.g. 1 or MA (initials). Optional."
                 />
               </label>
             )}
@@ -284,9 +283,10 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
           )}
           {isTechnicians && (
             <p className="manage-hint">
-              The <strong>ID</strong> is the number a technician types as the LAST part of a WhatsApp fault report
-              to identify themselves — e.g. ending a report in <code>1</code> files it under whoever has ID 1
-              here. Leave it blank for a technician who only appears in the app's own dropdowns. An ID set here{' '}
+              The <strong>ID</strong> is what a technician types as the LAST part of a WhatsApp fault report to
+              identify themselves — a number or letters, e.g. ending a report in <code>1</code> or <code>MA</code>{' '}
+              files it under whoever has that ID here. Leave it blank for a technician who only appears in the
+              app's own dropdowns. An ID set here{' '}
               <strong>outranks</strong> the same ID in Code Map's older Technician IDs list, so moving one over is
               a safe, incremental edit.
             </p>
@@ -358,7 +358,7 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                           <input
                             className="edit-input"
                             value={editId}
-                            onChange={(e) => setEditId(e.target.value.replace(/\D/g, ''))}
+                            onChange={(e) => setEditId(e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase())}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') {
                                 e.preventDefault()
@@ -366,8 +366,7 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                               }
                               if (e.key === 'Escape') setEditIndex(-1)
                             }}
-                            placeholder="1"
-                            inputMode="numeric"
+                            placeholder="1 or MA"
                           />
                         </label>
                       )}

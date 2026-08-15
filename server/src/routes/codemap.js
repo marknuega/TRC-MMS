@@ -172,21 +172,22 @@ export function faultCodes(issueTypes) {
 
 /**
  * Technician IDs claimed in AppOptions (Manage inputs -> Technicians), as
- * { '1': 'Amir' }. Mirrors technicianIdMap() in client/src/options.js — the
- * two are pinned together by codemap.test.js.
+ * { '1': 'Amir', 'MA': 'Muhammad Amir' }. Mirrors technicianIdMap() in
+ * client/src/options.js — the two are pinned together by codemap.test.js.
  *
- * A blank or non-numeric ID is skipped: there is nothing here for the
- * WhatsApp decoder to key on. First claim wins, matching faultCodes(), so a
- * duplicated ID can never flip meaning by list order.
+ * A blank or invalid ID is skipped: there is nothing here for the WhatsApp
+ * decoder to key on. IDs are upper-cased so "ma" and "MA" are the same
+ * claim. First claim wins, matching faultCodes(), so a duplicated ID can
+ * never flip meaning by list order.
  */
-const TECH_ID_RE = /^\d+$/
+const TECH_ID_RE = /^[A-Z0-9]+$/i
 
 export function technicianCodes(technicians) {
   const out = {}
   for (const it of technicians ?? []) {
     // Plain strings are technicians with no ID — nothing to publish.
     if (!it || typeof it !== 'object') continue
-    const id = String(it.id ?? '').trim()
+    const id = String(it.id ?? '').trim().toUpperCase()
     const name = String(it.name ?? '').trim()
     if (!id || !name || !TECH_ID_RE.test(id)) continue
     if (!out[id]) out[id] = name

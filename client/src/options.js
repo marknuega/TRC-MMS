@@ -147,15 +147,17 @@ export function materialDescMap(materials) {
 // moved here, and moving one here is a safe, incremental edit.
 // ---------------------------------------------------------------------------
 
-export const TECH_ID_RE = /^\d+$/
+// Letters as well as digits, so initials work (e.g. "MA" for Muhammad Amir),
+// not just a numbered ID.
+export const TECH_ID_RE = /^[A-Z0-9]+$/i
 export const technicianName = (v) => (typeof v === 'string' ? v : String(v?.name ?? ''))
 export const technicianId = (v) => (typeof v === 'string' ? '' : String(v?.id ?? ''))
 
-/** Map of numeric technician ID -> name, for publishing to the code map / WhatsApp bot. */
+/** Map of technician ID (upper-cased) -> name, for publishing to the code map / WhatsApp bot. */
 export function technicianIdMap(technicians) {
   const map = {}
   for (const it of technicians ?? []) {
-    const id = technicianId(it).trim()
+    const id = technicianId(it).trim().toUpperCase()
     const name = technicianName(it).trim()
     if (id && name && TECH_ID_RE.test(id) && !map[id]) map[id] = name
   }

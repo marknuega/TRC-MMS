@@ -82,12 +82,12 @@ const TECH_ROWS = [
   { name: 'Imran', id: '3' },
   { name: 'No ID', id: '' },
   { name: '  ', id: '9' }, // nameless: nothing to decode to
-  { name: 'Not numeric', id: 'AB' },
+  { name: 'Muhammad Amir', id: 'ma' }, // letters, lower-case as typed — upper-cased on publish
 ]
 
 describe('technicianCodes', () => {
   test('publishes exactly the rows that claim an ID', () => {
-    assert.deepEqual(technicianCodes(TECH_ROWS), { 2: 'Muhammad Rashid', 3: 'Imran' })
+    assert.deepEqual(technicianCodes(TECH_ROWS), { 2: 'Muhammad Rashid', 3: 'Imran', MA: 'Muhammad Amir' })
   })
 
   test('agrees with the client, row for row', () => {

@@ -109,14 +109,18 @@ export function decodeBatch(rawText, map) {
 
   const working = [...tokens]
   const technicianToken = working.pop()
+  // Upper-cased so a technician can key off initials (e.g. "MA") as well as a
+  // number, and "ma"/"MA" are the same claim — mirrors technicianIdMap() in
+  // client/src/options.js.
+  const techId = technicianToken.toUpperCase()
 
-  if (!/^\d+$/.test(technicianToken)) {
+  if (!/^[A-Z0-9]+$/.test(techId)) {
     return {
       ok: false,
-      reason: `The last part of the message must be the technician ID (numbers only) — found: "${technicianToken}".`,
+      reason: `The last part of the message must be the technician ID (letters/numbers, e.g. 1 or MA) — found: "${technicianToken}".`,
     }
   }
-  const techName = technicians[technicianToken]
+  const techName = technicians[techId]
   if (!techName) {
     return { ok: false, reason: `Unknown technician ID "${technicianToken}". Add it in Code Map if needed.` }
   }
@@ -287,7 +291,7 @@ export function decodeBatch(rawText, map) {
     ok: true,
     batch: {
       groups: [...groups.values()],
-      techId: technicianToken,
+      techId,
       techName,
       telNumber,
       issiNumber,

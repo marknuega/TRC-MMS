@@ -20,7 +20,7 @@ const MAP = {
   actions: { C: 'Change', R: 'Repair' },
   companies: { MT: 'MOTECO', MI: 'MOI' },
   agencies: { PSD: 'PUBLIC SECURITY DEPARTMENT' },
-  technicians: { 1: 'Amir' },
+  technicians: { 1: 'Amir', MA: 'Muhammad Amir' },
 }
 
 const one = (text) => {
@@ -83,6 +83,13 @@ describe('whatsapp decoder', () => {
     assert.equal(r.batch.issiNumber, '6575')
     assert.equal(r.batch.techName, 'Amir')
     assert.equal(r.batch.groups[0].faults.length, 2)
+  })
+
+  test('a technician ID may be letters (initials), matched case-insensitively', () => {
+    const r = decodeBatch('H43AC1MT ma', MAP)
+    assert.ok(r.ok, r.reason)
+    assert.equal(r.batch.techId, 'MA')
+    assert.equal(r.batch.techName, 'Muhammad Amir')
   })
 
   test('a batch mixing two brands is refused rather than split', () => {
