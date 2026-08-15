@@ -1207,48 +1207,51 @@ h2 {
 .sync-pill {
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
-  margin: 0.4rem 0 0 0.75rem;
-  padding: 0;
-  border-radius: 50%;
-  border: 0;
-  background: none;
-  cursor: pointer;
+  gap: 0.7rem;
+  margin: 0.4rem 0.4rem 0;
+  padding: 0.45rem 0.7rem;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
 }
-.sync-pill:hover {
-  background: var(--surface-3);
+.sync-pill small {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 500;
+  opacity: 0.85;
 }
-.sync-dot {
-  width: 10px;
-  height: 10px;
-  min-width: 10px;
-  border-radius: 50%;
-  display: inline-block;
+.sync-pill.offline {
+  background: rgba(245, 158, 11, 0.16);
+  color: #b45309;
+  border: 1px solid rgba(245, 158, 11, 0.4);
 }
-/* Blinking BLUE — pending records waiting to sync (offline, or online but not pushed yet). */
-.sync-dot-pending {
-  background: #3b82f6;
-  animation: sync-blink 1s ease-in-out infinite;
+.sync-pill.syncing {
+  background: rgba(37, 99, 235, 0.14);
+  color: #1d4ed8;
+  border: 1px solid rgba(37, 99, 235, 0.35);
 }
-/* YELLOW — actively writing to local storage / actively pushing to the server. */
-.sync-dot-syncing {
-  background: #eab308;
+.sync-pill.syncing .side-ico {
+  animation: sync-spin 1s linear infinite;
 }
-/* Steady GREEN — queue empty, everything synced. */
-.sync-dot-synced {
-  background: #22c55e;
-}
-@keyframes sync-blink {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.25;
+@keyframes sync-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
+@media (prefers-color-scheme: dark) {
+  .sync-pill.offline {
+    color: #fbbf24;
+  }
+  .sync-pill.syncing {
+    color: #93c5fd;
+  }
+}
+:root[data-theme='dark'] .sync-pill.offline {
+  color: #fbbf24;
+}
+:root[data-theme='dark'] .sync-pill.syncing {
+  color: #93c5fd;
+}
+
 .side-user {
   margin-top: auto;
   padding-top: 0.6rem;
