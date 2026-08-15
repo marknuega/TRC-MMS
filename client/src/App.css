@@ -1208,10 +1208,16 @@ h2 {
   display: flex;
   align-items: center;
   gap: 0.7rem;
+  width: 100%;
   margin: 0.4rem 0.4rem 0;
   padding: 0.45rem 0.7rem;
   border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: none;
+  font: inherit;
   font-weight: 600;
+  text-align: left;
+  cursor: pointer;
 }
 .sync-pill small {
   display: block;
@@ -1219,37 +1225,69 @@ h2 {
   font-weight: 500;
   opacity: 0.85;
 }
-.sync-pill.offline {
-  background: rgba(245, 158, 11, 0.16);
-  color: #b45309;
-  border: 1px solid rgba(245, 158, 11, 0.4);
+.sync-dot {
+  width: 10px;
+  height: 10px;
+  min-width: 10px;
+  border-radius: 50%;
+  display: inline-block;
 }
-.sync-pill.syncing {
-  background: rgba(37, 99, 235, 0.14);
+/* Blinking BLUE — pending records waiting to sync (offline, or online but not pushed yet). */
+.sync-pill.pending {
+  background: rgba(59, 130, 246, 0.14);
   color: #1d4ed8;
-  border: 1px solid rgba(37, 99, 235, 0.35);
+  border-color: rgba(59, 130, 246, 0.35);
 }
-.sync-pill.syncing .side-ico {
-  animation: sync-spin 1s linear infinite;
+.sync-dot-pending {
+  background: #3b82f6;
+  animation: sync-blink 1s ease-in-out infinite;
 }
-@keyframes sync-spin {
-  to {
-    transform: rotate(360deg);
+/* YELLOW — actively writing to local storage / actively pushing to the server. */
+.sync-pill.syncing {
+  background: rgba(234, 179, 8, 0.16);
+  color: #a16207;
+  border-color: rgba(234, 179, 8, 0.4);
+}
+.sync-dot-syncing {
+  background: #eab308;
+}
+/* Steady GREEN — queue empty, everything synced. */
+.sync-pill.synced {
+  background: rgba(34, 197, 94, 0.12);
+  color: #15803d;
+  border-color: rgba(34, 197, 94, 0.3);
+}
+.sync-dot-synced {
+  background: #22c55e;
+}
+@keyframes sync-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
   }
 }
 @media (prefers-color-scheme: dark) {
-  .sync-pill.offline {
-    color: #fbbf24;
-  }
-  .sync-pill.syncing {
+  .sync-pill.pending {
     color: #93c5fd;
   }
+  .sync-pill.syncing {
+    color: #fde047;
+  }
+  .sync-pill.synced {
+    color: #86efac;
+  }
 }
-:root[data-theme='dark'] .sync-pill.offline {
-  color: #fbbf24;
+:root[data-theme='dark'] .sync-pill.pending {
+  color: #93c5fd;
 }
 :root[data-theme='dark'] .sync-pill.syncing {
-  color: #93c5fd;
+  color: #fde047;
+}
+:root[data-theme='dark'] .sync-pill.synced {
+  color: #86efac;
 }
 
 .side-user {

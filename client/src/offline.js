@@ -56,8 +56,10 @@ const listQueue = () =>
 const putQueue = (op) => idb(QUEUE_STORE, 'readwrite', (s) => s.put(op))
 const delQueue = (id) => idb(QUEUE_STORE, 'readwrite', (s) => s.delete(id)).catch(() => {})
 
-// ---- Status pub/sub (online + pending count) ----
+// ---- Status pub/sub (online + pending count + in-flight flush + auth state) ----
 const listeners = new Set()
+let flushing = false
+let authExpired = false // session cookie expired mid-sync; queue is kept intact
 export function onSyncChange(fn) {
   listeners.add(fn)
   notify()
@@ -65,7 +67,7 @@ export function onSyncChange(fn) {
 }
 export async function notify() {
   const pending = (await listQueue()).length
-  const state = { online: navigator.onLine, pending }
+  const state = { online: navigator.onLine, pending, syncing: flushing, authExpired }
   for (const fn of listeners) fn(state)
 }
 
@@ -263,10 +265,11 @@ export async function queueMutation(method, path, body) {
 
 // Replay the queue in order. `send(op)` performs the raw network request and
 // resolves on any HTTP response, rejecting only on a network failure.
-let flushing = false
 export async function flushQueue(send) {
   if (flushing || !navigator.onLine) return
   flushing = true
+  authExpired = false // give a fresh attempt the benefit of the doubt each run
+  await notify()
   let drained = false
   try {
     const q = await listQueue()
@@ -276,6 +279,13 @@ export async function flushQueue(send) {
         await delQueue(op.id)
       } catch (err) {
         if (err && err.offline) break // still offline — stop, keep the rest queued
+        if (err && err.status === 401) {
+          // Session expired while offline (e.g. laptop closed overnight). Keep
+          // the queue intact — nothing is lost — and let the UI prompt a
+          // re-login. The next flush (on reconnect/focus/poll) resumes here.
+          authExpired = true
+          break
+        }
         await delQueue(op.id) // server rejected it; drop so it can't block the queue
       }
       await notify()

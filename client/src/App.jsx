@@ -390,7 +390,15 @@ function App({ user, onLogout }) {
   const seriesBranch = isAllBranches ? '' : branch
   const nextReportId = `REP-${pad4(nextSeriesNumber(saved, 'report', seriesBranch))}`
   const nextTransId = `TRANS-${pad4(nextSeriesNumber(saved, 'transmittal', seriesBranch))}`
-  const [sync, setSync] = useState({ online: true, pending: 0 })
+  const [sync, setSync] = useState({ online: true, pending: 0, syncing: false, authExpired: false })
+  // Blue blinking (pending) / yellow (actively syncing) / steady green (all synced).
+  const syncStatus = sync.authExpired
+    ? { cls: 'pending', label: 'Sign in to sync' }
+    : sync.syncing
+      ? { cls: 'syncing', label: 'Saving…' }
+      : sync.pending > 0
+        ? { cls: 'pending', label: sync.online ? `${sync.pending} pending sync` : `${sync.pending} saved offline` }
+        : { cls: 'synced', label: 'Synced' }
   const [editId, setEditId] = useState(null) // entry id being edited in the modal
   const [editForm, setEditForm] = useState(null)
   const lastEntriesSig = useRef('') // baseline for the live-refresh poll
@@ -1341,15 +1349,18 @@ function App({ user, onLogout }) {
               </button>
             ))}
           </nav>
-          {(!sync.online || sync.pending > 0) && (
-            <div className={`sync-pill${sync.online ? ' syncing' : ' offline'}`} title={sync.online ? 'Syncing queued changes to the server' : 'Working offline — changes are saved on this device and will sync when you reconnect'}>
-              <span className="side-ico">{sync.online ? '⟳' : '📴'}</span>
-              <span className="side-label">
-                {sync.online ? 'Syncing…' : 'Offline'}
-                {sync.pending > 0 && <small>{sync.pending} change{sync.pending === 1 ? '' : 's'} pending</small>}
-              </span>
-            </div>
-          )}
+          <button
+            type="button"
+            className={`sync-pill ${syncStatus.cls}`}
+            title={sync.authExpired ? 'Your session expired — click to retry, then sign in again if needed. Nothing was lost.' : syncStatus.label}
+            onClick={() => syncNow()}
+          >
+            <span className={`side-ico sync-dot sync-dot-${syncStatus.cls}`} />
+            <span className="side-label">
+              {syncStatus.label}
+              {sync.pending > 0 && <small>{sync.pending} change{sync.pending === 1 ? '' : 's'} pending</small>}
+            </span>
+          </button>
           <div className="side-user">
             <span className="side-user-info" title={`${user?.username} · ${isAdmin ? 'admin' : user?.branch || 'user'}`}>
               <span className="side-ico">{isAdmin ? '👑' : '👤'}</span>
