@@ -25,7 +25,7 @@ import {
 import { onSyncChange } from './offline'
 import {
   DEFAULT_OPTIONS, mergeOptions, MODEL_TYPE, BRANCHES, ALL_BRANCHES,
-  materialName, materialDescMap, issueName, issueCode,
+  materialName, materialDescMap, issueName, issueCode, technicianName,
 } from './options'
 import ManageInputs from './ManageInputs'
 import Inventory from './Inventory'
@@ -970,6 +970,12 @@ function App({ user, onLogout }) {
     return all.includes(lastAgency) ? [lastAgency, ...rest] : rest
   }, [options.agencies, saved, entries, lastAgency])
 
+  // Plain names for every place that just needs to list or match a
+  // technician — Manage Inputs is the only place that needs the ID
+  // alongside the name, so everywhere else works off this instead of
+  // options.technicians directly.
+  const technicianNames = useMemo(() => (options.technicians ?? []).map(technicianName), [options.technicians])
+
   // Collapse the Device/Faults cards in All-Branches (read-only merged) mode.
   useEffect(() => {
     setDeviceOpen(!isAllBranches)
@@ -1428,7 +1434,7 @@ function App({ user, onLogout }) {
                   Transmitted by
                   <select value={transmittedBy} onChange={changeTransmittedBy}>
                     <option value="">— select —</option>
-                    {options.technicians.map((t) => (
+                    {technicianNames.map((t) => (
                       <option key={t}>{t}</option>
                     ))}
                   </select>
@@ -1437,7 +1443,7 @@ function App({ user, onLogout }) {
                   Received by
                   <select value={receivedBy} onChange={changeReceivedBy}>
                     <option value="">— select —</option>
-                    {options.technicians.map((t) => (
+                    {technicianNames.map((t) => (
                       <option key={t}>{t}</option>
                     ))}
                   </select>
@@ -1516,7 +1522,7 @@ function App({ user, onLogout }) {
                 <span className="cap">Technician <span className="opt">(optional · multiple)</span></span>
                 <MultiSelect
                   value={form.technician}
-                  options={options.technicians}
+                  options={technicianNames}
                   onChange={(v) => setForm((f) => ({ ...f, technician: v }))}
                 />
               </label>
@@ -1771,7 +1777,7 @@ function App({ user, onLogout }) {
                       <span className="cap">Technician <span className="opt">(optional · multiple)</span></span>
                       <MultiSelect
                         value={editForm.technician}
-                        options={options.technicians}
+                        options={technicianNames}
                         onChange={(v) => setEditForm((f) => ({ ...f, technician: v }))}
                       />
                     </label>

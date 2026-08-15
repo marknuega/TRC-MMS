@@ -4,12 +4,15 @@ import {
   CHART_TOGGLES,
   PARTS_RE,
   VARIANT_RE,
+  TECH_ID_RE,
   issueCode,
   issueName,
   issueParts,
   issueVariant,
   materialName,
   materialDesc,
+  technicianName,
+  technicianId,
 } from './options'
 import { FALLBACK, useCodeMap, variantsOf } from './codes'
 
@@ -24,11 +27,13 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
   const [newDesc, setNewDesc] = useState('')
   const [newParts, setNewParts] = useState('')
   const [newVariant, setNewVariant] = useState('')
+  const [newId, setNewId] = useState('')
   const [editIndex, setEditIndex] = useState(-1)
   const [editValue, setEditValue] = useState('')
   const [editDesc, setEditDesc] = useState('')
   const [editParts, setEditParts] = useState('')
   const [editVariant, setEditVariant] = useState('')
+  const [editId, setEditId] = useState('')
   const [notice, setNotice] = useState('')
 
   // Only to describe what a code already means in the shared vocabulary — the
@@ -39,15 +44,30 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
   // variant, and their description IS their name; every other list is a string.
   const isMaterials = cat === 'materials'
   const isIssues = cat === 'issueTypes'
+  const isTechnicians = cat === 'technicians'
   const list = options[cat] ?? []
-  const nameOf = (v) => (isMaterials ? materialName(v) : isIssues ? issueName(v) : String(v))
+  const nameOf = (v) => (isMaterials ? materialName(v) : isIssues ? issueName(v) : isTechnicians ? technicianName(v) : String(v))
   const descOf = (v) => (isMaterials ? materialDesc(v) : '')
-  const makeItem = (name, desc, parts, variant) => {
+  const makeItem = (name, desc, parts, variant, id) => {
     if (isIssues) return { name, parts: parts.trim(), variant: variant.trim().toUpperCase() }
-    return isMaterials ? { name, description: desc.trim() } : name
+    if (isMaterials) return { name, description: desc.trim() }
+    if (isTechnicians) return id.trim() ? { name, id: id.trim() } : name
+    return name
   }
   const exists = (value, exceptIndex = -1) =>
     list.some((v, i) => i !== exceptIndex && nameOf(v).toLowerCase() === value.toLowerCase())
+
+  // What is wrong with a technician ID, or '' when it is usable (or blank —
+  // blank is allowed, for a technician who never files by WhatsApp).
+  function techIdProblem(id, exceptIndex = -1) {
+    if (!isTechnicians) return ''
+    const v = id.trim()
+    if (!v) return ''
+    if (!TECH_ID_RE.test(v)) return `"${v}" is not a valid ID — digits only, e.g. 3.`
+    const clash = list.findIndex((it, idx) => idx !== exceptIndex && technicianId(it) === v)
+    if (clash >= 0) return `ID ${v} is already used by "${nameOf(list[clash])}".`
+    return ''
+  }
 
   // What is wrong with a parts + variant pair, or '' when it is usable. Both
   // halves or neither: half a code decodes to nothing, so storing one is a trap.
@@ -90,16 +110,17 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
       flash(`"${value}" is already in the list.`)
       return
     }
-    const problem = codeProblem(newParts, newVariant)
+    const problem = codeProblem(newParts, newVariant) || techIdProblem(newId)
     if (problem) {
       flash(problem)
       return
     }
-    onChange(cat, [...list, makeItem(value, newDesc, newParts, newVariant)])
+    onChange(cat, [...list, makeItem(value, newDesc, newParts, newVariant, newId)])
     setNewValue('')
     setNewDesc('')
     setNewParts('')
     setNewVariant('')
+    setNewId('')
   }
 
   function startEdit(i) {
@@ -108,6 +129,7 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
     setEditDesc(descOf(list[i]))
     setEditParts(isIssues ? issueParts(list[i]) : '')
     setEditVariant(isIssues ? issueVariant(list[i]) : '')
+    setEditId(isTechnicians ? technicianId(list[i]) : '')
   }
 
   function saveEdit() {
@@ -117,17 +139,18 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
       flash(`"${value}" is already in the list.`)
       return
     }
-    const problem = codeProblem(editParts, editVariant, editIndex)
+    const problem = codeProblem(editParts, editVariant, editIndex) || techIdProblem(editId, editIndex)
     if (problem) {
       flash(problem)
       return
     }
-    onChange(cat, list.map((v, i) => (i === editIndex ? makeItem(value, editDesc, editParts, editVariant) : v)))
+    onChange(cat, list.map((v, i) => (i === editIndex ? makeItem(value, editDesc, editParts, editVariant, editId) : v)))
     setEditIndex(-1)
     setEditValue('')
     setEditDesc('')
     setEditParts('')
     setEditVariant('')
+    setEditId('')
   }
 
   function remove(i) {
@@ -166,6 +189,7 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                   setNewDesc('')
                   setNewParts('')
                   setNewVariant('')
+                  setNewId('')
                 }}
               >
                 {CATEGORIES.map((c) => (
@@ -202,6 +226,19 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                 </label>
               </>
             )}
+            {isTechnicians && (
+              <label className="field-code">
+                ID
+                <input
+                  value={newId}
+                  onChange={(e) => setNewId(e.target.value.replace(/\D/g, ''))}
+                  onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), add())}
+                  placeholder="1"
+                  inputMode="numeric"
+                  title="The number this technician texts as the last part of a WhatsApp report, e.g. 1. Optional."
+                />
+              </label>
+            )}
             <label className="grow">
               {isIssues ? 'Description' : isMaterials ? 'Material name' : 'Add new'}
               <div className="add-row">
@@ -235,6 +272,15 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
               this one entry. The variant is part of the part's identity, not just a build, so two variants of
               one parts number can be two genuinely different items rather than two builds of one. Leave both
               blank for an issue with no code.
+            </p>
+          )}
+          {isTechnicians && (
+            <p className="manage-hint">
+              The <strong>ID</strong> is the number a technician types as the LAST part of a WhatsApp fault report
+              to identify themselves — e.g. ending a report in <code>1</code> files it under whoever has ID 1
+              here. Leave it blank for a technician who only appears in the app's own dropdowns. An ID set here{' '}
+              <strong>outranks</strong> the same ID in Code Map's older Technician IDs list, so moving one over is
+              a safe, incremental edit.
             </p>
           )}
           {isIssues && (
@@ -298,6 +344,25 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                           </label>
                         </div>
                       )}
+                      {isTechnicians && (
+                        <label className="field-code">
+                          ID
+                          <input
+                            className="edit-input"
+                            value={editId}
+                            onChange={(e) => setEditId(e.target.value.replace(/\D/g, ''))}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault()
+                                saveEdit()
+                              }
+                              if (e.key === 'Escape') setEditIndex(-1)
+                            }}
+                            placeholder="1"
+                            inputMode="numeric"
+                          />
+                        </label>
+                      )}
                       <input
                         className="edit-input"
                         value={editValue}
@@ -340,6 +405,9 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                     <span className="manage-item-label">
                       {isIssues && issueCode(value) && (
                         <span className="manage-item-code">{issueCode(value)}</span>
+                      )}
+                      {isTechnicians && technicianId(value) && (
+                        <span className="manage-item-code">{technicianId(value)}</span>
                       )}
                       {nameOf(value)}
                       {isMaterials && descOf(value) && <span className="manage-item-desc">{descOf(value)}</span>}

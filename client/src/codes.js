@@ -37,7 +37,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 // Extension-ful so `node --test` resolves it too, not just Vite.
-import { issueCodeIndex, issueNames } from './options.js'
+import { issueCodeIndex, issueNames, technicianName } from './options.js'
 
 // This app now OWNS the code map, so the mirror is same-origin. It stays a
 // fetch rather than a bundled import because the map is edited at runtime and
@@ -206,6 +206,9 @@ export function parseCodeReport(text, map = FALLBACK, options = {}) {
   // of what H99B means, so it never has to survive a name match to be honoured.
   const claimed = issueCodeIndex(options.issueTypes)
   const issueList = issueNames(options.issueTypes)
+  // Manage Inputs technicians may carry an {name, id} shape now (for the
+  // WhatsApp ID); matchOption below only ever needs the plain name.
+  const technicianList = (options.technicians ?? []).map(technicianName)
 
   if (!src) return { ok: false, errors: ['Nothing to decode.'], warnings, faults: [], entry: null }
 
@@ -334,8 +337,8 @@ export function parseCodeReport(text, map = FALLBACK, options = {}) {
     const techName = technicians[tail[3]] ?? technicians[Number(tail[3])]
     if (!techName) warnings.push(`No technician with ID ${tail[3]} — leave the field blank or pick one.`)
     else {
-      technician = matchOption(techName, options.technicians) ?? up(techName)
-      if (!matchOption(techName, options.technicians)) {
+      technician = matchOption(techName, technicianList) ?? up(techName)
+      if (!matchOption(techName, technicianList)) {
         warnings.push(`Technician "${techName}" is not in the Technicians list — saved as typed.`)
       }
     }

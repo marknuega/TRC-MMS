@@ -171,12 +171,44 @@ export function faultCodes(issueTypes) {
 }
 
 /**
- * The whole decoding vocabulary: the stored map plus the derived `faults`.
+ * Technician IDs claimed in AppOptions (Manage inputs -> Technicians), as
+ * { '1': 'Amir' }. Mirrors technicianIdMap() in client/src/options.js — the
+ * two are pinned together by codemap.test.js.
+ *
+ * A blank or non-numeric ID is skipped: there is nothing here for the
+ * WhatsApp decoder to key on. First claim wins, matching faultCodes(), so a
+ * duplicated ID can never flip meaning by list order.
+ */
+const TECH_ID_RE = /^\d+$/
+
+export function technicianCodes(technicians) {
+  const out = {}
+  for (const it of technicians ?? []) {
+    // Plain strings are technicians with no ID — nothing to publish.
+    if (!it || typeof it !== 'object') continue
+    const id = String(it.id ?? '').trim()
+    const name = String(it.name ?? '').trim()
+    if (!id || !name || !TECH_ID_RE.test(id)) continue
+    if (!out[id]) out[id] = name
+  }
+  return out
+}
+
+/**
+ * The whole decoding vocabulary: the stored map plus the derived `faults`
+ * and (merged with the stored map's own) `technicians`.
  *
  * `faults` is derived on read, never stored: it is a projection of AppOptions,
  * so persisting it would create a second copy free to disagree with the list
  * the app actually edits. It is also absent from CODEMAP_CATEGORIES, so a PUT
  * can never write it back and turn the projection into state.
+ *
+ * `technicians` is a MERGE rather than a full override: an ID assigned in
+ * AppOptions outranks the same ID in the stored map (mirrors how an Issue
+ * type's code outranks the parts+variant lookup), but an ID only ever set in
+ * Code Map's older Technician IDs list keeps working until it too is moved
+ * over — so shipping this never silently locks an existing technician out of
+ * texting reports.
  *
  * Both consumers go through here — the public mirror below and the WhatsApp
  * webhook — so a technician's code can never decode against a different
@@ -187,7 +219,11 @@ export async function fullCodeMap() {
     readCodeMap(),
     prisma.appOptions.findUnique({ where: { id: 1 } }),
   ])
-  return { ...map, faults: faultCodes(opts?.data?.issueTypes) }
+  return {
+    ...map,
+    faults: faultCodes(opts?.data?.issueTypes),
+    technicians: { ...map.technicians, ...technicianCodes(opts?.data?.technicians) },
+  }
 }
 
 /** Public, read-only, CORS-open mirror — mounted at GET /codemap. */

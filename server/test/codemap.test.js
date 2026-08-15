@@ -10,8 +10,8 @@
 
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
-import { faultCodes, sanitizeCodeMap, validateCodeMap } from '../src/routes/codemap.js'
-import { issueCode, issueName } from '../../client/src/options.js'
+import { faultCodes, technicianCodes, sanitizeCodeMap, validateCodeMap } from '../src/routes/codemap.js'
+import { issueCode, issueName, technicianIdMap } from '../../client/src/options.js'
 
 // The same rows the app stores, in every shape it has ever written them.
 const ROWS = [
@@ -72,6 +72,41 @@ describe('faultCodes', () => {
   test('missing or empty options are not an error — just no faults', () => {
     assert.deepEqual(faultCodes(undefined), {})
     assert.deepEqual(faultCodes([]), {})
+  })
+})
+
+// The technicians rows the app stores, in every shape it has ever written them.
+const TECH_ROWS = [
+  'AMIR', // legacy plain string: a technician with no ID
+  { name: 'Muhammad Rashid', id: '2' },
+  { name: 'Imran', id: '3' },
+  { name: 'No ID', id: '' },
+  { name: '  ', id: '9' }, // nameless: nothing to decode to
+  { name: 'Not numeric', id: 'AB' },
+]
+
+describe('technicianCodes', () => {
+  test('publishes exactly the rows that claim an ID', () => {
+    assert.deepEqual(technicianCodes(TECH_ROWS), { 2: 'Muhammad Rashid', 3: 'Imran' })
+  })
+
+  test('agrees with the client, row for row', () => {
+    assert.deepEqual(technicianCodes(TECH_ROWS), technicianIdMap(TECH_ROWS))
+  })
+
+  test('first claim wins, so list order cannot flip a meaning', () => {
+    assert.deepEqual(
+      technicianCodes([
+        { name: 'FIRST', id: '1' },
+        { name: 'SECOND', id: '1' },
+      ]),
+      { 1: 'FIRST' },
+    )
+  })
+
+  test('missing or empty technicians are not an error — just no IDs', () => {
+    assert.deepEqual(technicianCodes(undefined), {})
+    assert.deepEqual(technicianCodes([]), {})
   })
 })
 

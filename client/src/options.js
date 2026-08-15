@@ -130,6 +130,39 @@ export function materialDescMap(materials) {
 }
 
 // ---------------------------------------------------------------------------
+// Technicians
+//
+// A technician entry may be a plain string (legacy, name only) or
+//   { name, id }
+// where `id` is the numeric ID a technician types as the LAST token of a
+// WhatsApp fault report to identify themselves (see server/src/whatsapp/decoder.js
+// and codes.js parseCodeReport). Optional — a technician who never files by
+// WhatsApp can be left without one.
+//
+// This is a second place an ID can be assigned: Code Map's own "Technician
+// IDs" category is the older list the WhatsApp bot originally read. An ID set
+// here OUTRANKS a same-numbered one there (mirrors how an Issue type's code
+// outranks Code Map's parts+variant lookup) — see technicianCodes() in
+// server/src/routes/codemap.js — so existing Code Map IDs keep working until
+// moved here, and moving one here is a safe, incremental edit.
+// ---------------------------------------------------------------------------
+
+export const TECH_ID_RE = /^\d+$/
+export const technicianName = (v) => (typeof v === 'string' ? v : String(v?.name ?? ''))
+export const technicianId = (v) => (typeof v === 'string' ? '' : String(v?.id ?? ''))
+
+/** Map of numeric technician ID -> name, for publishing to the code map / WhatsApp bot. */
+export function technicianIdMap(technicians) {
+  const map = {}
+  for (const it of technicians ?? []) {
+    const id = technicianId(it).trim()
+    const name = technicianName(it).trim()
+    if (id && name && TECH_ID_RE.test(id) && !map[id]) map[id] = name
+  }
+  return map
+}
+
+// ---------------------------------------------------------------------------
 // Issue types
 //
 // An issue type may be a plain string (legacy) or
