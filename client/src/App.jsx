@@ -1349,20 +1349,6 @@ function App({ user, onLogout }) {
               </button>
             ))}
           </nav>
-          <button
-            type="button"
-            className="sync-pill"
-            title={
-              sync.authExpired
-                ? `Sign in to sync — ${sync.pending} change${sync.pending === 1 ? '' : 's'} pending. Nothing was lost.`
-                : sync.pending > 0
-                  ? `${syncStatus.label} · ${sync.pending} change${sync.pending === 1 ? '' : 's'} pending`
-                  : syncStatus.label
-            }
-            onClick={() => syncNow()}
-          >
-            <span className={`sync-dot sync-dot-${syncStatus.cls}`} />
-          </button>
           <div className="side-user">
             <span className="side-user-info" title={`${user?.username} · ${isAdmin ? 'admin' : user?.branch || 'user'}`}>
               <span className="side-ico">{isAdmin ? '👑' : '👤'}</span>
@@ -1370,6 +1356,20 @@ function App({ user, onLogout }) {
                 {user?.username}
                 <small>{isAdmin ? 'Admin · all branches' : user?.branch || 'User'}</small>
               </span>
+              <button
+                type="button"
+                className="sync-pill"
+                title={
+                  sync.authExpired
+                    ? `Sign in to sync — ${sync.pending} change${sync.pending === 1 ? '' : 's'} pending. Nothing was lost.`
+                    : sync.pending > 0
+                      ? `${syncStatus.label} · ${sync.pending} change${sync.pending === 1 ? '' : 's'} pending`
+                      : syncStatus.label
+                }
+                onClick={() => syncNow()}
+              >
+                <span className={`sync-dot sync-dot-${syncStatus.cls}`} />
+              </button>
             </span>
             <button type="button" className="side-logout" onClick={onLogout} title="Sign out">
               <span className="side-ico">⎋</span>

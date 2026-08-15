@@ -1208,9 +1208,10 @@ h2 {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
-  margin: 0.4rem 0 0 0.75rem;
+  width: 1.6rem;
+  height: 1.6rem;
+  flex: none;
+  margin: 0;
   padding: 0;
   border-radius: 50%;
   border: 0;
@@ -1273,6 +1274,7 @@ h2 {
 .side-user-info .side-label {
   font-weight: 700;
   line-height: 1.15;
+  flex: 1;
 }
 .side-logout {
   display: flex;
