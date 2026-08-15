@@ -172,25 +172,44 @@ export function faultCodes(issueTypes) {
 
 /**
  * Technician IDs claimed in AppOptions (Manage inputs -> Technicians), as
- * { '1': 'Amir', 'MA': 'Muhammad Amir' }. Mirrors technicianIdMap() in
- * client/src/options.js — the two are pinned together by codemap.test.js.
+ * { '1': 'Amir', 'MA': 'Muhammad Amir', 'MRA': 'Muhammad Rashid Amir' }.
+ * Mirrors technicianIdMap() in client/src/options.js — the two are pinned
+ * together by codemap.test.js.
  *
- * A blank or invalid ID is skipped: there is nothing here for the WhatsApp
- * decoder to key on. IDs are upper-cased so "ma" and "MA" are the same
- * claim. First claim wins, matching faultCodes(), so a duplicated ID can
- * never flip meaning by list order.
+ * A technician may claim a numeric ID, a 2-letter initial, a 3-letter
+ * initial, any combination, or none — each claimed one is published. A
+ * blank or invalid one is skipped: there is nothing here for the WhatsApp
+ * decoder to key on for it. First claim wins, matching faultCodes(), so a
+ * duplicate can never flip meaning by list order.
  */
-const TECH_ID_RE = /^[A-Z0-9]+$/i
+const TECH_ID_RE = /^\d+$/
+const TECH_INITIALS2_RE = /^[A-Z]{2}$/i
+const TECH_INITIALS3_RE = /^[A-Z]{3}$/i
 
 export function technicianCodes(technicians) {
   const out = {}
-  for (const it of technicians ?? []) {
+  const rows = technicians ?? []
+  for (const it of rows) {
     // Plain strings are technicians with no ID — nothing to publish.
     if (!it || typeof it !== 'object') continue
-    const id = String(it.id ?? '').trim().toUpperCase()
+    const id = String(it.id ?? '').trim()
     const name = String(it.name ?? '').trim()
     if (!id || !name || !TECH_ID_RE.test(id)) continue
     if (!out[id]) out[id] = name
+  }
+  for (const it of rows) {
+    if (!it || typeof it !== 'object') continue
+    const initials2 = String(it.initials2 ?? '').trim().toUpperCase()
+    const name = String(it.name ?? '').trim()
+    if (!initials2 || !name || !TECH_INITIALS2_RE.test(initials2)) continue
+    if (!out[initials2]) out[initials2] = name
+  }
+  for (const it of rows) {
+    if (!it || typeof it !== 'object') continue
+    const initials3 = String(it.initials3 ?? '').trim().toUpperCase()
+    const name = String(it.name ?? '').trim()
+    if (!initials3 || !name || !TECH_INITIALS3_RE.test(initials3)) continue
+    if (!out[initials3]) out[initials3] = name
   }
   return out
 }

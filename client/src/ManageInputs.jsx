@@ -5,6 +5,8 @@ import {
   PARTS_RE,
   VARIANT_RE,
   TECH_ID_RE,
+  TECH_INITIALS2_RE,
+  TECH_INITIALS3_RE,
   issueCode,
   issueName,
   issueParts,
@@ -13,6 +15,8 @@ import {
   materialDesc,
   technicianName,
   technicianId,
+  technicianInitials2,
+  technicianInitials3,
 } from './options'
 import { FALLBACK, useCodeMap, variantsOf } from './codes'
 
@@ -28,12 +32,16 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
   const [newParts, setNewParts] = useState('')
   const [newVariant, setNewVariant] = useState('')
   const [newId, setNewId] = useState('')
+  const [newInitials2, setNewInitials2] = useState('')
+  const [newInitials3, setNewInitials3] = useState('')
   const [editIndex, setEditIndex] = useState(-1)
   const [editValue, setEditValue] = useState('')
   const [editDesc, setEditDesc] = useState('')
   const [editParts, setEditParts] = useState('')
   const [editVariant, setEditVariant] = useState('')
   const [editId, setEditId] = useState('')
+  const [editInitials2, setEditInitials2] = useState('')
+  const [editInitials3, setEditInitials3] = useState('')
   const [notice, setNotice] = useState('')
 
   // Only to describe what a code already means in the shared vocabulary — the
@@ -48,10 +56,16 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
   const list = options[cat] ?? []
   const nameOf = (v) => (isMaterials ? materialName(v) : isIssues ? issueName(v) : isTechnicians ? technicianName(v) : String(v))
   const descOf = (v) => (isMaterials ? materialDesc(v) : '')
-  const makeItem = (name, desc, parts, variant, id) => {
+  const makeItem = (name, desc, parts, variant, id, initials2, initials3) => {
     if (isIssues) return { name, parts: parts.trim(), variant: variant.trim().toUpperCase() }
     if (isMaterials) return { name, description: desc.trim() }
-    if (isTechnicians) return id.trim() ? { name, id: id.trim().toUpperCase() } : name
+    if (isTechnicians) {
+      const idT = id.trim()
+      const i2 = initials2.trim().toUpperCase()
+      const i3 = initials3.trim().toUpperCase()
+      if (!idT && !i2 && !i3) return name
+      return { name, ...(idT && { id: idT }), ...(i2 && { initials2: i2 }), ...(i3 && { initials3: i3 }) }
+    }
     return name
   }
   const exists = (value, exceptIndex = -1) =>
@@ -61,13 +75,28 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
   // blank is allowed, for a technician who never files by WhatsApp).
   function techIdProblem(id, exceptIndex = -1) {
     if (!isTechnicians) return ''
-    const v = id.trim().toUpperCase()
+    const v = id.trim()
     if (!v) return ''
-    if (!TECH_ID_RE.test(v)) return `"${v}" is not a valid ID — letters/numbers only, e.g. 3 or MA.`
+    if (!TECH_ID_RE.test(v)) return `"${v}" is not a valid ID — digits only, e.g. 3.`
     const clash = list.findIndex((it, idx) => idx !== exceptIndex && technicianId(it) === v)
     if (clash >= 0) return `ID ${v} is already used by "${nameOf(list[clash])}".`
     return ''
   }
+
+  // Same shape of check as techIdProblem, for the two initials fields.
+  function initialsProblem(re, getter, label, example, value, exceptIndex = -1) {
+    if (!isTechnicians) return ''
+    const v = value.trim().toUpperCase()
+    if (!v) return ''
+    if (!re.test(v)) return `"${v}" is not a valid ${label} — exactly ${example.length} letters, e.g. ${example}.`
+    const clash = list.findIndex((it, idx) => idx !== exceptIndex && getter(it) === v)
+    if (clash >= 0) return `${label} ${v} is already used by "${nameOf(list[clash])}".`
+    return ''
+  }
+  const initials2Problem = (v, exceptIndex = -1) =>
+    initialsProblem(TECH_INITIALS2_RE, technicianInitials2, '2-letter initial', 'MA', v, exceptIndex)
+  const initials3Problem = (v, exceptIndex = -1) =>
+    initialsProblem(TECH_INITIALS3_RE, technicianInitials3, '3-letter initial', 'MRA', v, exceptIndex)
 
   // What is wrong with a parts + variant pair, or '' when it is usable. Both
   // halves or neither: half a code decodes to nothing, so storing one is a trap.
@@ -110,17 +139,20 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
       flash(`"${value}" is already in the list.`)
       return
     }
-    const problem = codeProblem(newParts, newVariant) || techIdProblem(newId)
+    const problem =
+      codeProblem(newParts, newVariant) || techIdProblem(newId) || initials2Problem(newInitials2) || initials3Problem(newInitials3)
     if (problem) {
       flash(problem)
       return
     }
-    onChange(cat, [...list, makeItem(value, newDesc, newParts, newVariant, newId)])
+    onChange(cat, [...list, makeItem(value, newDesc, newParts, newVariant, newId, newInitials2, newInitials3)])
     setNewValue('')
     setNewDesc('')
     setNewParts('')
     setNewVariant('')
     setNewId('')
+    setNewInitials2('')
+    setNewInitials3('')
   }
 
   function startEdit(i) {
@@ -130,6 +162,8 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
     setEditParts(isIssues ? issueParts(list[i]) : '')
     setEditVariant(isIssues ? issueVariant(list[i]) : '')
     setEditId(isTechnicians ? technicianId(list[i]) : '')
+    setEditInitials2(isTechnicians ? technicianInitials2(list[i]) : '')
+    setEditInitials3(isTechnicians ? technicianInitials3(list[i]) : '')
   }
 
   function saveEdit() {
@@ -139,18 +173,27 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
       flash(`"${value}" is already in the list.`)
       return
     }
-    const problem = codeProblem(editParts, editVariant, editIndex) || techIdProblem(editId, editIndex)
+    const problem =
+      codeProblem(editParts, editVariant, editIndex) ||
+      techIdProblem(editId, editIndex) ||
+      initials2Problem(editInitials2, editIndex) ||
+      initials3Problem(editInitials3, editIndex)
     if (problem) {
       flash(problem)
       return
     }
-    onChange(cat, list.map((v, i) => (i === editIndex ? makeItem(value, editDesc, editParts, editVariant, editId) : v)))
+    onChange(
+      cat,
+      list.map((v, i) => (i === editIndex ? makeItem(value, editDesc, editParts, editVariant, editId, editInitials2, editInitials3) : v)),
+    )
     setEditIndex(-1)
     setEditValue('')
     setEditDesc('')
     setEditParts('')
     setEditVariant('')
     setEditId('')
+    setEditInitials2('')
+    setEditInitials3('')
   }
 
   function remove(i) {
@@ -190,6 +233,8 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                   setNewParts('')
                   setNewVariant('')
                   setNewId('')
+                  setNewInitials2('')
+                  setNewInitials3('')
                 }}
               >
                 {CATEGORIES.map((c) => (
@@ -227,16 +272,39 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
               </>
             )}
             {isTechnicians && (
-              <label className="field-code">
-                ID
-                <input
-                  value={newId}
-                  onChange={(e) => setNewId(e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase())}
-                  onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), add())}
-                  placeholder="1 or MA"
-                  title="What this technician texts as the last part of a WhatsApp report, e.g. 1 or MA (initials). Optional."
-                />
-              </label>
+              <>
+                <label className="field-code">
+                  Tech ID
+                  <input
+                    value={newId}
+                    onChange={(e) => setNewId(e.target.value.replace(/\D/g, ''))}
+                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), add())}
+                    placeholder="1"
+                    inputMode="numeric"
+                    title="The number this technician texts as the last part of a WhatsApp report, e.g. 1. Optional."
+                  />
+                </label>
+                <label className="field-code">
+                  2-Letter Initial
+                  <input
+                    value={newInitials2}
+                    onChange={(e) => setNewInitials2(e.target.value.replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase())}
+                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), add())}
+                    placeholder="MA"
+                    title="An alternative to the ID above — exactly 2 letters, e.g. MA for Muhammad Amir. Optional."
+                  />
+                </label>
+                <label className="field-code">
+                  3-Letter Initial
+                  <input
+                    value={newInitials3}
+                    onChange={(e) => setNewInitials3(e.target.value.replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase())}
+                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), add())}
+                    placeholder="MRA"
+                    title="A second alternative to the ID above — exactly 3 letters, e.g. MRA. Optional."
+                  />
+                </label>
+              </>
             )}
             <label className="grow">
               {isIssues ? 'Description' : isMaterials ? 'Material name' : isTechnicians ? 'Technician name' : 'Add new'}
@@ -283,12 +351,12 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
           )}
           {isTechnicians && (
             <p className="manage-hint">
-              The <strong>ID</strong> is what a technician types as the LAST part of a WhatsApp fault report to
-              identify themselves — a number or letters, e.g. ending a report in <code>1</code> or <code>MA</code>{' '}
-              files it under whoever has that ID here. Leave it blank for a technician who only appears in the
-              app's own dropdowns. An ID set here{' '}
-              <strong>outranks</strong> the same ID in Code Map's older Technician IDs list, so moving one over is
-              a safe, incremental edit.
+              A technician identifies themselves by ending a WhatsApp fault report in one of up to three things set
+              here: the numeric <strong>Tech ID</strong> (e.g. <code>1</code>), a <strong>2-Letter Initial</strong>{' '}
+              (e.g. <code>MA</code> for Muhammad Amir), or a <strong>3-Letter Initial</strong> (e.g. <code>MRA</code>{' '}
+              for a middle initial too) — any combination, or none. Leave all three blank for a technician who only
+              appears in the app's own dropdowns. A Tech ID set here <strong>outranks</strong> the same ID in Code
+              Map's older Technician IDs list, so moving one over is a safe, incremental edit.
             </p>
           )}
           {isIssues && (
@@ -353,22 +421,57 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                         </div>
                       )}
                       {isTechnicians && (
-                        <label className="field-code">
-                          ID
-                          <input
-                            className="edit-input"
-                            value={editId}
-                            onChange={(e) => setEditId(e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase())}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault()
-                                saveEdit()
-                              }
-                              if (e.key === 'Escape') setEditIndex(-1)
-                            }}
-                            placeholder="1 or MA"
-                          />
-                        </label>
+                        <div className="edit-code-row">
+                          <label className="field-code">
+                            Tech ID
+                            <input
+                              className="edit-input"
+                              value={editId}
+                              onChange={(e) => setEditId(e.target.value.replace(/\D/g, ''))}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault()
+                                  saveEdit()
+                                }
+                                if (e.key === 'Escape') setEditIndex(-1)
+                              }}
+                              placeholder="1"
+                              inputMode="numeric"
+                            />
+                          </label>
+                          <label className="field-code">
+                            2-Letter Initial
+                            <input
+                              className="edit-input"
+                              value={editInitials2}
+                              onChange={(e) => setEditInitials2(e.target.value.replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase())}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault()
+                                  saveEdit()
+                                }
+                                if (e.key === 'Escape') setEditIndex(-1)
+                              }}
+                              placeholder="MA"
+                            />
+                          </label>
+                          <label className="field-code">
+                            3-Letter Initial
+                            <input
+                              className="edit-input"
+                              value={editInitials3}
+                              onChange={(e) => setEditInitials3(e.target.value.replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase())}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault()
+                                  saveEdit()
+                                }
+                                if (e.key === 'Escape') setEditIndex(-1)
+                              }}
+                              placeholder="MRA"
+                            />
+                          </label>
+                        </div>
                       )}
                       <input
                         className="edit-input"
@@ -417,6 +520,12 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                       )}
                       {isTechnicians && technicianId(value) && (
                         <span className="manage-item-code">{technicianId(value)}</span>
+                      )}
+                      {isTechnicians && technicianInitials2(value) && (
+                        <span className="manage-item-code">{technicianInitials2(value)}</span>
+                      )}
+                      {isTechnicians && technicianInitials3(value) && (
+                        <span className="manage-item-code">{technicianInitials3(value)}</span>
                       )}
                       {nameOf(value)}
                       {isMaterials && descOf(value) && <span className="manage-item-desc">{descOf(value)}</span>}

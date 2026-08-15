@@ -82,12 +82,18 @@ const TECH_ROWS = [
   { name: 'Imran', id: '3' },
   { name: 'No ID', id: '' },
   { name: '  ', id: '9' }, // nameless: nothing to decode to
-  { name: 'Muhammad Amir', id: 'ma' }, // letters, lower-case as typed — upper-cased on publish
+  { name: 'Muhammad Amir', id: '1', initials2: 'ma', initials3: 'mha' }, // lower-case as typed — upper-cased on publish
 ]
 
 describe('technicianCodes', () => {
-  test('publishes exactly the rows that claim an ID', () => {
-    assert.deepEqual(technicianCodes(TECH_ROWS), { 2: 'Muhammad Rashid', 3: 'Imran', MA: 'Muhammad Amir' })
+  test('publishes ID, 2-letter, and 3-letter initials, each independently', () => {
+    assert.deepEqual(technicianCodes(TECH_ROWS), {
+      2: 'Muhammad Rashid',
+      3: 'Imran',
+      1: 'Muhammad Amir',
+      MA: 'Muhammad Amir',
+      MHA: 'Muhammad Amir',
+    })
   })
 
   test('agrees with the client, row for row', () => {
@@ -101,6 +107,13 @@ describe('technicianCodes', () => {
         { name: 'SECOND', id: '1' },
       ]),
       { 1: 'FIRST' },
+    )
+    assert.deepEqual(
+      technicianCodes([
+        { name: 'FIRST', initials2: 'MA' },
+        { name: 'SECOND', initials2: 'MA' },
+      ]),
+      { MA: 'FIRST' },
     )
   })
 

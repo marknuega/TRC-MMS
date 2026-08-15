@@ -147,19 +147,43 @@ export function materialDescMap(materials) {
 // moved here, and moving one here is a safe, incremental edit.
 // ---------------------------------------------------------------------------
 
-// Letters as well as digits, so initials work (e.g. "MA" for Muhammad Amir),
-// not just a numbered ID.
-export const TECH_ID_RE = /^[A-Z0-9]+$/i
+export const TECH_ID_RE = /^\d+$/
+// Two separate letters-only namespaces from the numeric ID above: a 2-letter
+// initial (e.g. "MA" for Muhammad Amir) and a 3-letter one (e.g. "MRA" with a
+// middle initial). Independent fields — neither is derived from the other.
+export const TECH_INITIALS2_RE = /^[A-Z]{2}$/i
+export const TECH_INITIALS3_RE = /^[A-Z]{3}$/i
 export const technicianName = (v) => (typeof v === 'string' ? v : String(v?.name ?? ''))
 export const technicianId = (v) => (typeof v === 'string' ? '' : String(v?.id ?? ''))
+export const technicianInitials2 = (v) => (typeof v === 'string' ? '' : String(v?.initials2 ?? ''))
+export const technicianInitials3 = (v) => (typeof v === 'string' ? '' : String(v?.initials3 ?? ''))
 
-/** Map of technician ID (upper-cased) -> name, for publishing to the code map / WhatsApp bot. */
+/**
+ * Map of technician ID/initials -> name, for publishing to the code map /
+ * WhatsApp bot. A technician may claim a numeric ID, a 2-letter initial, a
+ * 3-letter initial, any combination, or none — each claimed one is accepted
+ * as the LAST token of a WhatsApp report. First claim in the list wins a
+ * collision, matching faultCodes() (the three are disjoint by pattern, so
+ * only same-kind collisions — e.g. two technicians both wanting "MA" — are
+ * possible in practice).
+ */
 export function technicianIdMap(technicians) {
   const map = {}
-  for (const it of technicians ?? []) {
-    const id = technicianId(it).trim().toUpperCase()
+  const rows = technicians ?? []
+  for (const it of rows) {
+    const id = technicianId(it).trim()
     const name = technicianName(it).trim()
     if (id && name && TECH_ID_RE.test(id) && !map[id]) map[id] = name
+  }
+  for (const it of rows) {
+    const initials2 = technicianInitials2(it).trim().toUpperCase()
+    const name = technicianName(it).trim()
+    if (initials2 && name && TECH_INITIALS2_RE.test(initials2) && !map[initials2]) map[initials2] = name
+  }
+  for (const it of rows) {
+    const initials3 = technicianInitials3(it).trim().toUpperCase()
+    const name = technicianName(it).trim()
+    if (initials3 && name && TECH_INITIALS3_RE.test(initials3) && !map[initials3]) map[initials3] = name
   }
   return map
 }
