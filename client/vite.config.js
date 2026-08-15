@@ -6,10 +6,14 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
-    // Forward /api/* to the local Express server so the browser sees one origin.
-    // Avoids CORS entirely in development.
+    // Forward /api/* and the public /codemap mirror to the local Express server
+    // so the browser sees one origin. Avoids CORS entirely in development.
     proxy: {
       '/api': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      },
+      '/codemap': {
         target: 'http://localhost:3000',
         changeOrigin: true,
       },
