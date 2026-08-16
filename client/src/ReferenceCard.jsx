@@ -83,9 +83,20 @@ function printReference(data) {
 <title>TRC-MMS Short-Code Reference</title>
 <style>
   * { box-sizing: border-box; }
-  body { font: 12px/1.4 -apple-system, Segoe UI, Roboto, Arial, sans-serif; color: #111; margin: 14mm; }
+  /* Page margins live on @page, not body — a margin on body only wraps the
+     very first and very last page of the flow, so a continuation page (page
+     2+) would otherwise start flush against the physical edge with no
+     top margin at all. */
+  body { font: 12px/1.4 -apple-system, Segoe UI, Roboto, Arial, sans-serif; color: #111; margin: 0; }
   h1 { font-size: 18px; margin: 0 0 2px; }
-  h2 { font-size: 13px; margin: 16px 0 6px; padding-bottom: 3px; border-bottom: 2px solid #222; }
+  h2 {
+    font-size: 13px;
+    margin: 0 0 6px;
+    padding-bottom: 3px;
+    border-bottom: 2px solid #222;
+    break-after: avoid;
+    page-break-after: avoid; /* Safari/older Chromium still key off this */
+  }
   h3 { font-size: 11px; margin: 0 0 4px; color: #444; text-transform: uppercase; letter-spacing: .04em; }
   .sub { color: #555; margin: 0 0 4px; }
   table { border-collapse: collapse; width: 100%; }
@@ -96,14 +107,28 @@ function printReference(data) {
   td.note { color: #555; font-size: 10px; }
   td b { color: #111; }
   .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 18px; }
-  .grp { break-inside: avoid; margin-bottom: 8px; }
+  .grp { break-inside: avoid; page-break-inside: avoid; margin-bottom: 8px; }
   td.grp { background: #eef; font-weight: 700; margin: 0; }
   .syntax { font-family: ui-monospace, Consolas, monospace; font-size: 14px; font-weight: 700; }
-  .ex { background: #f4f4f4; border: 1px solid #ddd; padding: 8px 10px; border-radius: 6px; margin: 6px 0; }
+  .ex {
+    background: #f4f4f4;
+    border: 1px solid #ddd;
+    padding: 8px 10px;
+    border-radius: 6px;
+    margin: 6px 0 16px;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
   code { font-family: ui-monospace, Consolas, monospace; font-weight: 700; }
   .ex code { font-family: ui-monospace, Consolas, monospace; font-weight: 700; }
-  .foot { margin-top: 18px; padding-top: 6px; border-top: 1px solid #ccc; color: #666; font-size: 10px; }
-  @page { margin: 0; }
+  /* Each report section (heading + its table/cards) is one fragmentation
+     unit: the browser keeps it whole and, if it won't fit in what's left of
+     the page, starts it fresh on the next one instead of splitting it or
+     stranding the heading behind. */
+  .sec { break-inside: avoid; page-break-inside: avoid; margin: 0 0 16px; }
+  tr { break-inside: avoid; page-break-inside: avoid; }
+  .foot { margin-top: 18px; padding-top: 6px; border-top: 1px solid #ccc; color: #666; font-size: 10px; break-inside: avoid; page-break-inside: avoid; }
+  @page { size: A4 portrait; margin: 14mm; }
 </style></head><body>
   <h1>TRC-MMS · CDS Short-Code Reference</h1>
   <p class="sub">Fault-reporting codes. A fault = <b>[Type][Parts][Variant]</b> + <b>[Action][Qty][Company]</b>.</p>
@@ -119,32 +144,44 @@ function printReference(data) {
 
   ${
     claims.length
-      ? `<h2>Parts Number Catalog</h2>
-  <p class="sub">Parts numbers claimed by an Issue type in Manage Inputs → Faulty / Parts.</p>
-  <div class="cols">${claimTables}</div>`
+      ? `<section class="sec">
+    <h2>Parts Number Catalog</h2>
+    <p class="sub">Parts numbers claimed by an Issue type in Manage Inputs → Faulty / Parts.</p>
+    <div class="cols">${claimTables}</div>
+  </section>`
       : ''
   }
 
-  <h2>Type Letters</h2>
-  <div class="cols">
-    <table>${deviceRows(devices.slice(0, half))}</table>
-    <table>${deviceRows(devices.slice(half))}</table>
-  </div>
+  <section class="sec">
+    <h2>Type Letters</h2>
+    <div class="cols">
+      <table>${deviceRows(devices.slice(0, half))}</table>
+      <table>${deviceRows(devices.slice(half))}</table>
+    </div>
+  </section>
 
-  <h2>Actions</h2>
-  <div class="cols">
-    <table>${codeRows(actions.slice(0, Math.ceil(actions.length / 2)))}</table>
-    <table>${codeRows(actions.slice(Math.ceil(actions.length / 2)))}</table>
-  </div>
+  <section class="sec">
+    <h2>Actions</h2>
+    <div class="cols">
+      <table>${codeRows(actions.slice(0, Math.ceil(actions.length / 2)))}</table>
+      <table>${codeRows(actions.slice(Math.ceil(actions.length / 2)))}</table>
+    </div>
+  </section>
 
-  <h2>Companies</h2>
-  <table>${codeRows(companies)}</table>
+  <section class="sec">
+    <h2>Companies</h2>
+    <table>${codeRows(companies)}</table>
+  </section>
 
-  <h2>Technician ID</h2>
-  <table>${codeRows(technicians)}</table>
+  <section class="sec">
+    <h2>Technician ID</h2>
+    <table>${codeRows(technicians)}</table>
+  </section>
 
-  <h2>Agencies (verification)</h2>
-  <table>${codeRows(agencies)}</table>
+  <section class="sec">
+    <h2>Agencies (verification)</h2>
+    <table>${codeRows(agencies)}</table>
+  </section>
 
   <div class="foot">${COPYRIGHT_HTML}</div>
 </body></html>`
