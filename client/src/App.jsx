@@ -35,6 +35,7 @@ import Dashboard from './Dashboard'
 import AdminUsers from './AdminUsers'
 import ReferenceCard from './ReferenceCard'
 import CodeEntry from './CodeEntry'
+import SearchSelect from './SearchSelect'
 import { Credit, Copyright, COPYRIGHT_HTML } from './copyright'
 import { BrandMark } from './brand'
 import {
@@ -1725,31 +1726,22 @@ function App({ user, onLogout }) {
                   <label className="footer-agency">
                     Agency
                     {/* Not `required`: our own logic already guarantees a
-                        non-empty value before handleSubmit ever runs (see the
-                        `if (hit ...)` / quick-pick handlers below), and
+                        non-empty value before handleSubmit ever runs (see
+                        onSelect below and the quick-pick handlers), and
                         reportValidity() reads the DOM synchronously — a
-                        quick-pick click updates React state, not this
-                        element's live value, so marking it required here
+                        quick-pick click updates React state, not any live
+                        form control value, so marking a field required here
                         would block a perfectly good submission on stale DOM. */}
-                    <input
-                      list="entry-agency-options"
+                    <SearchSelect
                       value={form.agency}
-                      onChange={(e) => {
-                        const v = e.target.value
-                        setForm((f) => ({ ...f, agency: v }))
-                        const hit = agencyOptions.find((a) => a.toUpperCase() === v.trim().toUpperCase())
+                      options={agencyOptions}
+                      onSelect={(a) => {
+                        setForm((f) => ({ ...f, agency: a }))
                         // Picking an agency IS "Add entry" — but only once every
                         // other required field already checks out.
-                        if (hit && entryFormRef.current?.reportValidity()) handleSubmit(undefined, hit)
+                        if (entryFormRef.current?.reportValidity()) handleSubmit(undefined, a)
                       }}
-                      placeholder="Type to search, or pick —"
-                      autoComplete="off"
                     />
-                    <datalist id="entry-agency-options">
-                      {agencyOptions.map((a) => (
-                        <option key={a} value={a} />
-                      ))}
-                    </datalist>
                   </label>
                   {topAgencies.length > 0 && (
                     <div className="agency-quickpicks">

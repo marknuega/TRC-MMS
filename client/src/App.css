@@ -914,6 +914,76 @@ h2 {
 /* Frozen headings: the wrapper — not the page — has to be the scrollport, so it
    gets a height cap. Short tables never reach it, so they look unchanged; long
    ones scroll inside while `thead` stays pinned to the top of this box. */
+
+/* ---- SearchSelect (type-to-search picker, e.g. Agency) ---- */
+.search-select {
+  position: relative;
+  display: inline-flex;
+  align-items: stretch;
+  min-width: 11rem;
+}
+.search-select input {
+  width: 100%;
+  padding-right: 1.9rem; /* room for the caret */
+}
+.search-select-caret {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1;
+  padding: 0.2rem;
+  cursor: pointer;
+}
+.search-select-caret:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+/* Capped, scrollable, and sized off our own tokens — unlike a native
+   <datalist> popup, which the browser renders at OS-controlled size and
+   can balloon up to cover most of the screen. */
+.search-select-menu {
+  position: absolute;
+  top: calc(100% + 0.3rem);
+  left: 0;
+  z-index: 30;
+  width: max-content;
+  min-width: 100%;
+  max-width: 16rem;
+  max-height: 14rem;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  padding: 0.3rem;
+}
+.search-select-opt {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.6rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+.search-select-opt:hover {
+  background: var(--surface-2);
+}
+.search-select-empty {
+  padding: 0.4rem 0.6rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
 /* ---- Quick code entry (CDS short codes) ---- */
 /* Agency + Create sit beside the textarea instead of below it, so confirming
    a decode costs one row instead of two. Wraps back to stacked on narrow

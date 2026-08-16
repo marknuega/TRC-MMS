@@ -13,6 +13,7 @@
 
 import { useMemo, useState } from 'react'
 import { parseCodeReport, useCodeMap, VARIANTS } from './codes'
+import SearchSelect from './SearchSelect'
 
 const EXAMPLE = 'H43A C 1 MT 2221 6575 1'
 
@@ -59,28 +60,15 @@ export default function CodeEntry({ options, agencies = [], topAgencies = [], re
             <div className="code-actions">
               <label className="agency-field">
                 Agency <span className="opt">(verification)</span>
-                <input
-                  list="qce-agency-options"
+                <SearchSelect
                   value={agency}
-                  onChange={(e) => {
-                    const v = e.target.value
-                    setAgency(v)
-                    // Only an exact match (typed in full, or picked from the
-                    // caret's list) counts as a real pick — a partial string
-                    // while still typing must never fire a create.
-                    const hit = agencies.find((a) => a.toUpperCase() === v.trim().toUpperCase())
-                    if (hit) create(hit)
+                  options={agencies}
+                  onSelect={(a) => {
+                    setAgency(a)
+                    create(a)
                   }}
                   disabled={!result?.ok || busy}
-                  placeholder="Type to search, or pick —"
-                  autoComplete="off"
-                  required
                 />
-                <datalist id="qce-agency-options">
-                  {agencies.map((a) => (
-                    <option key={a} value={a} />
-                  ))}
-                </datalist>
               </label>
               {topAgencies.length > 0 && (
                 <div className="agency-quickpicks">

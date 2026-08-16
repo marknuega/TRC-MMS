@@ -157,12 +157,15 @@ const FAULT_RE = /^([A-Z])(\d{2})([A-Z])([A-Z])(\d*)([A-Z]{1,2})/
 // (enforced below), so repeating the letter was only ever a restatement.
 const SHORT_FAULT_RE = /^(\d{2})([A-Z])([A-Z])(\d*)([A-Z]{1,2})/
 // tel(4) issi(4) technician(1+, letters or digits — a numeric ID or an
-// initials claim), OR just the technician alone with tel/issi both left off.
-// Mirrors decodeBatch() in server/src/whatsapp/decoder.js, which only ever
-// consumes tel+issi as a PAIR (the last two tokens, both purely digits) —
-// there is no way to supply just one of them; give a placeholder digit for
-// the other if only one is known.
-const TAIL_RE = /^(?:(\d{4})(\d{4}))?([A-Z0-9]+)$/
+// initials claim), OR just the technician alone with tel/issi both left off,
+// OR just ONE of tel/issi — a single "0" placeholder marks the other as not
+// available: "0" then 4 digits = ISSI only (tel not available); 4 digits
+// then "0" = tel only (ISSI not available). Mirrors decodeBatch() in
+// server/src/whatsapp/decoder.js, which only ever consumes tel+issi as a
+// full PAIR — a technician typing there still needs a real placeholder
+// digit for the missing one, since there is no single-token equivalent of
+// this "0" marker in a space-tokenized message.
+const TAIL_RE = /^(?:(\d{4})(\d{4})|0(\d{4})|(\d{4})0)?([A-Z0-9]+)$/
 
 // A technician ID given once, right after ANY fault's company, applies to
 // the whole message — later fault codes never need to repeat it. Only
@@ -177,13 +180,17 @@ const TAIL_RE = /^(?:(\d{4})(\d{4}))?([A-Z0-9]+)$/
 // the standard "tech only at the very end" form is never mistaken for one.
 const MAX_INLINE_TECH_LEN = 4
 
+// A trailing tel/ISSI block: the full 8-digit pair, or just one of them with
+// a single "0" marking the other as not available (see TAIL_RE above).
+const TRAILING_TEL_ISSI_RE = /^(?:\d{8}|0\d{4}|\d{4}0)$/
+
 // Does `str` fully resolve as zero or more chained shorthand fault codes,
-// stopping at either nothing left ('' — no more faults) or a bare 8-digit
-// tel+ISSI block (ISSI always sits at the true end, however the technician
-// was placed — see parseCodeReport's inlineTechnician branch)?
+// stopping at either nothing left ('' — no more faults) or a trailing
+// tel/ISSI block (which always sits at the true end, however the
+// technician was placed — see parseCodeReport's inlineTechnician branch)?
 function fullyConsumesAsShortFaultChain(str) {
   let s = str
-  while (s && !/^\d{8}$/.test(s)) {
+  while (s && !TRAILING_TEL_ISSI_RE.test(s)) {
     const m = SHORT_FAULT_RE.exec(s)
     if (!m) return false
     s = s.slice(m[0].length)
@@ -413,13 +420,20 @@ export function parseCodeReport(text, map = FALLBACK, options = {}) {
   let technician = ''
   if (inlineTechnician) {
     // The technician was already given, right after a company earlier in the
-    // message — nothing else is expected here except optionally tel+ISSI as
-    // a pair (never a second technician).
-    if (rest && !/^\d{8}$/.test(rest)) {
-      errors.push(`Could not read "${rest}" after the technician — expected nothing, or tel(4) + ISSI(4).`)
-    } else if (rest) {
+    // message — nothing else is expected here except optionally tel+ISSI
+    // (full pair, or one of them with "0" marking the other not available;
+    // never a second technician).
+    if (rest && !TRAILING_TEL_ISSI_RE.test(rest)) {
+      errors.push(
+        `Could not read "${rest}" after the technician — expected nothing, tel(4) + ISSI(4), or one of them with 0 marking the other as not available.`,
+      )
+    } else if (/^\d{8}$/.test(rest)) {
       telNumber = rest.slice(0, 4)
       issiNumber = rest.slice(4, 8)
+    } else if (/^0\d{4}$/.test(rest)) {
+      issiNumber = rest.slice(1) // leading 0: tel not available
+    } else if (/^\d{4}0$/.test(rest)) {
+      telNumber = rest.slice(0, 4) // trailing 0: ISSI not available
     }
     technician = resolveTechnicianName(inlineTechnician, technicians, technicianList, warnings)
   } else {
@@ -430,9 +444,15 @@ export function parseCodeReport(text, map = FALLBACK, options = {}) {
     } else if (!tail) {
       errors.push(`Could not read "${rest}" as the technician ID, optionally preceded by tel(4) + ISSI(4).`)
     } else {
-      telNumber = tail[1] ?? ''
-      issiNumber = tail[2] ?? ''
-      technician = resolveTechnicianName(tail[3], technicians, technicianList, warnings)
+      if (tail[1] !== undefined) {
+        telNumber = tail[1]
+        issiNumber = tail[2]
+      } else if (tail[3] !== undefined) {
+        issiNumber = tail[3] // leading 0: tel not available
+      } else if (tail[4] !== undefined) {
+        telNumber = tail[4] // trailing 0: ISSI not available
+      }
+      technician = resolveTechnicianName(tail[5], technicians, technicianList, warnings)
     }
   }
 

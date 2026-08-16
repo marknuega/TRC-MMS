@@ -160,6 +160,35 @@ describe('an inline technician ID (beside a company, not just at the end)', () =
   })
 })
 
+// A single "0" marks whichever of tel/ISSI is not available, instead of
+// requiring a fake 4-digit placeholder for it.
+describe('a "0" placeholder for a not-available tel or ISSI', () => {
+  test('leading 0 = tel not available, the 4 digits are ISSI (at the end, no technician placed inline)', () => {
+    const r = parseCodeReport('H43AC1MT 0 2222 1', FALLBACK, OPTS)
+    assert.equal(r.ok, true, r.errors.join('; '))
+    assert.equal(r.telNumber, '')
+    assert.equal(r.issiNumber, '2222')
+    assert.equal(r.entry.technician, 'AMIR')
+  })
+
+  test('trailing 0 = ISSI not available, the 4 digits are tel (at the end, no technician placed inline)', () => {
+    const r = parseCodeReport('H43AC1MT 2222 0 1', FALLBACK, OPTS)
+    assert.equal(r.ok, true, r.errors.join('; '))
+    assert.equal(r.telNumber, '2222')
+    assert.equal(r.issiNumber, '')
+    assert.equal(r.entry.technician, 'AMIR')
+  })
+
+  test('works the same after an inline technician, with more faults in between', () => {
+    const r = parseCodeReport('H43ACT1 11ANI 2222 0', FALLBACK, OPTS)
+    assert.equal(r.ok, true, r.errors.join('; '))
+    assert.equal(r.faults.length, 2)
+    assert.equal(r.telNumber, '2222')
+    assert.equal(r.issiNumber, '')
+    assert.equal(r.entry.technician, 'AMIR')
+  })
+})
+
 test('mixing devices in one report is rejected, not silently merged', () => {
   const r = parseCodeReport('H43AC1MT T26AR1MI 2221 6575 1', FALLBACK, OPTS)
   assert.equal(r.ok, false)
