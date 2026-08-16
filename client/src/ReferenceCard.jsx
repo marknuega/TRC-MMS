@@ -607,7 +607,7 @@ function CodeMapEditor() {
                           }
                           if (e.key === 'Escape') setEditKey('')
                         }}
-                        placeholder={meta.blankOk ? 'Empty = the default build' : 'What this code means'}
+                        placeholder={meta.blankOk ? 'Leave empty — a variant carries no meaning of its own' : 'What this code means'}
                       />
                       {isComponents && (
                         <input
@@ -638,7 +638,7 @@ function CodeMapEditor() {
                   <>
                     <span className="manage-item-label">
                       <span className="manage-item-code">{code}</span>
-                      {name || <em className="muted">(blank — default build)</em>}
+                      {name || <em className="muted">(no suffix)</em>}
                       {isComponents && map?.componentCategories?.[code] && (
                         <em className="muted"> — {map.componentCategories[code]}</em>
                       )}
