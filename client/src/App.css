@@ -1013,12 +1013,13 @@ h2 {
   color: var(--muted);
   pointer-events: none;
 }
-/* Qualified with the always-present .search-select ancestor (not just the
-   bare class) so this reliably outranks broad ancestor rules like
+/* Qualified with the always-present .search-select ancestor AND the class
+   repeated, so this reliably outranks broad ancestor rules like
    ".manage-body button" (same specificity as a bare ".search-select-caret"
    would be — this is what actually made the caret render as a full-size
-   filled button overlapping the input instead of a small chevron). */
-.search-select .search-select-caret {
+   filled button overlapping the input instead of a small chevron), and the
+   deeper ".manage-inputs .manage-body button" that later did it again. */
+.search-select .search-select-caret.search-select-caret {
   position: absolute;
   right: 0.5rem;
   top: 50%;
@@ -1059,17 +1060,20 @@ h2 {
   max-width: 16rem;
   max-height: calc(var(--search-select-row-h) * 5 + 0.6rem);
   overflow-y: auto;
+  /* Light panel with a thin edge — the shadow is what lifts it off the page,
+     so the border only needs to close the shape, not draw attention. */
   background: var(--surface);
-  border: 1.5px solid var(--border-strong);
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-lg);
   padding: 0.3rem;
 }
-/* Qualified with .search-select-menu for the same reason the caret is
-   qualified with .search-select — outranks ancestor rules like
-   ".manage-body button" that would otherwise turn every option into a
-   full-size filled button. */
-.search-select-menu .search-select-opt {
+/* Qualified with .search-select-menu, and the class repeated, for the same
+   reason the caret is — outranks ancestor rules like ".manage-body button"
+   that would otherwise turn every option into a full-size filled button.
+   The repeat buys a third class, so a two-class ancestor scope (e.g.
+   ".manage-inputs .manage-body button") cannot reach in here either. */
+.search-select-menu .search-select-opt.search-select-opt {
   display: flex;
   align-items: center;
   width: 100%;
@@ -1088,12 +1092,19 @@ h2 {
    which marks whichever option matches the current value; both can apply
    to the same row at once and the two colors are deliberately different. */
 .search-select-menu .search-select-opt.active {
-  background: var(--surface-2);
+  /* --surface-3, not --surface-2: the menu itself is --surface, and in the
+     light theme those two are both pure white, so the highlighted row was
+     invisible. --surface-3 is a step away from the menu in both themes. */
+  background: var(--surface-3);
 }
+/* The row matching the current value: tinted, not just recoloured, so the
+   open menu shows at a glance what is already chosen. */
 .search-select-menu .search-select-opt.selected {
+  background: var(--primary-soft);
   color: var(--primary);
   font-weight: 700;
 }
+/* Both at once — the current value, under the cursor or the arrow keys. */
 .search-select-menu .search-select-opt.selected.active {
   background: var(--ring);
 }
@@ -2359,14 +2370,17 @@ h2 {
 }
 
 /* Add / Save commit; Delete destroys. Both read as solid, filled actions
-   against the card list they sit in. */
-.manage-inputs .manage-body button {
+   against the card list they sit in.
+   The :not()s matter: a SearchSelect renders its caret and every menu row as
+   a <button>, so without them this paints the whole Category dropdown navy.
+   Same trap the .search-select rules below are written to survive. */
+.manage-inputs .manage-body button:not(.search-select-caret):not(.search-select-opt) {
   background: var(--mi-action);
   border-color: var(--mi-action);
   color: #fff;
   font-weight: 600;
 }
-.manage-inputs .manage-body button:hover:not(:disabled) {
+.manage-inputs .manage-body button:not(.search-select-caret):not(.search-select-opt):hover:not(:disabled) {
   background: var(--mi-action-hover);
   border-color: var(--mi-action-hover);
 }
