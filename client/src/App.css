@@ -2674,6 +2674,35 @@ h2 {
   margin-bottom: 0.7rem;
 }
 
+/* Company color themes — MOI blue, MOTECO (MOT) green — so the two are easy
+   to tell apart at a glance. Kept to a small badge pill plus a subtle card
+   accent (border + faint tint); the table body underneath stays plain. */
+.sp-co-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.05em 0.55em;
+  border-radius: 999px;
+  font-size: 0.78em;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.sp-co-badge.co-blue {
+  background: var(--primary-soft);
+  color: var(--primary-ink);
+}
+.sp-co-badge.co-green {
+  background: var(--success-soft);
+  color: var(--success-ink);
+}
+.sp-brand.co-blue {
+  border-left: 3px solid var(--primary);
+  background: color-mix(in srgb, var(--primary) 5%, var(--surface));
+}
+.sp-brand.co-green {
+  border-left: 3px solid var(--success);
+  background: color-mix(in srgb, var(--success) 5%, var(--surface));
+}
+
 /* ---- Pie charts ---- */
 .pie-row {
   display: grid;

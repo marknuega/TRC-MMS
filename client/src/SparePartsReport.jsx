@@ -21,6 +21,16 @@ const ACT_COLS = [
 // company) last. Used for the cards and the exports alike.
 const companyRank = (c) => (c === 'MOT' ? 0 : c === 'MOI' ? 1 : c === '—' ? 9 : 5)
 
+// Subtle color theme per company (MOI blue, MOTECO/MOT green) so the cards
+// and their totals read apart at a glance. Any other/unknown company gets no
+// theme — a card without a recognized company just keeps the neutral look.
+const COMPANY_THEME = { MOI: 'co-blue', MOT: 'co-green' }
+const companyTheme = (c) => COMPANY_THEME[c] || ''
+// Same split, as literal colors — Excel/PDF export writes raw HTML and can't
+// reach CSS custom properties.
+const COMPANY_ACCENT = { MOI: { bg: '#2563eb', tint: '#eaf1fd' }, MOT: { bg: '#059669', tint: '#e3f6ec' } }
+const companyAccent = (c) => COMPANY_ACCENT[c] || { bg: '#2563eb', tint: '#eef' }
+
 // Regroup one brand's model blocks (rows carry a company) into per-company
 // groups, each keeping its model sub-blocks. -> [{ company, models, total }].
 function splitByCompany(models) {
@@ -144,9 +154,10 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
     // Parts by brand -> company -> model
     for (const { type, groups } of grouped) {
       for (const grp of groups) {
-        h += `<tr><td colspan="3" style="${b}background:#2563eb;color:#fff;font-weight:bold;">${esc(type)} · ${esc(grp.company)}</td></tr>`
+        const acc = companyAccent(grp.company)
+        h += `<tr><td colspan="3" style="${b}background:${acc.bg};color:#fff;font-weight:bold;">${esc(type)} · ${esc(grp.company)}</td></tr>`
         for (const m of grp.models) {
-          h += `<tr><td colspan="3" style="${b}background:#eef;font-weight:bold;">${esc(type)} ${esc(m.model)} · ${esc(grp.company)}</td></tr>`
+          h += `<tr><td colspan="3" style="${b}background:${acc.tint};font-weight:bold;">${esc(type)} ${esc(m.model)} · ${esc(grp.company)}</td></tr>`
           h += `<tr><th style="${hb}">#</th><th style="${hb}">Part</th><th style="${hb}">Qty</th></tr>`
           m.rows.forEach((r, i) => {
             h += `<tr><td style="${num}">${i + 1}</td><td style="${b}">${esc(r.part)}</td><td style="${num}">${r.qty}</td></tr>`
@@ -196,9 +207,10 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
     // Parts by brand -> company -> model
     for (const { type, groups } of grouped) {
       for (const grp of groups) {
-        b += `<tr><td class="sec" colspan="3">${e(type)} · ${e(grp.company)}</td></tr>`
+        const acc = companyAccent(grp.company)
+        b += `<tr><td class="sec" colspan="3" style="background:${acc.bg}">${e(type)} · ${e(grp.company)}</td></tr>`
         for (const m of grp.models) {
-          b += `<tr><td class="sub" colspan="3">${e(type)} ${e(m.model)} · ${e(grp.company)}</td></tr>`
+          b += `<tr><td class="sub" colspan="3" style="background:${acc.tint}">${e(type)} ${e(m.model)} · ${e(grp.company)}</td></tr>`
           b += `<tr><th class="c">#</th><th>Part</th><th class="c">Qty</th></tr>`
           m.rows.forEach((r, i) => {
             b += `<tr><td class="c">${i + 1}</td><td>${e(r.part)}</td><td class="c">${r.qty}</td></tr>`
@@ -308,7 +320,7 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
                     const key = `${type}|${model.model}|${co}`
                     const cardOpen = !collapsed.has(key)
                     return (
-                      <div className="sp-brand" key={key}>
+                      <div className={`sp-brand ${companyTheme(co)}`.trim()} key={key}>
                       <button
                         type="button"
                         className="manage-toggle sp-card-toggle"
@@ -316,7 +328,9 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
                         aria-expanded={cardOpen}
                       >
                         <span>
-                          {type} {model.model} · {company} <span className="hint">({model.total})</span>
+                          {type} {model.model} ·{' '}
+                          <span className={`sp-co-badge ${companyTheme(co)}`.trim()}>{co}</span>{' '}
+                          <span className="hint">({model.total})</span>
                         </span>
                         <span className="chev">{cardOpen ? '▲' : '▼'}</span>
                       </button>
@@ -362,7 +376,9 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
                       <tbody>
                         {report.companyTotals.map((c) => (
                           <tr key={c.company}>
-                            <td className="nowrap">TOTAL {c.company} PARTS</td>
+                            <td className="nowrap">
+                              TOTAL <span className={`sp-co-badge ${companyTheme(c.company)}`.trim()}>{c.company}</span> PARTS
+                            </td>
                             <td className="num">{c.qty}</td>
                           </tr>
                         ))}
