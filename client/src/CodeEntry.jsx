@@ -49,20 +49,19 @@ export default function CodeEntry({ options, agencies = [], reportDate, onCreate
 
       {open && (
         <div className="manage-body">
-          <p className="manage-hint">
-            Paste a CDS report — <code>[TYPE][PARTS][VARIANT]</code> then action, qty, company, technician ID. Tel and
-            ISSI are optional — give the last 4 of both together right before the technician ID, or leave both off if
-            neither is known. Spaces, hyphens, underscores, colons or nothing at all all work.
-            Example: <code>{EXAMPLE}</code>
-            {status === 'offline' && ' · using built-in codes (code map unreachable)'}
-          </p>
-          <p className="manage-hint">
-            Short cuts: drop the quantity for 1 (<code>H43ACMT</code>), drop the type letter on every
-            code after the first (<code>H11AC1MT 11AC1MI …</code>), and write the company with one
-            letter — <code>T</code> for MOTECO, <code>I</code> for MOI (<code>H11AC1T</code>).
-          </p>
+          {status === 'offline' && (
+            <p className="manage-hint">Using built-in codes — the live code map is unreachable.</p>
+          )}
 
           <div className="code-input-row">
+            <textarea
+              className="code-input"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              rows={3}
+              placeholder={EXAMPLE}
+              spellCheck={false}
+            />
             <div className="code-actions">
               <label>
                 Agency <span className="opt">(verification)</span>
@@ -77,14 +76,6 @@ export default function CodeEntry({ options, agencies = [], reportDate, onCreate
                 Create entry
               </button>
             </div>
-            <textarea
-              className="code-input"
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              rows={3}
-              placeholder={EXAMPLE}
-              spellCheck={false}
-            />
           </div>
 
           {result && (
@@ -148,6 +139,17 @@ export default function CodeEntry({ options, agencies = [], reportDate, onCreate
           <details className="ref-sec code-legend">
             <summary className="ref-section">What the 4 characters mean</summary>
             <div className="ref-sec-body">
+              <p className="manage-hint">
+                Paste a CDS report — <code>[TYPE][PARTS][VARIANT]</code> then action, qty, company, technician ID. Tel
+                and ISSI are optional — give the last 4 of both together right before the technician ID, or leave
+                both off if neither is known. Spaces, hyphens, underscores, colons or nothing at all all work.
+                Example: <code>{EXAMPLE}</code>
+              </p>
+              <p className="manage-hint">
+                Short cuts: drop the quantity for 1 (<code>H43ACMT</code>), drop the type letter on every
+                code after the first (<code>H11AC1MT 11AC1MI …</code>), and write the company with one
+                letter — <code>T</code> for MOTECO, <code>I</code> for MOI (<code>H11AC1T</code>).
+              </p>
               <table className="ref-table">
                 <tbody>
                   <tr>
