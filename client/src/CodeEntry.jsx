@@ -16,8 +16,7 @@ import { parseCodeReport, useCodeMap, VARIANTS } from './codes'
 
 const EXAMPLE = 'H43A C 1 MT 2221 6575 1'
 
-export default function CodeEntry({ options, agencies = [], reportDate, onCreate, busy = false }) {
-  const [open, setOpen] = useState(false)
+export default function CodeEntry({ options, agencies = [], reportDate, onCreate, busy = false, open, onToggle }) {
   const [text, setText] = useState('')
   const [agency, setAgency] = useState('')
   const [notice, setNotice] = useState('')
@@ -43,7 +42,7 @@ export default function CodeEntry({ options, agencies = [], reportDate, onCreate
 
   return (
     <section className="manage code-entry">
-      <button type="button" className="manage-toggle" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+      <button type="button" className="manage-toggle" onClick={onToggle} aria-expanded={open}>
         <span>🔤 Quick code entry</span>
         <span className="chev">{open ? '▲' : '▼'}</span>
       </button>

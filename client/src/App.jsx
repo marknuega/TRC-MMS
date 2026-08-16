@@ -380,6 +380,39 @@ function App({ user, onLogout }) {
   const [branch, setBranch] = useState(loadBranch)
   const [deviceOpen, setDeviceOpen] = useState(true)
   const [faultsOpen, setFaultsOpen] = useState(true)
+  // Quick Code Entry and the manual Device/Faults form are two alternate ways
+  // to do the same thing — only one is ever the one actually in use, so
+  // opening either side closes the other rather than letting all three cards
+  // sit open and eat vertical space at once. Device and Faults open/close as
+  // a pair since manual entry always needs both.
+  const [codeOpen, setCodeOpen] = useState(false)
+  const toggleCodeOpen = () =>
+    setCodeOpen((o) => {
+      const next = !o
+      if (next) {
+        setDeviceOpen(false)
+        setFaultsOpen(false)
+      }
+      return next
+    })
+  const toggleDeviceOpen = () =>
+    setDeviceOpen((o) => {
+      const next = !o
+      if (next) {
+        setFaultsOpen(true)
+        setCodeOpen(false)
+      }
+      return next
+    })
+  const toggleFaultsOpen = () =>
+    setFaultsOpen((o) => {
+      const next = !o
+      if (next) {
+        setDeviceOpen(true)
+        setCodeOpen(false)
+      }
+      return next
+    })
   const [lastAgency, setLastAgency] = useState(() => loadLast().agency ?? '')
   const isAllBranches = (isAdmin || isDirector) && branch === ALL_BRANCHES
   // Monthly follows the same shared branch selection ('' = all branches).
@@ -1474,6 +1507,8 @@ function App({ user, onLogout }) {
             reportDate={form.reportDate}
             onCreate={handleCodeCreate}
             busy={busy}
+            open={codeOpen}
+            onToggle={toggleCodeOpen}
           />
         )}
 
@@ -1483,7 +1518,7 @@ function App({ user, onLogout }) {
             <button
               type="button"
               className="manage-toggle"
-              onClick={() => setDeviceOpen((o) => !o)}
+              onClick={toggleDeviceOpen}
               aria-expanded={deviceOpen}
             >
               <span>Device</span>
@@ -1538,7 +1573,7 @@ function App({ user, onLogout }) {
             <button
               type="button"
               className="manage-toggle"
-              onClick={() => setFaultsOpen((o) => !o)}
+              onClick={toggleFaultsOpen}
               aria-expanded={faultsOpen}
             >
               <span>{isTransmittal ? 'Transmittal Report' : 'Faults'}</span>
