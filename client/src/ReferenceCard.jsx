@@ -7,7 +7,7 @@
 //
 // A printable cheat-sheet for the CDS fault-reporting short codes. A fault token
 // is [TYPE][PARTS][VARIANT] + [ACTION][QTY][COMPANY], e.g. "H43AC1MT" = type H
-// (Airbus TH1n), parts 43 (Side Grip), variant A (Original), action C (Change),
+// (Airbus TH1n), the claimed code 43A (Side Grip), action C (Change),
 // qty 1, company MT (MOTECO).
 //
 // The first FOUR characters are the CDS code proper. This replaced the older
@@ -21,11 +21,12 @@
 // shared with the decoder that actually parses these codes — one vocabulary,
 // described in exactly one place.
 //
-// TWO sections describe how a code resolves, and their order is the resolution
-// order: a Claimed Code (an Issue type in Manage inputs) wins outright, and only
-// where there is no claim do Parts Numbers + Variants apply. The card used to
-// show the second without the first, which made it a partial description of a
-// vocabulary technicians rely on being complete.
+// A fault code resolves ONE way: an Issue type in Manage inputs claims it, and
+// that claim is its meaning. There is no second path — a code nothing claims is
+// refused rather than assembled from a parts number and a variant suffix, which
+// is what used to happen and could produce a name no issue type actually had.
+// The parts and variant lists below still describe the vocabulary the codes are
+// built from; they no longer decide what any code means.
 //
 // Editing used to be a separate admin-only "Code Map" page. It moved here —
 // as an admin-only collapsible section (CodeMapEditor, below) — because every
@@ -135,7 +136,7 @@ function printReference(data) {
 
   <div class="ex">
     <div class="syntax">H&nbsp;·&nbsp;43&nbsp;·&nbsp;A&nbsp;&nbsp;·&nbsp;&nbsp;C&nbsp;·&nbsp;1&nbsp;·&nbsp;MT&nbsp;&nbsp;→&nbsp;&nbsp;<code>H43AC1MT</code></div>
-    <div>H (Airbus TH1n) + 43 (Side Grip) + A (Original) + C (Change) + 1 (qty) + MT (MOTECO)</div>
+    <div>H (Airbus TH1n) + 43A (Side Grip) + C (Change) + 1 (qty) + MT (MOTECO)</div>
     <div class="sub">Full report: <code>H43A C 1 MT 2221 6575 1</code> &nbsp;(code · action · qty · company · last 4 of tel · last 4 of ISSI · technician&nbsp;ID). Then send the agency code alone, e.g. <code>PSD</code>, to verify.</div>
     <div class="sub">Separators are free: <code>H43AC1MT222165751</code>, <code>H43A-C-1-MT-2221-6575-1</code>, <code>H43A_C_1_MT_2221_6575_1</code> and <code>H43A:C:1:MT:2221:6575:1</code> all read the same.</div>
     <div class="sub"><b>Short cuts.</b> Leave the <b>quantity</b> out for 1: <code>H43ACMT</code>. Leave the <b>type letter</b> off every code after the first — one report is one radio, so it carries down: <code>H11AC1MT 11AC1MI 2221 6666 1</code>. Write the <b>company</b> with one letter: <code>T</code> = MOTECO, <code>I</code> = MOI, so <code>H11AC1T</code>. All three together: <code>H11ACT 11ACI 2221 6666 1</code>.</div>
@@ -726,7 +727,7 @@ export default function ReferenceCard({ isAdmin = false, issueTypes = [] }) {
           H · 43 · A &nbsp;·&nbsp; C · 1 · MT &nbsp;→&nbsp; <code>H43AC1MT</code>
         </div>
         <div>
-          H (Airbus TH1n) + 43 (Side Grip) + A (Original) + C (Change) + 1 (qty) + MT (MOTECO)
+          H (Airbus TH1n) + 43A (Side Grip) + C (Change) + 1 (qty) + MT (MOTECO)
         </div>
         <div className="muted">
           Full report: <code>H43A C 1 MT 2221 6575 1</code> — code · action · qty · company · last 4
