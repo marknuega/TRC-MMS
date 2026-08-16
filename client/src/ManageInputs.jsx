@@ -19,6 +19,7 @@ import {
   technicianInitials3,
 } from './options'
 import { FALLBACK, useCodeMap, variantsOf } from './codes'
+import SearchSelect from './SearchSelect'
 
 // Add / edit / delete the dropdown option lists. Changes are pushed up via
 // onChange(categoryKey, newList); the parent persists them to the backend.
@@ -245,7 +246,7 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
           <div className="manage-controls">
             <label>
               Category
-              <select
+              <SearchSelect
                 value={cat}
                 onChange={(e) => {
                   setCat(e.target.value)
@@ -258,13 +259,8 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                   setNewInitials2('')
                   setNewInitials3('')
                 }}
-              >
-                {CATEGORIES.map((c) => (
-                  <option key={c.key} value={c.key}>
-                    {c.label} ({(options[c.key] ?? []).length})
-                  </option>
-                ))}
-              </select>
+                options={CATEGORIES.map((c) => ({ value: c.key, label: `${c.label} (${(options[c.key] ?? []).length})` }))}
+              />
             </label>
             {/* Each field is its own label — one "Add new" over a row of boxes
                 left you guessing which box was which. */}

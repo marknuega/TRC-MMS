@@ -420,11 +420,6 @@ function App({ user, onLogout }) {
   const [editForm, setEditForm] = useState(null)
   const lastEntriesSig = useRef('') // baseline for the live-refresh poll
   const lastSavedSig = useRef('') // baseline for saved-report changes (any source)
-  // Picking the Agency submits the entry directly (see handleSubmit's
-  // agencyOverride) rather than through a submit-button click, which
-  // bypasses the browser's native required-field check — reportValidity()
-  // below puts that check back before anything is sent.
-  const entryFormRef = useRef(null)
 
   // Plain users are pinned to their own branch everywhere.
   useEffect(() => {
@@ -801,6 +796,19 @@ function App({ user, onLogout }) {
   async function handleSubmit(e, agencyOverride) {
     e?.preventDefault?.()
     try {
+      // Model/Type used to be native `required` <select>s — SearchSelect
+      // isn't a real form control, so the browser can no longer catch a
+      // still-blank one on submit; check explicitly instead.
+      if (!isTransmittal) {
+        if (!form.type) {
+          setError('Pick a Type.')
+          return
+        }
+        if (!form.model && form.type !== 'OTHER') {
+          setError('Pick a Model.')
+          return
+        }
+      }
       const agency = agencyOverride ?? form.agency
       const payload = {
         ...form,
@@ -916,6 +924,23 @@ function App({ user, onLogout }) {
 
   async function handleUpdateEntry(ev) {
     ev.preventDefault()
+    // Model/Type/Agency used to be native `required` <select>s — SearchSelect
+    // isn't a real form control, so the browser can no longer catch one
+    // still blank on submit; check explicitly instead.
+    if (!isTransmittal) {
+      if (!editForm.type) {
+        setError('Pick a Type.')
+        return
+      }
+      if (!editForm.model && editForm.type !== 'OTHER') {
+        setError('Pick a Model.')
+        return
+      }
+      if (!editForm.agency) {
+        setError('Pick an Agency.')
+        return
+      }
+    }
     setBusy(true)
     try {
       const payload = {
@@ -1436,20 +1461,19 @@ function App({ user, onLogout }) {
           <div className="topbar-right">
             <label className="date-field">
               Mode
-              <select value={mode} onChange={changeMode}>
-                <option value="report">Maintenance Report</option>
-                <option value="transmittal">Transmittal Report</option>
-              </select>
+              <SearchSelect
+                value={mode}
+                onChange={changeMode}
+                options={[
+                  { value: 'report', label: 'Maintenance Report' },
+                  { value: 'transmittal', label: 'Transmittal Report' },
+                ]}
+              />
             </label>
             <label className="date-field">
               Branch
               {lockBranch == null ? (
-                <select value={branch} onChange={changeBranch}>
-                  {branchList.map((b) => (
-                    <option key={b}>{b}</option>
-                  ))}
-                  <option value={ALL_BRANCHES}>{ALL_BRANCHES}</option>
-                </select>
+                <SearchSelect value={branch} onChange={changeBranch} options={[...branchList, ALL_BRANCHES]} />
               ) : (
                 <input value={branch} readOnly aria-label="Branch" />
               )}
@@ -1474,21 +1498,11 @@ function App({ user, onLogout }) {
               <div className="handover-grid">
                 <label>
                   Transmitted by
-                  <select value={transmittedBy} onChange={changeTransmittedBy}>
-                    <option value="">— select —</option>
-                    {technicianNames.map((t) => (
-                      <option key={t}>{t}</option>
-                    ))}
-                  </select>
+                  <SearchSelect value={transmittedBy} onChange={changeTransmittedBy} options={technicianNames} />
                 </label>
                 <label>
                   Received by
-                  <select value={receivedBy} onChange={changeReceivedBy}>
-                    <option value="">— select —</option>
-                    {technicianNames.map((t) => (
-                      <option key={t}>{t}</option>
-                    ))}
-                  </select>
+                  <SearchSelect value={receivedBy} onChange={changeReceivedBy} options={technicianNames} />
                 </label>
               </div>
             )}
@@ -1531,7 +1545,7 @@ function App({ user, onLogout }) {
           />
         )}
 
-        <form ref={entryFormRef} onSubmit={handleSubmit} className="entry-form">
+        <form onSubmit={handleSubmit} className="entry-form">
           {!isTransmittal && entryMode === 'manual' && (
           <div className="form-card">
             <button
@@ -1547,21 +1561,11 @@ function App({ user, onLogout }) {
             <div className="grid">
               <label>
                 Model {form.type === 'OTHER' && <span className="opt">(optional)</span>}
-                <select value={form.model} onChange={setModel} required={form.type !== 'OTHER'}>
-                  <option value="">— select —</option>
-                  {options.models.map((m) => (
-                    <option key={m}>{m}</option>
-                  ))}
-                </select>
+                <SearchSelect value={form.model} onChange={setModel} options={options.models} />
               </label>
               <label>
                 Type
-                <select value={form.type} onChange={set('type')} required>
-                  <option value="">— select —</option>
-                  {options.types.map((t) => (
-                    <option key={t}>{t}</option>
-                  ))}
-                </select>
+                <SearchSelect value={form.type} onChange={set('type')} options={options.types} />
               </label>
               {!isTransmittal && (
                 <>
@@ -1615,11 +1619,7 @@ function App({ user, onLogout }) {
                 <div className={`fault-row${isTransmittal ? ' fault-row--tx fault-row--txtype' : ''}`} key={i}>
                   {isTransmittal &&
                     (i === 0 ? (
-                      <select value={form.type || 'OTHER'} onChange={set('type')} aria-label="Type">
-                        {options.types.map((t) => (
-                          <option key={t}>{t}</option>
-                        ))}
-                      </select>
+                      <SearchSelect value={form.type || 'OTHER'} onChange={set('type')} options={options.types} ariaLabel="Type" />
                     ) : (
                       <span className="tx-type-spacer" aria-hidden="true" />
                     ))}
@@ -1639,24 +1639,16 @@ function App({ user, onLogout }) {
                     aria-label="Quantity"
                   />
                   {!isTransmittal && (
-                    <select value={fault.action} onChange={setFault(i, 'action')} aria-label="Action">
-                      {options.actions.map((a) => (
-                        <option key={a}>{a}</option>
-                      ))}
-                    </select>
+                    <SearchSelect value={fault.action} onChange={setFault(i, 'action')} options={options.actions} ariaLabel="Action" />
                   )}
-                  <select value={fault.company} onChange={setFault(i, 'company')} aria-label="Company">
-                    <option value="">— none —</option>
-                    {options.companies.map((c) => (
-                      <option key={c}>{c}</option>
-                    ))}
-                  </select>
+                  <SearchSelect
+                    value={fault.company}
+                    onChange={setFault(i, 'company')}
+                    options={[{ value: '', label: '— none —' }, ...options.companies]}
+                    ariaLabel="Company"
+                  />
                   {isTransmittal && (
-                    <select value={fault.status} onChange={setFault(i, 'status')} aria-label="Item status">
-                      {options.statuses.map((s) => (
-                        <option key={s}>{s}</option>
-                      ))}
-                    </select>
+                    <SearchSelect value={fault.status} onChange={setFault(i, 'status')} options={options.statuses} ariaLabel="Item status" />
                   )}
                   <button
                     type="button"
@@ -1725,21 +1717,17 @@ function App({ user, onLogout }) {
                 <>
                   <label className="footer-agency">
                     Agency
-                    {/* Not `required`: our own logic already guarantees a
-                        non-empty value before handleSubmit ever runs (see
-                        onSelect below and the quick-pick handlers), and
-                        reportValidity() reads the DOM synchronously — a
-                        quick-pick click updates React state, not any live
-                        form control value, so marking a field required here
-                        would block a perfectly good submission on stale DOM. */}
+                    {/* Picking an agency IS "Add entry" — handleSubmit does its
+                        own Model/Type/faults validation and just sets an
+                        error if something's still missing, same as it
+                        always has for faults. */}
                     <SearchSelect
                       value={form.agency}
                       options={agencyOptions}
-                      onSelect={(a) => {
+                      onChange={(e) => {
+                        const a = e.target.value
                         setForm((f) => ({ ...f, agency: a }))
-                        // Picking an agency IS "Add entry" — but only once every
-                        // other required field already checks out.
-                        if (entryFormRef.current?.reportValidity()) handleSubmit(undefined, a)
+                        handleSubmit(undefined, a)
                       }}
                     />
                   </label>
@@ -1751,7 +1739,7 @@ function App({ user, onLogout }) {
                           type="button"
                           onClick={() => {
                             setForm((f) => ({ ...f, agency: a }))
-                            if (entryFormRef.current?.reportValidity()) handleSubmit(undefined, a)
+                            handleSubmit(undefined, a)
                           }}
                         >
                           {a}
@@ -1840,30 +1828,15 @@ function App({ user, onLogout }) {
                   <div className="grid">
                     <label>
                       Model {editForm.type === 'OTHER' && <span className="opt">(optional)</span>}
-                      <select value={editForm.model} onChange={eSetModel} required={editForm.type !== 'OTHER'}>
-                        <option value="">— select —</option>
-                        {options.models.map((m) => (
-                          <option key={m}>{m}</option>
-                        ))}
-                      </select>
+                      <SearchSelect value={editForm.model} onChange={eSetModel} options={options.models} />
                     </label>
                     <label>
                       Type
-                      <select value={editForm.type} onChange={eSet('type')} required>
-                        <option value="">— select —</option>
-                        {options.types.map((t) => (
-                          <option key={t}>{t}</option>
-                        ))}
-                      </select>
+                      <SearchSelect value={editForm.type} onChange={eSet('type')} options={options.types} />
                     </label>
                     <label>
                       Agency
-                      <select value={editForm.agency} onChange={eSet('agency')} required>
-                        <option value="">— select —</option>
-                        {agencyOptions.map((a) => (
-                          <option key={a}>{a}</option>
-                        ))}
-                      </select>
+                      <SearchSelect value={editForm.agency} onChange={eSet('agency')} options={agencyOptions} />
                     </label>
                     <label>
                       <span className="cap">Tel number <span className="opt">(optional)</span></span>
@@ -1892,11 +1865,7 @@ function App({ user, onLogout }) {
                   <div className="grid tx-fields">
                     <label>
                       Type
-                      <select value={editForm.type || 'OTHER'} onChange={eSet('type')}>
-                        {options.types.map((t) => (
-                          <option key={t}>{t}</option>
-                        ))}
-                      </select>
+                      <SearchSelect value={editForm.type || 'OTHER'} onChange={eSet('type')} options={options.types} />
                     </label>
                     <label>
                       Report date
@@ -1925,24 +1894,16 @@ function App({ user, onLogout }) {
                       />
                       <input type="number" min="1" step="1" value={fault.quantity} onChange={eSetFault(i, 'quantity')} aria-label="Quantity" />
                       {!isTransmittal && (
-                        <select value={fault.action} onChange={eSetFault(i, 'action')} aria-label="Action">
-                          {options.actions.map((a) => (
-                            <option key={a}>{a}</option>
-                          ))}
-                        </select>
+                        <SearchSelect value={fault.action} onChange={eSetFault(i, 'action')} options={options.actions} ariaLabel="Action" />
                       )}
-                      <select value={fault.company} onChange={eSetFault(i, 'company')} aria-label="Company">
-                        <option value="">— none —</option>
-                        {options.companies.map((c) => (
-                          <option key={c}>{c}</option>
-                        ))}
-                      </select>
+                      <SearchSelect
+                        value={fault.company}
+                        onChange={eSetFault(i, 'company')}
+                        options={[{ value: '', label: '— none —' }, ...options.companies]}
+                        ariaLabel="Company"
+                      />
                       {isTransmittal && (
-                        <select value={fault.status} onChange={eSetFault(i, 'status')} aria-label="Item status">
-                          {options.statuses.map((s) => (
-                            <option key={s}>{s}</option>
-                          ))}
-                        </select>
+                        <SearchSelect value={fault.status} onChange={eSetFault(i, 'status')} options={options.statuses} ariaLabel="Item status" />
                       )}
                       <button
                         type="button"
@@ -2077,12 +2038,7 @@ function App({ user, onLogout }) {
                 <label>
                   Branch
                   {lockBranch == null ? (
-                    <select value={branch} onChange={changeBranch}>
-                      {branchList.map((b) => (
-                        <option key={b}>{b}</option>
-                      ))}
-                      <option value={ALL_BRANCHES}>{ALL_BRANCHES}</option>
-                    </select>
+                    <SearchSelect value={branch} onChange={changeBranch} options={[...branchList, ALL_BRANCHES]} />
                   ) : (
                     <input value={monthBranch} readOnly aria-label="Branch" />
                   )}

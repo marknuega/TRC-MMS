@@ -6,6 +6,7 @@
 import { useMemo, useState } from 'react'
 import { agencyBlocks } from './report'
 import { ALL_BRANCHES } from './options'
+import SearchSelect from './SearchSelect'
 
 const today = () => new Date().toISOString().slice(0, 10)
 const up = (v) => String(v ?? '').trim().toUpperCase()
@@ -106,12 +107,16 @@ export default function AgencyTotals({ saved, branches, embedded = false, lockBr
           <div className="monthly-controls">
             <label>
               Period
-              <select value={period} onChange={(e) => setPeriod(e.target.value)}>
-                <option value="day">Day / Date</option>
-                <option value="week">Week</option>
-                <option value="month">Month</option>
-                <option value="year">Year</option>
-              </select>
+              <SearchSelect
+                value={period}
+                onChange={(e) => setPeriod(e.target.value)}
+                options={[
+                  { value: 'day', label: 'Day / Date' },
+                  { value: 'week', label: 'Week' },
+                  { value: 'month', label: 'Month' },
+                  { value: 'year', label: 'Year' },
+                ]}
+              />
             </label>
             <label>
               Date in period
@@ -122,12 +127,7 @@ export default function AgencyTotals({ saved, branches, embedded = false, lockBr
               {lockBranch != null ? (
                 <input value={branch} readOnly aria-label="Branch" />
               ) : (
-                <select value={branchSel} onChange={(e) => onBranch?.(e.target.value)}>
-                  {branches.map((b) => (
-                    <option key={b}>{b}</option>
-                  ))}
-                  <option value={ALL_BRANCHES}>{ALL_BRANCHES}</option>
-                </select>
+                <SearchSelect value={branchSel} onChange={(e) => onBranch?.(e.target.value)} options={[...branches, ALL_BRANCHES]} />
               )}
             </label>
             <button type="button" className="btn-txt" onClick={exportCsv} disabled={!rows.length}>

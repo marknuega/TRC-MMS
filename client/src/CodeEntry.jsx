@@ -63,10 +63,12 @@ export default function CodeEntry({ options, agencies = [], topAgencies = [], re
                 <SearchSelect
                   value={agency}
                   options={agencies}
-                  onSelect={(a) => {
+                  onChange={(e) => {
+                    const a = e.target.value
                     setAgency(a)
                     create(a)
                   }}
+                  placeholder="Type to search, or pick —"
                   disabled={!result?.ok || busy}
                 />
               </label>

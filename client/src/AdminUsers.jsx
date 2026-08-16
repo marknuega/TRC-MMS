@@ -12,6 +12,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
+import SearchSelect from './SearchSelect'
 import {
   getUsers, createUser, updateUser, deleteUser,
   getCredentialRequests, updateCredentialRequest, deleteCredentialRequest,
@@ -19,6 +20,15 @@ import {
 import { BRANCHES } from './options'
 
 const BLANK = { username: '', password: '', role: 'user', branch: BRANCHES[0] ?? '', region: '' }
+const ROLE_OPTIONS = [
+  { value: 'user', label: 'User' },
+  { value: 'director', label: 'Director' },
+  { value: 'admin', label: 'Admin' },
+]
+const ACTIVE_OPTIONS = [
+  { value: 'true', label: 'Active' },
+  { value: 'false', label: 'Disabled' },
+]
 
 export default function AdminUsers({ currentUser, embedded = false, branches = BRANCHES, regions = {}, onAddBranch }) {
   const isDirectorCaller = currentUser?.role === 'director'
@@ -39,12 +49,13 @@ export default function AdminUsers({ currentUser, embedded = false, branches = B
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
 
-  // A <select> with a value not among its <option>s still shows the first
-  // option visually while React's state stays whatever it was — so without
-  // this, choosing "Director" and submitting without ever touching the
-  // Region dropdown silently creates an account with a BLANK region (the
-  // picker looks filled in, but nothing was ever selected). Keep the
-  // tracked state in lockstep with what's on screen instead.
+  // Convenience default: pre-fill the first region as soon as Role switches
+  // to Director, so there's already a sensible value if Create/Save is
+  // pressed without touching the Region picker. (Originally a workaround for
+  // a native <select> quirk where an out-of-range value still displayed the
+  // first <option> — SearchSelect doesn't have that failure mode, since an
+  // unmatched value just shows its placeholder, but the default is still
+  // worth keeping.)
   useEffect(() => {
     if (form.role === 'director' && !form.region && regionOptions.length) {
       setForm((f) => ({ ...f, region: regionOptions[0] }))
@@ -216,24 +227,21 @@ export default function AdminUsers({ currentUser, embedded = false, branches = B
           <label>Password<input value={form.password} onChange={set('password')} required /></label>
           {isAdminCaller && (
             <label>Role
-              <select value={form.role} onChange={set('role')}>
-                <option value="user">User</option>
-                <option value="director">Director</option>
-                <option value="admin">Admin</option>
-              </select>
+              <SearchSelect value={form.role} onChange={set('role')} options={ROLE_OPTIONS} />
             </label>
           )}
           {isAdminCaller && form.role === 'director' ? (
             <label>Region
-              <select value={form.region} onChange={set('region')}>
-                {regionOptions.map((r) => <option key={r}>{r}</option>)}
-              </select>
+              <SearchSelect value={form.region} onChange={set('region')} options={regionOptions} />
             </label>
           ) : (
             <label>Branch
-              <select value={form.branch} onChange={set('branch')} disabled={isAdminCaller && form.role === 'admin'}>
-                {branchOptions.map((b) => <option key={b}>{b}</option>)}
-              </select>
+              <SearchSelect
+                value={form.branch}
+                onChange={set('branch')}
+                options={branchOptions}
+                disabled={isAdminCaller && form.role === 'admin'}
+              />
             </label>
           )}
           {isAdminCaller && (
@@ -276,32 +284,25 @@ export default function AdminUsers({ currentUser, embedded = false, branches = B
                     <td><input value={editForm.username} onChange={eset('username')} /></td>
                     <td>
                       {isAdminCaller ? (
-                        <select value={editForm.role} onChange={eset('role')}>
-                          <option value="user">User</option>
-                          <option value="director">Director</option>
-                          <option value="admin">Admin</option>
-                        </select>
+                        <SearchSelect value={editForm.role} onChange={eset('role')} options={ROLE_OPTIONS} />
                       ) : (
                         'user'
                       )}
                     </td>
                     <td>
                       {isAdminCaller && editForm.role === 'director' ? (
-                        <select value={editForm.region} onChange={eset('region')}>
-                          {regionOptions.map((r) => <option key={r}>{r}</option>)}
-                        </select>
+                        <SearchSelect value={editForm.region} onChange={eset('region')} options={regionOptions} />
                       ) : (
-                        <select value={editForm.branch} onChange={eset('branch')} disabled={isAdminCaller && editForm.role === 'admin'}>
-                          <option value=""></option>
-                          {(isAdminCaller ? branches : branchOptions).map((b) => <option key={b}>{b}</option>)}
-                        </select>
+                        <SearchSelect
+                          value={editForm.branch}
+                          onChange={eset('branch')}
+                          options={isAdminCaller ? branches : branchOptions}
+                          disabled={isAdminCaller && editForm.role === 'admin'}
+                        />
                       )}
                     </td>
                     <td>
-                      <select value={String(editForm.active)} onChange={eset('active')}>
-                        <option value="true">Active</option>
-                        <option value="false">Disabled</option>
-                      </select>
+                      <SearchSelect value={String(editForm.active)} onChange={eset('active')} options={ACTIVE_OPTIONS} />
                     </td>
                     <td className="admin-actions">
                       <input placeholder="New password (optional)" value={editForm.password} onChange={eset('password')} />

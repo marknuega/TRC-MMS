@@ -9,6 +9,7 @@ import { Pie } from './Pie'
 import { toPie } from './chartUtils'
 import { ALL_BRANCHES } from './options'
 import { PeriodPicker, makePeriod, periodValue, periodLabel } from './period'
+import SearchSelect from './SearchSelect'
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 const monthShort = (mk) => {
@@ -100,12 +101,7 @@ export default function Dashboard({ saved, branches, embedded = false, lockBranc
               {lockBranch != null ? (
                 <input value={lockBranch || 'Your branch'} readOnly aria-label="Branch" />
               ) : (
-                <select value={branchSel} onChange={(e) => onBranch?.(e.target.value)}>
-                  {(branches ?? []).map((b) => (
-                    <option key={b}>{b}</option>
-                  ))}
-                  <option value={ALL_BRANCHES}>{ALL_BRANCHES}</option>
-                </select>
+                <SearchSelect value={branchSel} onChange={(e) => onBranch?.(e.target.value)} options={[...(branches ?? []), ALL_BRANCHES]} />
               )}
             </label>
           </div>

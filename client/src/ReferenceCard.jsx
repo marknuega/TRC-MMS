@@ -39,6 +39,7 @@ import { FALLBACK, VARIANTS, useCodeMap } from './codes'
 import { issueCodeIndex } from './options'
 import { groupComponents, PARTS_RE, COMPONENT_BUCKETS } from './refGroups'
 import { getCodeMap, saveCodeMap } from './api'
+import SearchSelect from './SearchSelect'
 
 const numericSort = ([a], [b]) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
 // Split a list into n roughly equal columns, keeping reading order down each one.
@@ -454,7 +455,7 @@ function CodeMapEditor() {
           <div className="manage-controls">
             <label>
               Category
-              <select
+              <SearchSelect
                 value={cat}
                 onChange={(e) => {
                   setCat(e.target.value)
@@ -464,13 +465,8 @@ function CodeMapEditor() {
                   setNewCategory('')
                   setError('')
                 }}
-              >
-                {CATS.map((c) => (
-                  <option key={c.key} value={c.key}>
-                    {c.label} ({Object.keys(map[c.key] ?? {}).length})
-                  </option>
-                ))}
-              </select>
+                options={CATS.map((c) => ({ value: c.key, label: `${c.label} (${Object.keys(map[c.key] ?? {}).length})` }))}
+              />
             </label>
             <label className="field-code">
               {meta.codeLabel}

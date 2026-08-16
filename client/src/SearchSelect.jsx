@@ -2,30 +2,48 @@
  * Software Developed by Muhammad Amir  MT# MT1063
  * © 2026 Muhammad Amir. All rights reserved.
  *
- * A type-to-search, single-value picker. Same job as
- * <input list="..."><datalist>, but self-rendered rather than the browser's
- * native datalist popup — that popup ignores CSS entirely (font-size, row
- * height and width are OS-controlled, not page-controlled) and on some
- * displays balloons up large enough to cover most of the screen. This stays
- * a fixed, capped size regardless of how many options there are.
+ * A drop-in replacement for a plain <select value={x} onChange={handler}>
+ * — same value/onChange contract (onChange receives a { target: { value } }
+ * event, exactly what a real <select> passes), so most call sites only need
+ * the element swapped, not the handler.
+ *
+ * Built because neither native popup a single-choice picker can use is
+ * actually stylable: a <select>'s open dropdown and a <datalist>'s
+ * suggestion list are both OS-rendered — font size, row height and width
+ * follow the platform, not the page's CSS, and on some displays balloon up
+ * large enough to cover most of the screen (see codes.js's Quick Code Entry
+ * history). This renders its own menu instead, capped at a fixed,
+ * scrollable size, styled off the app's own tokens.
+ *
+ * `options` accepts plain strings (value === label, the common case) or
+ * { value, label } objects for the few pickers where they differ (e.g.
+ * Active/Disabled backed by "true"/"false").
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 export default function SearchSelect({
   value,
   options,
-  onSelect, // called with the exact matched option string when one is chosen
-  placeholder = 'Type to search, or pick —',
+  onChange,
+  placeholder = '— select —',
   disabled = false,
   className = '',
+  ariaLabel,
 }) {
-  const [text, setText] = useState(value ?? '')
+  const normalized = useMemo(
+    () => (options ?? []).map((o) => (o && typeof o === 'object' ? o : { value: o, label: String(o) })),
+    [options],
+  )
+  const labelFor = (v) => normalized.find((o) => o.value === v)?.label ?? ''
+
+  const [text, setText] = useState(labelFor(value))
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
 
-  // Stay in sync when the caller resets the value after a successful pick.
-  useEffect(() => setText(value ?? ''), [value])
+  // Stay in sync when the caller changes the value out from under us (a
+  // fresh form, a reset after submit, an edit-row opening, ...).
+  useEffect(() => setText(labelFor(value)), [value, normalized]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!open) return
@@ -37,21 +55,21 @@ export default function SearchSelect({
   }, [open])
 
   const q = text.trim().toLowerCase()
-  const filtered = q ? options.filter((o) => o.toLowerCase().includes(q)) : options
+  const filtered = q ? normalized.filter((o) => o.label.toLowerCase().includes(q)) : normalized
 
   function choose(opt) {
-    setText(opt)
+    setText(opt.label)
     setOpen(false)
-    onSelect(opt)
+    onChange({ target: { value: opt.value } })
   }
 
   function change(e) {
     const v = e.target.value
     setText(v)
     setOpen(true)
-    // Typing the full option out (not just picking from the list) still
-    // commits it — matches how the native datalist version behaved.
-    const hit = options.find((o) => o.toLowerCase() === v.trim().toLowerCase())
+    // Typing the option's label out in full (not just picking from the
+    // list) still commits it.
+    const hit = normalized.find((o) => o.label.toLowerCase() === v.trim().toLowerCase())
     if (hit) choose(hit)
   }
 
@@ -69,6 +87,7 @@ export default function SearchSelect({
           }
         }}
         placeholder={placeholder}
+        aria-label={ariaLabel}
         disabled={disabled}
         autoComplete="off"
       />
@@ -88,8 +107,8 @@ export default function SearchSelect({
             <div className="search-select-empty">No matches</div>
           ) : (
             filtered.map((opt) => (
-              <button type="button" key={opt} className="search-select-opt" onClick={() => choose(opt)}>
-                {opt}
+              <button type="button" key={opt.value} className="search-select-opt" onClick={() => choose(opt)}>
+                {opt.label}
               </button>
             ))
           )}

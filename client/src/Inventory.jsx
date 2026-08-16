@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getInventory, createInventory, updateInventory, deleteInventory, importInventory, getInventoryTxns } from './api'
 import { COPYRIGHT_HTML } from './copyright'
+import SearchSelect from './SearchSelect'
 
 const TYPE_LABEL = { usage: 'Usage', adjustment: 'Adjustment', import: 'Import' }
 const esc = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -287,12 +288,12 @@ export default function Inventory({ embedded = false, branch = '' }) {
           {notice && <p className="saved-hint">✅ {notice}</p>}
 
           <div className="inv-toolbar">
-            <select value={store} onChange={(e) => setStore(e.target.value)} aria-label="Store filter">
-              <option value="">All stores</option>
-              {stores.map((s) => (
-                <option key={s}>{s}</option>
-              ))}
-            </select>
+            <SearchSelect
+              value={store}
+              onChange={(e) => setStore(e.target.value)}
+              options={[{ value: '', label: 'All stores' }, ...stores]}
+              ariaLabel="Store filter"
+            />
             <input
               type="search"
               value={search}

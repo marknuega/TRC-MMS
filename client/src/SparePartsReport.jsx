@@ -9,6 +9,7 @@ import { Pie } from './Pie'
 import { COPYRIGHT_HTML } from './copyright'
 import { ALL_BRANCHES } from './options'
 import { PeriodPicker, makePeriod, periodValue, periodLabel } from './period'
+import SearchSelect from './SearchSelect'
 
 const ACT_COLS = [
   ['maintenance', 'Maintenance'],
@@ -267,12 +268,7 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
               {lockBranch != null ? (
                 <input value={branch} readOnly aria-label="Branch" />
               ) : (
-                <select value={branchSel} onChange={(e) => onBranch?.(e.target.value)}>
-                  {(branches ?? []).map((b) => (
-                    <option key={b}>{b}</option>
-                  ))}
-                  <option value={ALL_BRANCHES}>{ALL_BRANCHES}</option>
-                </select>
+                <SearchSelect value={branchSel} onChange={(e) => onBranch?.(e.target.value)} options={[...(branches ?? []), ALL_BRANCHES]} />
               )}
             </label>
             <button type="button" className="submit" onClick={exportExcel} disabled={!hasData}>

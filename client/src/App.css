@@ -915,12 +915,16 @@ h2 {
    gets a height cap. Short tables never reach it, so they look unchanged; long
    ones scroll inside while `thead` stays pinned to the top of this box. */
 
-/* ---- SearchSelect (type-to-search picker, e.g. Agency) ---- */
+/* ---- SearchSelect (type-to-search picker) ---- */
+/* Fills its container by default, same as a native <select> would in a
+   .grid label or a table-row cell — a blanket min-width here would blow
+   out the narrow fault-row columns. Agency's own wrapper (.agency-field,
+   .footer-agency) sets a wider min-width where that room is wanted. */
 .search-select {
   position: relative;
-  display: inline-flex;
+  display: flex;
   align-items: stretch;
-  min-width: 11rem;
+  width: 100%;
 }
 .search-select input {
   width: 100%;

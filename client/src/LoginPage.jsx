@@ -8,6 +8,7 @@ import { login, requestCredentials } from './api'
 import { BRANCHES } from './options'
 import { Credit } from './copyright'
 import { LOGO_FULL, BRAND_NAME } from './brand'
+import SearchSelect from './SearchSelect'
 
 export default function LoginPage({ onAuthed }) {
   const [tab, setTab] = useState('login') // login | request
@@ -103,11 +104,7 @@ export default function LoginPage({ onAuthed }) {
             </label>
             <label>
               Branch
-              <select value={req.branch} onChange={setR('branch')}>
-                {BRANCHES.map((b) => (
-                  <option key={b}>{b}</option>
-                ))}
-              </select>
+              <SearchSelect value={req.branch} onChange={setR('branch')} options={BRANCHES} />
             </label>
             <label>
               Contact (phone / email)

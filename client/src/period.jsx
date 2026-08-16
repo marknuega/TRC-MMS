@@ -11,6 +11,8 @@
  * also the prefix length report.js matches entry dates against.
  */
 
+import SearchSelect from './SearchSelect'
+
 const pad = (n) => String(n).padStart(2, '0')
 export const todayIso = () => {
   const d = new Date()
@@ -57,13 +59,11 @@ export function PeriodPicker({ period, onChange, label = 'View by' }) {
     <>
       <label>
         {label}
-        <select value={period.kind} onChange={(e) => onChange({ ...period, kind: e.target.value })}>
-          {KINDS.map((k) => (
-            <option key={k.kind} value={k.kind}>
-              {k.label}
-            </option>
-          ))}
-        </select>
+        <SearchSelect
+          value={period.kind}
+          onChange={(e) => onChange({ ...period, kind: e.target.value })}
+          options={KINDS.map((k) => ({ value: k.kind, label: k.label }))}
+        />
       </label>
       <label>
         {period.kind === 'day' ? 'Date' : period.kind === 'month' ? 'Month' : 'Year'}
