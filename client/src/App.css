@@ -323,10 +323,12 @@
   max-height: 240px;
   overflow-y: auto;
   padding: 0.3rem;
-  background: var(--surface-2);
-  border: 1.5px solid var(--border-strong);
+  /* Same panel as .search-select-menu — the two are the app's only dropdowns
+     and must not read as different components. */
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--shadow-lg);
 }
 .multi-opt {
   display: flex;
@@ -334,10 +336,22 @@
   gap: 0.55rem;
   padding: 0.4rem 0.55rem;
   border-radius: var(--radius-sm);
+  font-size: 0.85rem; /* same row text as .search-select-opt */
+  color: var(--text);
   cursor: pointer;
 }
 .multi-opt:hover {
   background: var(--surface-3);
+}
+/* A ticked row is tinted and bold, exactly as .search-select-opt.selected is,
+   so "what is already chosen" reads the same in both dropdowns. */
+.multi-opt:has(input:checked) {
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-weight: 700;
+}
+.multi-opt:has(input:checked):hover {
+  background: var(--ring);
 }
 .multi-opt input {
   width: 1rem;
@@ -349,7 +363,8 @@
   cursor: pointer;
 }
 .multi-empty {
-  padding: 0.5rem 0.6rem;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.82rem;
   color: var(--muted);
 }
 
