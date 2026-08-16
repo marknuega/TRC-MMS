@@ -10,7 +10,7 @@
 
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
-import { faultCodes, technicianCodes, sanitizeCodeMap, validateCodeMap } from '../src/routes/codemap.js'
+import { faultCodes, technicianCodes, sanitizeCodeMap, validateCodeMap, withRequiredActions } from '../src/routes/codemap.js'
 import { issueCode, issueName, technicianIdMap } from '../../client/src/options.js'
 
 // The same rows the app stores, in every shape it has ever written them.
@@ -162,5 +162,39 @@ describe('validateCodeMap', () => {
 
   test('componentCategories is a recognised category, not rejected as unknown', () => {
     assert.equal(validateCodeMap({ componentCategories: { '43': 'Audio & Controls' } }), null)
+  })
+})
+
+// A map saved before RTO existed must not make a correctly-written RTO code
+// undecodable: FAULT_PATTERN would match the three letters and then find no
+// name for them, rejecting the technician's message.
+describe('withRequiredActions', () => {
+  test('RTO is filled into a map that predates it', () => {
+    const out = withRequiredActions({ actions: { C: 'Change' } })
+    assert.deepEqual(out.actions, { C: 'Change', RTO: 'RTO' })
+  })
+
+  test('a map with no actions category at all still gets RTO', () => {
+    assert.deepEqual(withRequiredActions({}).actions, { RTO: 'RTO' })
+  })
+
+  test('an existing RTO entry is left exactly as the admin wrote it', () => {
+    const map = { actions: { RTO: 'Return To Owner' } }
+    assert.equal(withRequiredActions(map), map, 'must not rewrite an admin value')
+  })
+
+  test('nothing missing means the very same object back, so no needless write', () => {
+    const map = { actions: { C: 'Change', RTO: 'RTO' }, companies: { MT: 'MOTECO' } }
+    assert.equal(withRequiredActions(map), map)
+  })
+
+  test('the other categories are untouched', () => {
+    const out = withRequiredActions({ actions: {}, components: { 43: 'Side Grip' } })
+    assert.deepEqual(out.components, { 43: 'Side Grip' })
+  })
+
+  test('a non-object is passed straight through', () => {
+    assert.equal(withRequiredActions(null), null)
+    assert.equal(withRequiredActions(undefined), undefined)
   })
 })

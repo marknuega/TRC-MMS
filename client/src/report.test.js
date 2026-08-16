@@ -11,12 +11,15 @@ describe('classify', () => {
     assert.equal(classify('RTO'), 'rto')
   })
 
-  test('PCBRTO is an RTO too, not maintenance', () => {
-    assert.equal(classify('PCBRTO'), 'rto')
-  })
-
   test('matches regardless of case and padding', () => {
     assert.equal(classify(' rto '), 'rto')
+  })
+
+  // A defective PCB handed back is the parts code 50F plus the RTO action —
+  // the part carries the "PCB" half, so there is no PCB-specific RTO action.
+  test('a defective-PCB return classifies on its action, not its part', () => {
+    assert.equal(classify('RTO'), 'rto')
+    assert.equal(classify('PCB'), 'maintenance') // PCB the action is real work
   })
 
   test('the real service actions are unchanged', () => {

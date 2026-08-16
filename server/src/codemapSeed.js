@@ -79,6 +79,9 @@ export const CODEMAP_SEED = {
     I: "Install/Re-Install",
     P: "Program/Re-program",
     D: "Dismantle",
+    // Written out in full, unlike the one-letter service actions — see
+    // ACTION_ALT in whatsapp/decoder.js.
+    RTO: "RTO",
   },
   companies: {
     MI: "MOI",

@@ -17,7 +17,8 @@ const MAP = {
   components: { 19: 'Fistmic', 41: 'Rotary Knob' },
   variants: { A: '', B: '3D' },
   faults: { '43A': 'Side Grip', '43B': 'Side Grip-3D', '99A': 'Charger', '99B': 'Charger-818' },
-  actions: { C: 'Change', R: 'Repair' },
+  // RTO is the one action written out in full — see ACTION_ALT in decoder.js.
+  actions: { C: 'Change', R: 'Repair', RTO: 'RTO' },
   companies: { MT: 'MOTECO', MI: 'MOI' },
   agencies: { PSD: 'PUBLIC SECURITY DEPARTMENT' },
   technicians: { 1: 'Amir', MA: 'Muhammad Amir' },
@@ -245,5 +246,42 @@ describe('whatsapp shorthand', () => {
       assert.ok(r.ok, `${text}: ${r.reason}`)
       assert.deepEqual(r.batch.groups.flatMap((g) => g.faults).map((f) => f.quantity), [1, 1], text)
     }
+  })
+})
+
+// RTO is three characters in a slot that is otherwise one letter, sitting
+// directly in front of the company. The risk is that "R" + a two-letter
+// company and "RTO" + a one-letter company read the same; these pin which
+// wins, and that plain Repair is untouched.
+describe('whatsapp RTO action', () => {
+  test('RTO is taken whole, not as Repair plus a company', () => {
+    const f = one('H43ARTOMT 1')
+    assert.equal(f.actionCode, 'RTO')
+    assert.equal(f.companyCode, 'MT')
+  })
+
+  test('a plain R still decodes as Repair', () => {
+    const f = one('H43AR1MT 1')
+    assert.equal(f.actionCode, 'R')
+    assert.equal(f.companyCode, 'MT')
+  })
+
+  test('RTO carries a quantity like any other action', () => {
+    const f = one('H43ARTO3MT 1')
+    assert.equal(f.actionCode, 'RTO')
+    assert.equal(f.quantity, 3)
+  })
+
+  test('RTO works with a one-letter company too', () => {
+    const f = one('H43ARTOT 1')
+    assert.equal(f.actionCode, 'RTO')
+    assert.equal(f.companyCode, 'MT')
+  })
+
+  test('RTO works in the device-less shorthand', () => {
+    const r = decodeBatch('H43AC1MT 43ARTOMT 1', MAP)
+    assert.ok(r.ok, r.reason)
+    const faults = r.batch.groups.flatMap((g) => g.faults)
+    assert.deepEqual(faults.map((f) => f.actionCode), ['C', 'RTO'])
   })
 })

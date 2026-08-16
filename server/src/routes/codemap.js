@@ -40,6 +40,22 @@ export const CODEMAP_CATEGORIES = [
 // the WhatsApp bridge actually gets served.
 const PARTS_ONLY_RE = /^\d{2}$/
 
+// Actions the decoder itself reasons about, so they must be in the served map
+// whatever is stored. A map saved before RTO existed would otherwise let
+// FAULT_PATTERN match "RTO" and then fail to name it, rejecting a code the
+// technician wrote correctly. Mirrors REQUIRED_ACTIONS in client/src/options.js.
+const REQUIRED_ACTIONS = { RTO: 'RTO' }
+
+/** The map with any missing required action filled in. Returns the SAME object
+ *  when nothing is missing, so readCodeMap only writes when it must. */
+export function withRequiredActions(data) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return data
+  const actions = data.actions && typeof data.actions === 'object' && !Array.isArray(data.actions) ? data.actions : {}
+  const missing = Object.entries(REQUIRED_ACTIONS).filter(([code]) => !(code in actions))
+  if (!missing.length) return data
+  return { ...data, actions: { ...actions, ...Object.fromEntries(missing) } }
+}
+
 /**
  * Read the map, seeding the row on first use.
  *
@@ -49,7 +65,7 @@ const PARTS_ONLY_RE = /^\d{2}$/
 export async function readCodeMap() {
   const row = await prisma.codeMap.findUnique({ where: { id: 1 } })
   const saved = row && row.data && Object.keys(row.data).length > 0 ? row.data : CODEMAP_SEED
-  const clean = sanitizeCodeMap(saved)
+  const clean = withRequiredActions(sanitizeCodeMap(saved))
 
   if (clean !== saved) {
     const updated = await prisma.codeMap.upsert({

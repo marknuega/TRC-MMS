@@ -20,9 +20,12 @@ const COMPANY_DISPLAY = {
   '': '',
 }
 
+// RTO prints as its own three letters, like PCB — it is spelled out rather
+// than abbreviated to a single character (see ACTION_ALT in codes.js).
 const ACTION_CODE = {
   CHANGE: 'C', REPAIR: 'R', NEW: 'N', PCB: 'PCB',
   PROGRAM: 'P', 'RE-PROGRAM': 'RP', INSTALL: 'I', 'RE-INSTALL': 'RI', DISMANTLE: 'D',
+  RTO: 'RTO',
 }
 
 const MAINTENANCE_ACTIONS = new Set(['CHANGE', 'REPAIR', 'NEW', 'PCB'])
@@ -33,8 +36,9 @@ const DISMANTLE_ACTIONS = new Set(['DISMANTLE'])
 // and no part was consumed. It is its own category rather than a service one,
 // so it never reaches the maintenance / programming / install / dismantle
 // totals that the monthly, agency and technician aggregations are built from.
-// PCBRTO is the PCB-specific variant and behaves identically.
-const RTO_ACTIONS = new Set(['RTO', 'PCBRTO'])
+// It pairs with any parts code — a defective PCB handed back is 50F + RTO —
+// so there is no PCB-specific RTO action; the part carries that meaning.
+const RTO_ACTIONS = new Set(['RTO'])
 
 const MODEL_DISPLAY = {
   'SRG3900 CARKIT': 'SRG CARKIT',

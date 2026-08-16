@@ -14,10 +14,11 @@ const docId = (mode, n) => `${normMode(mode) === 'transmittal' ? 'TRANS' : 'REP'
 const withFaults = { faults: { orderBy: { position: 'asc' } } }
 
 // RTO (Return to Owner) means the device went back untouched — no part was
-// consumed. PCBRTO is the PCB-specific variant and means the same thing.
-// Mirrors RTO_ACTIONS in client/src/report.js, which keeps these out of the
-// service totals for the same reason.
-const RTO_ACTIONS = new Set(['RTO', 'PCBRTO'])
+// consumed. It pairs with any parts code (a defective PCB handed back is
+// 50F + RTO), so the action alone carries the meaning. Mirrors RTO_ACTIONS in
+// client/src/report.js, which keeps it out of the service totals for the same
+// reason.
+const RTO_ACTIONS = new Set(['RTO'])
 export const isRtoAction = (action) => RTO_ACTIONS.has(String(action ?? '').trim().toUpperCase())
 
 // A snapshot containing an RTO is a reference/record-only document. Detected

@@ -41,13 +41,19 @@
 // Both decoders (this and client/src/codes.js) must agree; codemap.test.js
 // pins the fault-claim half of that together.
 
+// The action is normally ONE letter, but RTO (Return to Owner) is spelled out
+// in full — a special designation rather than a service action. Tried FIRST so
+// the three characters read as one action rather than "R" plus a two-letter
+// company ("TO" names no company, so no existing code changes meaning).
+// Mirrors ACTION_ALT in client/src/codes.js — both decoders must agree.
+const ACTION_ALT = 'RTO|[A-Z]'
 // (device)(2-digit parts)(variant)(action)(optional qty)(company, 1 or 2 letters)
-const FAULT_PATTERN = /^([A-Z])(\d{2})([A-Z])([A-Z])(\d*)([A-Z]{1,2})$/i
+const FAULT_PATTERN = new RegExp(`^([A-Z])(\\d{2})([A-Z])(${ACTION_ALT})(\\d*)([A-Z]{1,2})$`, 'i')
 // The same token with the device letter left off, which is allowed from the
 // SECOND fault on — it inherits the device from the token before it. A batch
 // is one radio anyway (mixing brands is refused below), so repeating the letter
 // on every code was pure typing.
-const SHORT_FAULT_PATTERN = /^(\d{2})([A-Z])([A-Z])(\d*)([A-Z]{1,2})$/i
+const SHORT_FAULT_PATTERN = new RegExp(`^(\\d{2})([A-Z])(${ACTION_ALT})(\\d*)([A-Z]{1,2})$`, 'i')
 // The superseded form, recognised ONLY to explain itself — never decoded.
 //
 // Note this is character-for-character the same shape as SHORT_FAULT_PATTERN:

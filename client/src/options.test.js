@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
-import { mergeOptions, DEFAULT_OPTIONS } from './options.js'
+import { mergeOptions, DEFAULT_OPTIONS, issueCodeIndex } from './options.js'
 
 describe('mergeOptions', () => {
   test('a stored category replaces its default', () => {
@@ -32,5 +32,22 @@ describe('mergeOptions', () => {
 
   test('the defaults already carry RTO', () => {
     assert.ok(mergeOptions(undefined).actions.includes('RTO'))
+  })
+
+  // Same reasoning for the 50F fault code: an issueTypes list saved before it
+  // existed must not make the documented shorthand undecodable.
+  test('50F is re-added to a stored issueTypes list that predates it', () => {
+    const out = mergeOptions({ issueTypes: ['ANTENNA'] })
+    assert.equal(issueCodeIndex(out.issueTypes)['50F'], 'DEFECTIVE PCB')
+  })
+
+  test('an installation that already claims 50F keeps its own wording', () => {
+    const out = mergeOptions({ issueTypes: [{ name: 'BAD MAINBOARD', parts: '50', variant: 'F' }] })
+    assert.equal(issueCodeIndex(out.issueTypes)['50F'], 'BAD MAINBOARD')
+    assert.equal(out.issueTypes.length, 1, 'must not append a second claim on the same code')
+  })
+
+  test('the defaults already claim 50F', () => {
+    assert.equal(issueCodeIndex(mergeOptions(undefined).issueTypes)['50F'], 'DEFECTIVE PCB')
   })
 })

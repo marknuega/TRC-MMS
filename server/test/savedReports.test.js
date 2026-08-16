@@ -11,8 +11,10 @@ describe('hasRtoAction', () => {
     assert.equal(hasRtoAction([entry('CHANGE'), entry('REPAIR', 'RTO')]), true)
   })
 
-  test('PCBRTO counts as an RTO too', () => {
-    assert.equal(hasRtoAction([entry('PCBRTO')]), true)
+  // A defective PCB handed back is the parts code 50F plus the RTO action, so
+  // the action alone decides — there is no PCB-specific RTO action.
+  test('PCB the action is real work, not an RTO', () => {
+    assert.equal(hasRtoAction([entry('PCB')]), false)
   })
 
   test('is false when no fault is an RTO', () => {
@@ -38,9 +40,8 @@ describe('hasRtoAction', () => {
 // Stock is skipped per FAULT, not per report — this is what lets a
 // reference-only report still deduct for the real parts it also records.
 describe('isRtoAction', () => {
-  test('an RTO or PCBRTO line draws no stock', () => {
+  test('an RTO line draws no stock', () => {
     assert.equal(isRtoAction('RTO'), true)
-    assert.equal(isRtoAction('PCBRTO'), true)
     assert.equal(isRtoAction(' rto '), true)
   })
 

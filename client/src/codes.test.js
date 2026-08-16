@@ -469,3 +469,72 @@ test('the WhatsApp decoder reads the shorthand identically', async () => {
     app.faults.map((f) => [f.code, f.quantity, f.companyCode]),
   )
 })
+
+// ---------------------------------------------------------------------------
+// RTO — the one action written out in full, and the 50F parts code it pairs
+// with. See ACTION_ALT in codes.js.
+// ---------------------------------------------------------------------------
+describe('RTO shorthand', () => {
+  test('RTO is read as one action, not "R" plus a company', () => {
+    const r = parseCodeReport('H43A RTO MT 2221 6575 1', FALLBACK, OPTS)
+    assert.ok(r.ok, r.errors.join('; '))
+    assert.equal(r.faults.length, 1)
+    assert.equal(r.faults[0].action, 'RTO')
+    assert.equal(r.faults[0].company, 'MOTECO')
+    assert.equal(r.faults[0].issue, 'SIDE GRIP')
+  })
+
+  test('RTO decodes the same run together as spaced out', () => {
+    const spaced = parseCodeReport('H43A RTO 1 MT 2221 6575 1', FALLBACK, OPTS)
+    const dense = parseCodeReport('H43ARTO1MT222165751', FALLBACK, OPTS)
+    assert.ok(dense.ok, dense.errors.join('; '))
+    assert.deepEqual(dense.entry, spaced.entry)
+  })
+
+  test('50F decodes to the defective PCB it claims', () => {
+    const r = parseCodeReport('H50F RTO MT 2221 6575 1', FALLBACK, OPTS)
+    assert.ok(r.ok, r.errors.join('; '))
+    assert.equal(r.faults[0].issue, 'DEFECTIVE PCB')
+    assert.equal(r.faults[0].action, 'RTO')
+  })
+
+  test('50F is a parts code, so it pairs with an ordinary action too', () => {
+    const r = parseCodeReport('H50F C 2 MT 2221 6575 1', FALLBACK, OPTS)
+    assert.ok(r.ok, r.errors.join('; '))
+    assert.equal(r.faults[0].issue, 'DEFECTIVE PCB')
+    assert.equal(r.faults[0].action, 'CHANGE')
+    assert.equal(r.faults[0].quantity, 2)
+  })
+
+  test('a single-letter R action still means Repair', () => {
+    const r = parseCodeReport('H43A R 1 MT 2221 6575 1', FALLBACK, OPTS)
+    assert.ok(r.ok, r.errors.join('; '))
+    assert.equal(r.faults[0].action, 'REPAIR')
+  })
+
+  test('RTO works in the device-less shorthand from the second code on', () => {
+    const r = parseCodeReport('H43AC1MT 50FRTOMT 2221 6575 1', FALLBACK, OPTS)
+    assert.ok(r.ok, r.errors.join('; '))
+    assert.deepEqual(r.faults.map((f) => [f.issue, f.action]), [
+      ['SIDE GRIP', 'CHANGE'],
+      ['DEFECTIVE PCB', 'RTO'],
+    ])
+  })
+
+  test('both decoders read an RTO code identically', async () => {
+    const { decodeBatch } = await import('../../server/src/whatsapp/decoder.js')
+    const map = { ...FALLBACK, faults: issueCodeIndex(OPTS.issueTypes) }
+    // WhatsApp is space-TOKENIZED, so one fault is one token there — the app's
+    // free-form separators are a Quick Code Entry convenience, not a wire format.
+    const bot = decodeBatch('H50FRTOMT 1', map)
+    assert.ok(bot.ok, bot.reason)
+    const botFaults = bot.batch.groups.flatMap((g) => g.faults)
+    assert.equal(botFaults.length, 1)
+    assert.equal(botFaults[0].componentCode, 'H50F')
+
+    const app = parseCodeReport('H50F RTO MT 2221 6666 1', FALLBACK, OPTS)
+    assert.ok(app.ok, app.errors.join('; '))
+    assert.equal(app.faults[0].code, 'H50F')
+    assert.equal(botFaults[0].companyCode, app.faults[0].companyCode)
+  })
+})

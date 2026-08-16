@@ -21,6 +21,10 @@ export const DEFAULT_OPTIONS = {
   ],
 
   issueTypes: [
+    // Claims the fault code 50F, so "H50F RTO MT" decodes to a defective PCB
+    // handed back to its owner. A claim needs no code-map entry: parts 50 and
+    // variant F mean nothing on their own, only together and only here.
+    { name: 'DEFECTIVE PCB', parts: '50', variant: 'F' },
     'A COVER', 'ANTENNA', 'ANTENNA BASE', 'ANTENNA CABLE', 'ANTENNA STICK',
     'B COVER', 'BATTERY 1590', 'BATTERY 1880', 'BATTERY 3180', 'BATTERY CONNECTOR',
     'BELT CLIP', 'CAPACITOR', 'CHARGER', 'DESK MIC', 'DIODE', 'DV15 CONNECTOR', 'FIST MIC',
@@ -266,8 +270,14 @@ export function issueCodeIndex(list) {
 // every dropdown and the auto-detection could never fire.
 const REQUIRED_ACTIONS = ['RTO']
 
+// Fault codes the shorthand is documented to understand, so a stored
+// issueTypes list saved before they existed cannot make them undecodable.
+// Re-added by CODE, not by name: an installation that already claims 50F for
+// its own wording keeps that wording — the claim is what matters, not ours.
+const REQUIRED_ISSUE_TYPES = [{ name: 'DEFECTIVE PCB', parts: '50', variant: 'F' }]
+
 // Merge stored lists over the defaults (a saved category fully replaces its
-// default), then re-add any required action the stored list is missing.
+// default), then re-add anything the app itself depends on that is missing.
 export function mergeOptions(stored) {
   const out = {}
   for (const { key } of CATEGORIES) {
@@ -276,6 +286,10 @@ export function mergeOptions(stored) {
   }
   for (const action of REQUIRED_ACTIONS) {
     if (!out.actions.some((a) => String(a).trim().toUpperCase() === action)) out.actions.push(action)
+  }
+  const claimedCodes = issueCodeIndex(out.issueTypes)
+  for (const it of REQUIRED_ISSUE_TYPES) {
+    if (!claimedCodes[issueCode(it)]) out.issueTypes.push({ ...it })
   }
   // Chart toggles are a plain object, not a category list.
   const storedCharts = stored?.charts && typeof stored.charts === 'object' ? stored.charts : {}

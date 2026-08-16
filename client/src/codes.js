@@ -33,6 +33,17 @@
  *
  * The agency is NOT part of the code. It is sent (or picked) separately as the
  * verification step that turns a decoded report into a real entry.
+ *
+ * The ACTION is one letter, with one exception: RTO (Return to Owner) is
+ * written out in full, because it is a special designation rather than a
+ * service action — it says the device went back untouched, which marks the
+ * saved report reference-only, draws no stock and counts towards no service
+ * total. It combines with any parts code, so a defective PCB handed back is
+ *
+ *     H 50 F  RTO  MT
+ *
+ * where 50F is the parts code for Defective PCB (claimed by an issue type
+ * under Manage inputs) and RTO is the action.
  */
 
 import { useEffect, useRef, useState } from 'react'
@@ -68,7 +79,8 @@ export const FALLBACK = {
   // Suffix appended to the part name. '' is a real value, not "missing" — an
   // empty suffix is what makes A the default build.
   variants: { A: '', B: '3D' },
-  actions: { C: 'Change', N: 'New', R: 'Repair', I: 'Install/Re-Install', P: 'Program/Re-program', D: 'Dismantle' },
+  // RTO is keyed by its full three letters — see ACTION_ALT below.
+  actions: { C: 'Change', N: 'New', R: 'Repair', I: 'Install/Re-Install', P: 'Program/Re-program', D: 'Dismantle', RTO: 'RTO' },
   companies: { MI: 'MOI', MT: 'MOTECO' },
   agencies: {
     PSD: 'PUBLIC SECURITY DEPARTMENT', CD: 'CIVIL DEFENSE', PRI: 'PRISON',
@@ -150,12 +162,19 @@ const primaryAction = (name) => up(String(name ?? '').split('/')[0])
 // Strip every supported separator so one grammar covers all six write-ups.
 export const denseCode = (text) => up(text).replace(/[\s\-_:.]+/g, '')
 
-//                          type   parts  variant action  qty    company
-const FAULT_RE = /^([A-Z])(\d{2})([A-Z])([A-Z])(\d*)([A-Z]{1,2})/
+// The action is normally ONE letter, but RTO (Return to Owner) is spelled out
+// in full — it is a special designation rather than a service action, and a
+// single letter for it would read as noise next to C/R/N. It is tried FIRST so
+// the three characters are taken as one action rather than "R" followed by a
+// two-letter company; "TO" names no company, so no existing code changes
+// meaning. Any future multi-character action joins the same alternation.
+const ACTION_ALT = 'RTO|[A-Z]'
+//                          type   parts  variant      action        qty    company
+const FAULT_RE = new RegExp(`^([A-Z])(\\d{2})([A-Z])(${ACTION_ALT})(\\d*)([A-Z]{1,2})`)
 // The same token with the device letter left off — legal from the SECOND fault
 // on, inheriting the device from the one before it. One report is one device
 // (enforced below), so repeating the letter was only ever a restatement.
-const SHORT_FAULT_RE = /^(\d{2})([A-Z])([A-Z])(\d*)([A-Z]{1,2})/
+const SHORT_FAULT_RE = new RegExp(`^(\\d{2})([A-Z])(${ACTION_ALT})(\\d*)([A-Z]{1,2})`)
 // tel(4) issi(4) technician(1+, letters or digits — a numeric ID or an
 // initials claim), OR just the technician alone with tel/issi both left off,
 // OR just ONE of tel/issi — a single "0" placeholder marks the other as not
