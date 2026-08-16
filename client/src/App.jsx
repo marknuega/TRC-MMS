@@ -1723,7 +1723,6 @@ function App({ user, onLogout }) {
               ) : (
                 <>
                   <label className="footer-agency">
-                    Agency
                     {/* Not `required`: our own logic already guarantees a
                         non-empty value before handleSubmit ever runs (see the
                         `if (hit ...)` / quick-pick handlers below), and
@@ -1745,6 +1744,7 @@ function App({ user, onLogout }) {
                       placeholder="Type to search, or pick —"
                       autoComplete="off"
                     />
+                    Agency
                     <datalist id="entry-agency-options">
                       {agencyOptions.map((a) => (
                         <option key={a} value={a} />
