@@ -164,6 +164,70 @@ const SHORT_FAULT_RE = /^(\d{2})([A-Z])([A-Z])(\d*)([A-Z]{1,2})/
 // the other if only one is known.
 const TAIL_RE = /^(?:(\d{4})(\d{4}))?([A-Z0-9]+)$/
 
+// A technician ID given once, right after ANY fault's company, applies to
+// the whole message — later fault codes never need to repeat it. Only
+// codes.js's dense (no separators, no token boundaries) format needs this:
+// the WhatsApp decoder tokenizes on whitespace, so the technician there is
+// already an unambiguous, separate, always-last token — this problem does
+// not exist for it.
+//
+// Realistic technician IDs are short (Manage Inputs: a numeric id, or a 2/3
+// -letter initials claim), so the search only tries a few lengths — this
+// keeps it far below the length of a genuine tel+ISSI block (8 digits), so
+// the standard "tech only at the very end" form is never mistaken for one.
+const MAX_INLINE_TECH_LEN = 4
+
+// Does `str` fully resolve as zero or more chained shorthand fault codes,
+// stopping at either nothing left ('' — no more faults) or a bare 8-digit
+// tel+ISSI block (ISSI always sits at the true end, however the technician
+// was placed — see parseCodeReport's inlineTechnician branch)?
+function fullyConsumesAsShortFaultChain(str) {
+  let s = str
+  while (s && !/^\d{8}$/.test(s)) {
+    const m = SHORT_FAULT_RE.exec(s)
+    if (!m) return false
+    s = s.slice(m[0].length)
+  }
+  return true
+}
+
+// Look for a technician ID sitting right after a company, with a REAL fault
+// code immediately following it. The token must be a REGISTERED technician
+// — matching only on shape (like the end-of-line tail does) would risk
+// silently swallowing a typo'd fault code as a bogus "technician ID" instead
+// of surfacing a clear parse error.
+//
+// Requiring the remainder to start with an actual fault (2 digits + a
+// variant LETTER, per SHORT_FAULT_RE) is what tells an inline technician
+// ("...T1 43BNI...", a letter right after the split) apart from the
+// ordinary end-of-line tail ("...MT 2221 6575 1", nothing but digits after
+// it) — a run of plain digits is never accepted as "more faults", however
+// it happens to end.
+function inlineTechnicianSplit(str, technicians) {
+  for (let len = 1; len <= Math.min(MAX_INLINE_TECH_LEN, str.length); len++) {
+    const token = str.slice(0, len)
+    const known = technicians[token] ?? technicians[Number(token)]
+    if (!known) continue
+    const remainder = str.slice(len)
+    if (!SHORT_FAULT_RE.test(remainder)) continue
+    if (fullyConsumesAsShortFaultChain(remainder)) return { token, remainder }
+  }
+  return null
+}
+
+// Shared by both places a technician ID gets resolved (inline and end-of-
+// line) so the two can never drift into different messages/behaviour.
+function resolveTechnicianName(id, technicians, technicianList, warnings) {
+  const techName = technicians[id] ?? technicians[Number(id)]
+  if (!techName) {
+    warnings.push(`No technician with ID ${id} — leave the field blank or pick one.`)
+    return ''
+  }
+  const matched = matchOption(techName, technicianList)
+  if (!matched) warnings.push(`Technician "${techName}" is not in the Technicians list — saved as typed.`)
+  return matched ?? up(techName)
+}
+
 /**
  * Resolve a company code, accepting a one-letter shorthand: "I" is MOI, "T" is
  * MOTECO. Both real codes start with M, so the second letter is the one that
@@ -222,6 +286,10 @@ export function parseCodeReport(text, map = FALLBACK, options = {}) {
   let rest = src
   // Device carried forward for a token that omits it (second fault onward).
   let lastDevice = null
+  // Set once a technician ID is found sitting right after some fault's
+  // company — everything from there on is resolved from it rather than the
+  // end-of-line tail (see inlineTechnicianSplit()).
+  let inlineTechnician = null
   let m
   for (;;) {
     let device
@@ -233,6 +301,15 @@ export function parseCodeReport(text, map = FALLBACK, options = {}) {
     } else if (lastDevice && (m = SHORT_FAULT_RE.exec(rest))) {
       ;[whole, partNo, variant, action, qty, company] = m
       device = lastDevice
+    } else if (lastDevice && !inlineTechnician) {
+      // No more fault codes match directly — before giving up, check whether
+      // a technician ID was placed right here, with more fault codes after
+      // it (the whole point: state the technician once, not per code).
+      const found = inlineTechnicianSplit(rest, technicians)
+      if (!found) break
+      inlineTechnician = found.token
+      rest = found.remainder
+      continue
     } else {
       break
     }
@@ -327,25 +404,32 @@ export function parseCodeReport(text, map = FALLBACK, options = {}) {
     )
   }
 
-  // ---- Whatever is left must be the tel / issi / technician tail ----
+  // ---- Resolve tel / ISSI / technician ----
   let telNumber = ''
   let issiNumber = ''
   let technician = ''
-  const tail = TAIL_RE.exec(rest)
-  if (!rest) {
-    errors.push('Missing the tail — expected the technician ID, with last 4 of tel + last 4 of ISSI in front if known.')
-  } else if (!tail) {
-    errors.push(`Could not read "${rest}" as the technician ID, optionally preceded by tel(4) + ISSI(4).`)
+  if (inlineTechnician) {
+    // The technician was already given, right after a company earlier in the
+    // message — nothing else is expected here except optionally tel+ISSI as
+    // a pair (never a second technician).
+    if (rest && !/^\d{8}$/.test(rest)) {
+      errors.push(`Could not read "${rest}" after the technician — expected nothing, or tel(4) + ISSI(4).`)
+    } else if (rest) {
+      telNumber = rest.slice(0, 4)
+      issiNumber = rest.slice(4, 8)
+    }
+    technician = resolveTechnicianName(inlineTechnician, technicians, technicianList, warnings)
   } else {
-    telNumber = tail[1] ?? ''
-    issiNumber = tail[2] ?? ''
-    const techName = technicians[tail[3]] ?? technicians[Number(tail[3])]
-    if (!techName) warnings.push(`No technician with ID ${tail[3]} — leave the field blank or pick one.`)
-    else {
-      technician = matchOption(techName, technicianList) ?? up(techName)
-      if (!matchOption(techName, technicianList)) {
-        warnings.push(`Technician "${techName}" is not in the Technicians list — saved as typed.`)
-      }
+    // ---- Otherwise whatever is left must be the tel / issi / technician tail ----
+    const tail = TAIL_RE.exec(rest)
+    if (!rest) {
+      errors.push('Missing the tail — expected the technician ID, with last 4 of tel + last 4 of ISSI in front if known.')
+    } else if (!tail) {
+      errors.push(`Could not read "${rest}" as the technician ID, optionally preceded by tel(4) + ISSI(4).`)
+    } else {
+      telNumber = tail[1] ?? ''
+      issiNumber = tail[2] ?? ''
+      technician = resolveTechnicianName(tail[3], technicians, technicianList, warnings)
     }
   }
 

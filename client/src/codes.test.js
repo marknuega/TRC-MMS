@@ -3,7 +3,7 @@
  * © 2026 Muhammad Amir. All rights reserved.
  */
 
-import { test } from 'node:test'
+import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 import { parseCodeReport, matchOption, denseCode, FALLBACK } from './codes.js'
 import { DEFAULT_OPTIONS, issueCode, issueCodeIndex, issueNames } from './options.js'
@@ -86,6 +86,50 @@ test('a two-digit technician id still leaves tel and issi at 4', () => {
   const r = parseCodeReport('H43AC1MT2221657512', FALLBACK, OPTS)
   assert.equal(r.telNumber, '2221')
   assert.equal(r.issiNumber, '6575')
+})
+
+// A technician ID may be given once, right after ANY fault's company, and it
+// applies to the whole message — later fault codes never need to repeat it.
+describe('an inline technician ID (beside a company, not just at the end)', () => {
+  test('decodes, and later shorthand codes still chain normally', () => {
+    const r = parseCodeReport('H43ACT1 11ANI', FALLBACK, OPTS)
+    assert.equal(r.ok, true, r.errors.join('; '))
+    assert.equal(r.faults.length, 2)
+    assert.equal(r.faults[1].code, 'H11A')
+    assert.equal(r.telNumber, '')
+    assert.equal(r.issiNumber, '')
+    assert.equal(r.entry.technician, 'AMIR')
+  })
+
+  test('tel + ISSI may still follow at the true end of the message', () => {
+    const r = parseCodeReport('H43ACT1 11ANI 2221 6575', FALLBACK, OPTS)
+    assert.equal(r.ok, true, r.errors.join('; '))
+    assert.equal(r.faults.length, 2)
+    assert.equal(r.telNumber, '2221')
+    assert.equal(r.issiNumber, '6575')
+    assert.equal(r.entry.technician, 'AMIR')
+  })
+
+  test('only a REGISTERED id counts — an unregistered short run is not silently read as one', () => {
+    const r = parseCodeReport('H43ACT99', FALLBACK, OPTS)
+    assert.equal(r.ok, true, r.errors.join('; '))
+    assert.equal(r.faults.length, 1) // "99" was never mistaken for a continuing fault code either
+    assert.equal(r.entry.technician, '')
+    assert.match(r.warnings.join(' '), /No technician with ID 99/)
+  })
+
+  test('a short numeric prefix that happens to be a real id never hijacks the standard end-of-line tel+ISSI+tech form', () => {
+    // "2" IS a registered id (Muhammad Rashid) in FALLBACK, but the rest of
+    // "2221657512" can never cleanly close out as more fault codes (it's all
+    // digits), so this must still resolve exactly as the plain tail — tel
+    // 2221, ISSI 6575, technician id "12" (unregistered, hence the warning).
+    const r = parseCodeReport('H43AC1MT2221657512', FALLBACK, OPTS)
+    assert.equal(r.ok, true, r.errors.join('; '))
+    assert.equal(r.faults.length, 1)
+    assert.equal(r.telNumber, '2221')
+    assert.equal(r.issiNumber, '6575')
+    assert.match(r.warnings.join(' '), /No technician with ID 12/)
+  })
 })
 
 test('mixing devices in one report is rejected, not silently merged', () => {
