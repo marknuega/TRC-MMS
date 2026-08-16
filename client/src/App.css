@@ -930,6 +930,19 @@ h2 {
   width: 100%;
   padding-right: 1.9rem; /* room for the caret */
 }
+.search-select.has-icon input {
+  padding-left: 1.9rem; /* room for the leading icon */
+}
+.search-select-icon {
+  position: absolute;
+  left: 0.6rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.85rem;
+  line-height: 1;
+  color: var(--muted);
+  pointer-events: none;
+}
 .search-select-caret {
   position: absolute;
   right: 0.5rem;
@@ -942,6 +955,11 @@ h2 {
   line-height: 1;
   padding: 0.2rem;
   cursor: pointer;
+  transition: transform 0.15s ease;
+}
+.search-select-caret.open {
+  transform: translateY(-50%) rotate(180deg);
+  color: var(--primary);
 }
 .search-select-caret:disabled {
   cursor: not-allowed;
@@ -979,8 +997,18 @@ h2 {
   color: var(--text);
   cursor: pointer;
 }
-.search-select-opt:hover {
+/* Keyboard-highlighted row (arrow keys / hover) — distinct from .selected,
+   which marks whichever option matches the current value; both can apply
+   to the same row at once and the two colors are deliberately different. */
+.search-select-opt.active {
   background: var(--surface-2);
+}
+.search-select-opt.selected {
+  color: var(--primary);
+  font-weight: 700;
+}
+.search-select-opt.selected.active {
+  background: var(--ring);
 }
 .search-select-empty {
   padding: 0.4rem 0.6rem;

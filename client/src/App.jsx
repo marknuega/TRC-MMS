@@ -1646,6 +1646,7 @@ function App({ user, onLogout }) {
                     onChange={setFault(i, 'company')}
                     options={[{ value: '', label: '— none —' }, ...options.companies]}
                     ariaLabel="Company"
+                    icon="🏢"
                   />
                   {isTransmittal && (
                     <SearchSelect value={fault.status} onChange={setFault(i, 'status')} options={options.statuses} ariaLabel="Item status" />
@@ -1901,6 +1902,7 @@ function App({ user, onLogout }) {
                         onChange={eSetFault(i, 'company')}
                         options={[{ value: '', label: '— none —' }, ...options.companies]}
                         ariaLabel="Company"
+                        icon="🏢"
                       />
                       {isTransmittal && (
                         <SearchSelect value={fault.status} onChange={eSetFault(i, 'status')} options={options.statuses} ariaLabel="Item status" />
