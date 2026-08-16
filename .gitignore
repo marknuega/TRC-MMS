@@ -2,10 +2,11 @@ node_modules/
 dist/
 build/
 
-# Secrets - never commit these
+# Secrets - never commit these.
+# .env.* covers every variant, so pointing a script at another database with
+# e.g. .env.production cannot leave production credentials in a commit.
 .env
-.env.local
-.env.*.local
+.env.*
 !.env.example
 
 # Logs
