@@ -119,6 +119,10 @@ export const loadSavedReport = (id) =>
 export const deleteSavedReport = (id) =>
   request(`/api/saved-reports/${id}`, { method: 'DELETE' })
 
+// Mark/unmark a saved report as reference-only (record kept, no parts used).
+export const setSavedReportReference = (id, isReferenceOnly) =>
+  request(`/api/saved-reports/${id}`, { method: 'PATCH', body: JSON.stringify({ isReferenceOnly }) })
+
 const monthlyQs = (month, branch) =>
   `?month=${encodeURIComponent(month)}&branch=${encodeURIComponent(branch)}`
 

@@ -1966,6 +1966,23 @@ h2 {
   background: var(--surface-3);
   padding: 0.8rem 1rem;
 }
+/* Reference-only snapshot: kept for the record, no parts used (e.g. RTO). */
+.saved-list li.ref-only {
+  background: var(--warn-soft);
+  border-color: var(--warn);
+}
+.ref-badge {
+  display: inline-block;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: var(--warn);
+  color: var(--surface);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  vertical-align: 0.1em;
+}
 .saved-list strong {
   color: var(--text-h);
   font-size: 1rem;

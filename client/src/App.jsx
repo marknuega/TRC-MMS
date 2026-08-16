@@ -16,6 +16,7 @@ import {
   saveReport,
   loadSavedReport,
   deleteSavedReport,
+  setSavedReportReference,
   getMonthly,
   saveMonthly,
   clearMonthly,
@@ -162,7 +163,9 @@ function searchInside(list, query) {
     for (const e of entries) {
       const model = e.model && e.model !== '-' ? e.model : ''
       for (const f of e.faults ?? []) {
-        const hay = `${label} ${r.reportId} ${r.branch} ${r.dateLabel} ${e.technician ?? ''} ${r.receivedBy ?? ''} ${e.type} ${e.model} ${f.issue} ${f.company} ${f.status} ${e.comment ?? ''}`
+        // Tel/ISSI are in the haystack so a technician's radio can be traced
+        // back to the reports it appears in.
+        const hay = `${label} ${r.reportId} ${r.branch} ${r.dateLabel} ${e.technician ?? ''} ${r.receivedBy ?? ''} ${e.telNumber ?? ''} ${e.issiNumber ?? ''} ${e.type} ${e.model} ${f.issue} ${f.company} ${f.status} ${e.comment ?? ''}`
         if (hay.toLowerCase().includes(q)) {
           out.push({
             date: r.dateLabel,
@@ -600,7 +603,9 @@ function App({ user, onLogout }) {
       const reports = data.reports ?? []
       // Only swap state when something actually changed, so polling this every
       // tick doesn't churn re-renders across the saved-report–derived pages.
-      const sig = reports.map((r) => `${r.id}:${r.seq ?? ''}:${r.savedAt ?? r.updatedAt ?? ''}`).join('|')
+      const sig = reports
+        .map((r) => `${r.id}:${r.seq ?? ''}:${r.savedAt ?? r.updatedAt ?? ''}:${r.isReferenceOnly ? 1 : 0}`)
+        .join('|')
       if (sig !== lastSavedSig.current) {
         lastSavedSig.current = sig
         setSaved(reports)
@@ -717,6 +722,21 @@ function App({ user, onLogout }) {
       setError(err.message)
     } finally {
       setBusy(false)
+    }
+  }
+
+  // Flip the reference-only mark by hand — overrides whatever the RTO
+  // auto-detection decided when the report was saved.
+  async function handleToggleReference(rep) {
+    const next = !rep.isReferenceOnly
+    // Paint it straight away; refreshSaved() below reconciles with the server.
+    setSaved((list) => list.map((r) => (r.id === rep.id ? { ...r, isReferenceOnly: next } : r)))
+    try {
+      await setSavedReportReference(rep.id, next)
+      await refreshSaved()
+    } catch (err) {
+      setSaved((list) => list.map((r) => (r.id === rep.id ? { ...r, isReferenceOnly: !next } : r)))
+      setError(err.message)
     }
   }
 
@@ -1293,9 +1313,14 @@ function App({ user, onLogout }) {
 
   // One saved-snapshot row (Edit -> Load / Delete).
   const savedRow = (r) => (
-    <li key={r.id}>
+    <li key={r.id} className={r.isReferenceOnly ? 'ref-only' : undefined}>
       <div>
         <strong>{repLabel(r.reportId, r.branch, r.mode)}</strong>{' '}
+        {r.isReferenceOnly && (
+          <span className="ref-badge" title="Kept for the record only — no parts were used">
+            Reference only
+          </span>
+        )}{' '}
         <span className="muted small">
           · {r.dateLabel} · {r.entryCount} {r.entryCount === 1 ? 'entry' : 'entries'} · saved{' '}
           {new Date(r.savedAt).toLocaleString('en-GB')}
@@ -1306,6 +1331,18 @@ function App({ user, onLogout }) {
           <>
             <button type="button" onClick={() => { handleLoadReport(r); setEditSavedId(null) }} disabled={busy}>
               Load
+            </button>
+            <button
+              type="button"
+              className="ghost"
+              onClick={() => handleToggleReference(r)}
+              title={
+                r.isReferenceOnly
+                  ? 'Treat this as a normal report again'
+                  : 'Mark as kept for the record only — no parts were used'
+              }
+            >
+              {r.isReferenceOnly ? 'Unmark reference' : 'Mark reference'}
             </button>
             <button type="button" className="danger" onClick={() => { handleDeleteSaved(r); setEditSavedId(null) }}>
               Delete
@@ -2009,7 +2046,7 @@ function App({ user, onLogout }) {
             results: reportResults,
             hint: 'Daily-report snapshots, saved under a unique REP-#### number. Load one back to review or edit it, then Save again to store it as a new report.',
             empty: 'No saved reports yet — in Report mode, click “Save report” above.',
-            placeholder: '🔎 Search inside reports (item, model, branch, date)…',
+            placeholder: '🔎 Search inside reports (item, model, branch, date, tel, ISSI)…',
           })}
 
         {isTransmittal &&
@@ -2024,7 +2061,7 @@ function App({ user, onLogout }) {
             results: txResults,
             hint: 'Transmittal snapshots, saved under a unique TRANS-#### number — kept separate from daily reports.',
             empty: 'No saved transmittals yet — switch to Transmittal mode and Save.',
-            placeholder: '🔎 Search inside transmittals (item, model, branch, date)…',
+            placeholder: '🔎 Search inside transmittals (item, model, branch, date, tel, ISSI)…',
             tx: true,
           })}
             </>

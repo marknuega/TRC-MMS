@@ -13,6 +13,13 @@ const normMode = (m) => (String(m ?? 'report').trim().toLowerCase() === 'transmi
 const docId = (mode, n) => `${normMode(mode) === 'transmittal' ? 'TRANS' : 'REP'}-${String(n).padStart(4, '0')}`
 const withFaults = { faults: { orderBy: { position: 'asc' } } }
 
+// RTO (Return to Owner) means the device went back untouched — no part was
+// consumed — so a snapshot containing one is a reference/record-only document.
+// Detected here at save time; the saver can still override it either way, and
+// the flag stays editable afterwards via PATCH.
+export const hasRtoAction = (snapshot) =>
+  (snapshot ?? []).some((e) => (e.faults ?? []).some((f) => String(f.action ?? '').trim().toUpperCase() === 'RTO'))
+
 // Deduct stock for materials/faults that match an inventory item (by itemCode,
 // case-insensitive). Quantities across the snapshot are summed per item, and
 // `out` is incremented (so `avail` = begin - out drops). Unmatched issues are
@@ -82,6 +89,7 @@ router.get('/', async (req, res, next) => {
         select: {
           id: true, seq: true, docNumber: true, reportId: true, branch: true, mode: true,
           transmittedBy: true, receivedBy: true, savedAt: true, dateLabel: true, entryCount: true,
+          isReferenceOnly: true,
           entries: true, // snapshot, so the client can search inside report data
         },
       }),
@@ -165,13 +173,18 @@ router.post('/', async (req, res, next) => {
 
     const transmittedBy = String(req.body?.transmittedBy ?? '').trim()
     const receivedBy = String(req.body?.receivedBy ?? '').trim()
+    // Auto-detect RTO, but let an explicit isReferenceOnly in the body win, so
+    // the saver can mark a normal report as reference-only (or clear a
+    // false positive) without a second round-trip.
+    const isReferenceOnly =
+      req.body?.isReferenceOnly == null ? hasRtoAction(snapshot) : Boolean(req.body.isReferenceOnly)
     const seq = await nextSeq()
     const docNumber = await nextDocNumber(mode, branch)
     const saved = await prisma.$transaction(async (tx) => {
       const created = await tx.savedReport.create({
         data: {
           seq, docNumber, reportId: docId(mode, docNumber), branch, mode, transmittedBy, receivedBy,
-          dateLabel, entryCount: snapshot.length, entries: snapshot,
+          dateLabel, entryCount: snapshot.length, isReferenceOnly, entries: snapshot,
         },
       })
       await applyInventoryUsage(tx, snapshot, created.reportId, branch) // auto stock deduction + ledger
@@ -229,6 +242,30 @@ router.post('/:id/load', async (req, res, next) => {
     })
     res.json({ loaded: snapshot.length })
   } catch (err) {
+    next(err)
+  }
+})
+
+// PATCH /api/saved-reports/:id - manual override of the reference-only mark
+// (the RTO auto-detection at save time is only the starting value).
+router.patch('/:id', async (req, res, next) => {
+  try {
+    const id = Number(req.params.id)
+    const report = await prisma.savedReport.findUnique({ where: { id }, select: { branch: true } })
+    if (!report || !canAccessBranch(req, report.branch)) {
+      return res.status(404).json({ error: 'Saved report not found' })
+    }
+    if (req.body?.isReferenceOnly == null) {
+      return res.status(400).json({ error: 'isReferenceOnly is required' })
+    }
+    const updated = await prisma.savedReport.update({
+      where: { id },
+      data: { isReferenceOnly: Boolean(req.body.isReferenceOnly) },
+      select: { id: true, isReferenceOnly: true },
+    })
+    res.json(updated)
+  } catch (err) {
+    if (err.code === 'P2025') return res.status(404).json({ error: 'Saved report not found' })
     next(err)
   }
 })

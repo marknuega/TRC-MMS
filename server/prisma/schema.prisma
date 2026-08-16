@@ -9,18 +9,22 @@ datasource db {
 
 // A saved snapshot of the working entries, with a unique REP-#### series number.
 model SavedReport {
-  id            Int      @id @default(autoincrement())
-  seq           Int      @unique // global insertion order (sorting + latest-per-date dedup)
-  docNumber     Int      @default(0) @map("doc_number") // per-branch series number (REP-#### / TRANS-####)
-  reportId      String   @map("report_id") // "REP-####"/"TRANS-####"; unique within a branch, not globally
-  branch        String   @default("") // Makkah | Taif | Jeddah
-  mode          String   @default("report") // report | transmittal
-  transmittedBy String   @default("") @map("transmitted_by")
-  receivedBy    String   @default("") @map("received_by")
-  savedAt       DateTime @default(now()) @map("saved_at")
-  dateLabel     String   @default("") @map("date_label")
-  entryCount    Int      @default(0) @map("entry_count")
-  entries       Json // snapshot of entries + faults, used to reload into the form
+  id              Int      @id @default(autoincrement())
+  seq             Int      @unique // global insertion order (sorting + latest-per-date dedup)
+  docNumber       Int      @default(0) @map("doc_number") // per-branch series number (REP-#### / TRANS-####)
+  reportId        String   @map("report_id") // "REP-####"/"TRANS-####"; unique within a branch, not globally
+  branch          String   @default("") // Makkah | Taif | Jeddah
+  mode            String   @default("report") // report | transmittal
+  transmittedBy   String   @default("") @map("transmitted_by")
+  receivedBy      String   @default("") @map("received_by")
+  savedAt         DateTime @default(now()) @map("saved_at")
+  dateLabel       String   @default("") @map("date_label")
+  entryCount      Int      @default(0) @map("entry_count")
+  // Kept for the record only — no parts were actually used. Set automatically
+  // when the snapshot contains an RTO (Return to Owner) action, and toggleable
+  // by hand afterwards from the saved list.
+  isReferenceOnly Boolean  @default(false) @map("is_reference_only")
+  entries         Json // snapshot of entries + faults, used to reload into the form
 
   @@unique([mode, branch, docNumber]) // each branch numbers its own series independently
   @@map("saved_reports")
@@ -28,19 +32,19 @@ model SavedReport {
 
 // Spare-parts inventory. Avail is derived (begin - out), not stored.
 model InventoryItem {
-  id        Int      @id @default(autoincrement())
-  sku       String   @unique
-  branch    String   @default("") // owning branch; non-admins are scoped to their own
-  store     String   @default("")
-  shelf     String   @default("")
-  itemCode  String   @default("") @map("item_code")
-  begin     Int      @default(0)
-  out       Int      @default(0)
-  lowStock  Int      @default(0) @map("low_stock")
-  remarks   String   @default("")
+  id        Int            @id @default(autoincrement())
+  sku       String         @unique
+  branch    String         @default("") // owning branch; non-admins are scoped to their own
+  store     String         @default("")
+  shelf     String         @default("")
+  itemCode  String         @default("") @map("item_code")
+  begin     Int            @default(0)
+  out       Int            @default(0)
+  lowStock  Int            @default(0) @map("low_stock")
+  remarks   String         @default("")
   txns      InventoryTxn[]
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  createdAt DateTime       @default(now()) @map("created_at")
+  updatedAt DateTime       @updatedAt @map("updated_at")
 
   @@index([store])
   @@index([branch])
@@ -190,8 +194,8 @@ model Fault {
   issue    String
   quantity Int         @default(1)
   action   String // CHANGE|REPAIR|NEW|PCB|PROGRAM|RE-PROGRAM|INSTALL|RE-INSTALL|DISMANTLE
-  company  String   @default("") // MOTECO|MOI|PROJECT 2|PROJECT X|ONLINE|MOTECO LOCAL|FREE
-  status   String   @default("") // transmittal item status: New | Refurbish
+  company  String      @default("") // MOTECO|MOI|PROJECT 2|PROJECT X|ONLINE|MOTECO LOCAL|FREE
+  status   String      @default("") // transmittal item status: New | Refurbish
 
   @@index([entryId])
   @@map("faults")

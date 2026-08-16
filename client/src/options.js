@@ -34,7 +34,9 @@ export const DEFAULT_OPTIONS = {
 
   // The report engine knows the codes for these built-ins (C/R/N/PCB/P/RP/I/RI/D).
   // Adding a custom action is fine — it just prints its own name as the code.
-  actions: ['CHANGE', 'REPAIR', 'NEW', 'PCB', 'PROGRAM', 'RE-PROGRAM', 'INSTALL', 'RE-INSTALL', 'DISMANTLE'],
+  // RTO (Return to Owner) means the device went back untouched; saving a report
+  // that contains one auto-marks it reference-only (see savedReports.js).
+  actions: ['CHANGE', 'REPAIR', 'NEW', 'PCB', 'PROGRAM', 'RE-PROGRAM', 'INSTALL', 'RE-INSTALL', 'DISMANTLE', 'RTO'],
 
   // The report engine knows the display codes for these (MOT (P2), MOI, ...).
   companies: ['MOTECO', 'MOI', 'PROJECT 2', 'PROJECT X', 'ONLINE', 'MOTECO LOCAL', 'FREE'],
