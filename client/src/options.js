@@ -260,12 +260,22 @@ export function issueCodeIndex(list) {
   return index
 }
 
-// Merge stored lists over the defaults (a saved category fully replaces its default).
+// Actions the app itself reasons about, so they must exist whatever is stored.
+// RTO drives the reference-only marking at save time (see savedReports.js); a
+// stored `actions` list saved before RTO existed would otherwise hide it from
+// every dropdown and the auto-detection could never fire.
+const REQUIRED_ACTIONS = ['RTO']
+
+// Merge stored lists over the defaults (a saved category fully replaces its
+// default), then re-add any required action the stored list is missing.
 export function mergeOptions(stored) {
   const out = {}
   for (const { key } of CATEGORIES) {
     const list = Array.isArray(stored?.[key]) ? stored[key] : DEFAULT_OPTIONS[key]
     out[key] = [...list]
+  }
+  for (const action of REQUIRED_ACTIONS) {
+    if (!out.actions.some((a) => String(a).trim().toUpperCase() === action)) out.actions.push(action)
   }
   // Chart toggles are a plain object, not a category list.
   const storedCharts = stored?.charts && typeof stored.charts === 'object' ? stored.charts : {}
