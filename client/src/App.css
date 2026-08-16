@@ -2905,32 +2905,30 @@ h2 {
   font-size: 1.05rem;
 }
 
-/* Parts Number Catalog — card grid (code badge + name + Edit), not a table. */
-.parts-catalog-hint {
+/* Shared card/grid design for the Code Reference lists (Parts Number
+   Catalog, Type Letters): a rounded, subtly-bordered light-blue card with a
+   blue pill code badge, laid out 3/2/1 columns by viewport. */
+.catalog-hint {
   max-width: 46rem;
   margin: 0 0 1rem;
   font-size: 0.88rem;
 }
-.parts-catalog-grid {
+.catalog-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.75rem;
 }
 @media (max-width: 900px) {
-  .parts-catalog-grid {
+  .catalog-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 @media (max-width: 560px) {
-  .parts-catalog-grid {
+  .catalog-grid {
     grid-template-columns: 1fr;
   }
 }
-.parts-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
+.catalog-card {
   min-height: 4.25rem;
   padding: 0.65rem 0.85rem;
   background: var(--surface-3);
@@ -2938,17 +2936,11 @@ h2 {
   border-radius: var(--radius-sm);
   transition: border-color 0.15s ease, background 0.15s ease;
 }
-.parts-card:hover {
+.catalog-card:hover {
   background: var(--surface-2);
   border-color: var(--border-strong);
 }
-.parts-card-info {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  min-width: 0;
-}
-.parts-card-badge {
+.catalog-badge {
   align-self: flex-start;
   display: inline-flex;
   align-items: center;
@@ -2961,6 +2953,20 @@ h2 {
   font-family: ui-monospace, Consolas, monospace;
   font-weight: 700;
   font-size: 0.8rem;
+}
+
+/* Parts Number Catalog — badge + name on the left, Edit on the right. */
+.parts-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.parts-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
 }
 .parts-card-name {
   color: var(--text-h);
@@ -2987,17 +2993,33 @@ h2 {
   border-color: var(--primary);
   color: var(--primary);
 }
+
+/* Type Letters — badge on top, device name (source char highlighted) and a
+   muted one-line explanation stacked below it. */
+.device-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.device-card-name {
+  color: var(--text-h);
+  font-size: 0.92rem;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.device-card-hit {
+  font-weight: 800;
+  color: var(--primary);
+}
+.device-card-note {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
 .ref-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
   gap: 0.9rem 1.2rem;
   align-items: start;
-}
-/* Device letters are a 3-column table (code · model · why), which does not fit
-   the default track — it used to overflow its cell and paint over the table
-   beside it. Give it a wider minimum and let it drop to one column sooner. */
-.ref-grid-devices {
-  grid-template-columns: repeat(auto-fill, minmax(21rem, 1fr));
 }
 .ref-block {
   min-width: 0;
@@ -3053,21 +3075,6 @@ h2 {
   font-family: ui-monospace, Consolas, monospace;
   font-weight: 700;
   font-size: 0.88em;
-}
-/* The source char of a device letter, highlighted in the model name. */
-.ref-table .ref-hit {
-  font-weight: 800;
-  color: var(--primary);
-}
-/* Explanation column for device letters. It wraps: pinning it to one line is
-   what made the table wider than its column in the first place. */
-.ref-table .ref-note {
-  color: var(--muted);
-  font-size: 0.85em;
-}
-/* Keep the model name on one line to save vertical space. */
-.ref-table .ref-dev-name {
-  white-space: nowrap;
 }
 .ref-table th {
   /* No scroll wrapper here — the page itself is the scrollport, so this pins to

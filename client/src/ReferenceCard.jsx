@@ -221,29 +221,27 @@ function deviceSource(code, name) {
   return { before: s.slice(0, idx), hit: s[idx], after: s.slice(idx + 1), note }
 }
 
-// Device Letters: model name with its source char bolded, plus an explanation.
-function DeviceTable({ rows }) {
+// Device Letters: same card design as the Parts Number Catalog — a blue
+// letter badge, the model name with its source char bolded, and a muted
+// one-line explanation of where that letter comes from.
+function DeviceCards({ rows }) {
   return (
-    <table className="ref-table">
-      <tbody>
-        {rows.map(([code, name]) => {
-          const p = deviceSource(code, name)
-          return (
-            <tr key={code}>
-              <td className="ref-code">
-                <span className="ref-code-badge">{code}</span>
-              </td>
-              <td className="ref-dev-name">
-                {p.before}
-                <strong className="ref-hit">{p.hit}</strong>
-                {p.after}
-              </td>
-              <td className="ref-note">{p.note}</td>
-            </tr>
-          )
-        })}
-      </tbody>
-    </table>
+    <div className="catalog-grid">
+      {rows.map(([code, name]) => {
+        const p = deviceSource(code, name)
+        return (
+          <div className="catalog-card device-card" key={code}>
+            <span className="catalog-badge">{code}</span>
+            <span className="device-card-name">
+              {p.before}
+              <strong className="device-card-hit">{p.hit}</strong>
+              {p.after}
+            </span>
+            <span className="device-card-note">{p.note}</span>
+          </div>
+        )
+      })}
+    </div>
   )
 }
 
@@ -652,7 +650,6 @@ export default function ReferenceCard({ isAdmin = false, issueTypes = [] }) {
     }
   }, [map, issueTypes])
 
-  const half = Math.ceil(data.devices.length / 2)
   const actHalf = Math.ceil(data.actions.length / 2)
 
   const statusLabel =
@@ -733,7 +730,7 @@ export default function ReferenceCard({ isAdmin = false, issueTypes = [] }) {
           Parts Number Catalog ({data.claims.length})
         </summary>
         <div className="ref-sec-body">
-          <p className="muted parts-catalog-hint">
+          <p className="muted catalog-hint">
             Parts numbers claimed by an <strong>Issue type</strong> in{' '}
             <strong>Manage Inputs → Faulty / Parts</strong> — the parts+variant code (e.g.{' '}
             <code>11A</code>) alongside what it names. This list updates the instant it changes in
@@ -745,11 +742,11 @@ export default function ReferenceCard({ isAdmin = false, issueTypes = [] }) {
               Faulty / Parts.
             </p>
           ) : (
-            <div className="parts-catalog-grid">
+            <div className="catalog-grid">
               {data.claims.map(([code, name]) => (
-                <div className="parts-card" key={code}>
+                <div className="catalog-card parts-card" key={code}>
                   <div className="parts-card-info">
-                    <span className="parts-card-badge">{code}</span>
+                    <span className="catalog-badge">{code}</span>
                     <span className="parts-card-name">{name}</span>
                   </div>
                   <button type="button" className="parts-card-edit">
@@ -765,14 +762,7 @@ export default function ReferenceCard({ isAdmin = false, issueTypes = [] }) {
       <details className="ref-sec">
         <summary className="ref-section">Type Letters</summary>
         <div className="ref-sec-body">
-          <div className="ref-grid ref-grid-devices">
-            <div className="ref-block">
-              <DeviceTable rows={data.devices.slice(0, half)} />
-            </div>
-            <div className="ref-block">
-              <DeviceTable rows={data.devices.slice(half)} />
-            </div>
-          </div>
+          <DeviceCards rows={data.devices} />
         </div>
       </details>
 
