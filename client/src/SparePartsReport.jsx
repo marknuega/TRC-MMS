@@ -336,7 +336,7 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
                       </button>
                       {cardOpen && (
                         <div className="sp-model">
-                          <div className="inv-scroll">
+                          <div className="sp-scroll">
                             <table className="inv-table sp-table">
                               <thead>
                                 <tr>
@@ -371,7 +371,7 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
               {report.companyTotals.length > 0 && (
                 <div className="sp-block">
                   <h3 className="sp-brand-h">Parts by company</h3>
-                  <div className="inv-scroll">
+                  <div className="sp-scroll">
                     <table className="inv-table sp-table sp-narrow">
                       <tbody>
                         {report.companyTotals.map((c) => (
@@ -395,7 +395,7 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
               {report.activity.length > 0 && (
                 <div className="sp-block">
                   <h3 className="sp-brand-h">Activity totals</h3>
-                  <div className="inv-scroll">
+                  <div className="sp-scroll">
                     <table className="inv-table sp-table">
                       <thead>
                         <tr>
@@ -436,7 +436,7 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
               {report.agencies.length > 0 && (
                 <div className="sp-block">
                   <h3 className="sp-brand-h">Agency activity</h3>
-                  <div className="inv-scroll">
+                  <div className="sp-scroll">
                     <table className="inv-table sp-table">
                       <thead>
                         <tr>

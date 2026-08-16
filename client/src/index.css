@@ -127,6 +127,31 @@ body {
   color: var(--text);
 }
 
+/* The page's own vertical scrollbar, kept always-on and easy to grab —
+   subtle rather than the OS default that some setups only reveal on hover.
+   This only styles the scrollbar box; wheel/trackpad/touch scrolling is
+   native browser behavior and untouched. */
+html {
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+html::-webkit-scrollbar {
+  width: 12px;
+}
+html::-webkit-scrollbar-track {
+  background: transparent;
+}
+html::-webkit-scrollbar-thumb {
+  background-color: var(--border-strong);
+  background-clip: padding-box;
+  border: 3px solid transparent;
+  border-radius: 999px;
+}
+html::-webkit-scrollbar-thumb:hover {
+  background-color: var(--muted);
+}
+
 h1 {
   color: var(--text-h);
   font-weight: 700;

@@ -2673,6 +2673,28 @@ h2 {
 .sp-card-toggle {
   margin-bottom: 0.7rem;
 }
+/* Unlike .inv-scroll (Inventory's genuinely long tables), every Spare Parts
+   table is short and belongs to the normal page flow — it should never own
+   its own vertical scroll region. A vertical max-height + overflow:auto here
+   would turn each card into a separate nested scroller a mouse wheel can get
+   caught on while scrolling down a long page. Horizontal overflow (a very
+   long part name) still gets its own scrollbar; the card's border/radius
+   framing matches .inv-scroll's so the visual stays identical. */
+.sp-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+/* .inv-table's header is sticky so it pins while scrolling *inside*
+   .inv-scroll's own box. .sp-scroll has no such box, so without this the
+   header would instead pin against the whole page — every short card's
+   header flicker-sticking to the viewport top as you scroll past it.
+   Staying `relative` (not `static`) keeps it a valid anchor for the
+   header's ::after underline. */
+.sp-scroll .inv-table thead th {
+  position: relative;
+  top: auto;
+}
 
 /* Company color themes — MOI blue, MOTECO (MOT) green — so the two are easy
    to tell apart at a glance. The card's whole surface (table rows included,
