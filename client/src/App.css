@@ -943,11 +943,18 @@ h2 {
   color: var(--muted);
   pointer-events: none;
 }
-.search-select-caret {
+/* Qualified with the always-present .search-select ancestor (not just the
+   bare class) so this reliably outranks broad ancestor rules like
+   ".manage-body button" (same specificity as a bare ".search-select-caret"
+   would be — this is what actually made the caret render as a full-size
+   filled button overlapping the input instead of a small chevron). */
+.search-select .search-select-caret {
   position: absolute;
   right: 0.5rem;
   top: 50%;
   transform: translateY(-50%);
+  height: auto;
+  width: auto;
   border: 0;
   background: transparent;
   color: var(--muted);
@@ -957,11 +964,11 @@ h2 {
   cursor: pointer;
   transition: transform 0.15s ease;
 }
-.search-select-caret.open {
+.search-select .search-select-caret.open {
   transform: translateY(-50%) rotate(180deg);
   color: var(--primary);
 }
-.search-select-caret:disabled {
+.search-select .search-select-caret:disabled {
   cursor: not-allowed;
   opacity: 0.5;
 }
@@ -984,9 +991,14 @@ h2 {
   box-shadow: var(--shadow);
   padding: 0.3rem;
 }
-.search-select-opt {
+/* Qualified with .search-select-menu for the same reason the caret is
+   qualified with .search-select — outranks ancestor rules like
+   ".manage-body button" that would otherwise turn every option into a
+   full-size filled button. */
+.search-select-menu .search-select-opt {
   display: block;
   width: 100%;
+  height: auto;
   text-align: left;
   font: inherit;
   font-size: 0.85rem;
@@ -1000,14 +1012,14 @@ h2 {
 /* Keyboard-highlighted row (arrow keys / hover) — distinct from .selected,
    which marks whichever option matches the current value; both can apply
    to the same row at once and the two colors are deliberately different. */
-.search-select-opt.active {
+.search-select-menu .search-select-opt.active {
   background: var(--surface-2);
 }
-.search-select-opt.selected {
+.search-select-menu .search-select-opt.selected {
   color: var(--primary);
   font-weight: 700;
 }
-.search-select-opt.selected.active {
+.search-select-menu .search-select-opt.selected.active {
   background: var(--ring);
 }
 .search-select-empty {
@@ -1080,7 +1092,12 @@ h2 {
   align-items: center;
   gap: 0.35rem;
 }
-.agency-quickpicks button {
+/* Class repeated to outrank ancestor rules like ".manage-body button" at
+   equal specificity otherwise (both class+element) — a plain
+   ".agency-quickpicks button" lost that tie by source order, which is why
+   these rendered as full-size filled buttons instead of small pills
+   whenever this sits inside a .manage-body container (Quick Code Entry). */
+.agency-quickpicks.agency-quickpicks button {
   font: inherit;
   font-size: 0.78rem;
   font-weight: 700;
@@ -1096,11 +1113,11 @@ h2 {
   color: var(--text);
   cursor: pointer;
 }
-.agency-quickpicks button:hover:not(:disabled) {
+.agency-quickpicks.agency-quickpicks button:hover:not(:disabled) {
   border-color: var(--primary);
   color: var(--primary);
 }
-.agency-quickpicks button:disabled {
+.agency-quickpicks.agency-quickpicks button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
