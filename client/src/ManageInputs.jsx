@@ -180,15 +180,40 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
   function add() {
     const value = newValue.trim()
     if (!value) return
-    if (exists(value)) {
-      flash(`"${value}" is already in the list.`, 'name')
-      return
-    }
+
     const [problem, field] = problemFor(newParts, newVariant, newId, newInitials2, newInitials3)
     if (problem) {
       flash(problem, field)
       return
     }
+
+    // A name already in the list is usually a mistake — but not when it has no
+    // code and one is being given. That is the SAME issue type gaining its
+    // code, so it is attached rather than refused: otherwise an entry like
+    // "PCB" that predates the codes could never be given one from here, and
+    // adding a second row named "PCB" is not what anyone wants either.
+    const clash = list.findIndex((v) => nameOf(v).toLowerCase() === value.toLowerCase())
+    if (clash >= 0) {
+      const givingCode = isIssues && newParts.trim() && newVariant.trim()
+      const held = isIssues ? issueCode(list[clash]) : ''
+      if (!givingCode || held) {
+        flash(`"${value}" is already in the list${held ? `, holding code ${held}` : ''}.`, 'name')
+        return
+      }
+      onChange(
+        cat,
+        list.map((v, i) => (i === clash ? makeItem(value, newDesc, newParts, newVariant, newId, newInitials2, newInitials3) : v)),
+      )
+      setNewValue('')
+      setNewDesc('')
+      setNewParts('')
+      setNewVariant('')
+      setNewId('')
+      setNewInitials2('')
+      setNewInitials3('')
+      return
+    }
+
     onChange(cat, [...list, makeItem(value, newDesc, newParts, newVariant, newId, newInitials2, newInitials3)])
     setNewValue('')
     setNewDesc('')
