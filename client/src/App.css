@@ -242,15 +242,19 @@
 .app textarea:hover {
   border-color: var(--field-border-hover);
 }
-/* An offset outline instead of a thick coloured border and a 4px glow: it
-   reads clearly at a glance, does not recolour the field, and cannot be
-   confused with the red border that marks a validation failure. */
+/* One hairline, drawn tight to the field and in ink rather than brand blue.
+   The previous 2px blue outline sat 2px clear of the box, so it rendered at a
+   larger radius than the field itself and read as a second, rounder shape
+   around it — which is exactly what made inputs look unlike the buttons
+   beside them. Zero offset keeps the focused shape identical to the resting
+   one. Buttons and links keep the blue :focus-visible ring from index.css;
+   this rule is more specific, so it only claims form fields. */
 .app input:focus,
 .app select:focus,
 .app textarea:focus {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
-  border-color: var(--field-border-hover);
+  outline: 1px solid var(--field-focus);
+  outline-offset: 0;
+  border-color: var(--field-focus);
   background: var(--surface-2);
 }
 .app select {
@@ -292,9 +296,9 @@
   border-color: var(--field-border-hover);
 }
 .multi-toggle[aria-expanded='true'] {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
-  border-color: var(--field-border-hover);
+  outline: 1px solid var(--field-focus);
+  outline-offset: 0;
+  border-color: var(--field-focus);
   background: var(--surface-2);
 }
 .multi-toggle > span:first-child {
@@ -2393,7 +2397,8 @@ h2 {
   border: 1.5px solid var(--danger);
 }
 .manage-inputs input.invalid:focus {
-  outline-color: var(--danger);
+  outline: 1px solid var(--danger);
+  outline-offset: 0;
   border-color: var(--danger);
 }
 

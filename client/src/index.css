@@ -46,9 +46,15 @@
   --field-border: #e7eaf0;
   --field-border-hover: #cfd6e2;
   --field-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.045);
+  /* Focus is a single hairline drawn tight to the field, in ink rather than
+     brand blue — the blue ring sat 2px out and read as a second, rounder box
+     around the input. */
+  --field-focus: #334155;
 
   --radius: 14px;
-  --radius-sm: 10px;
+  /* Every control — inputs, selects, textareas and buttons alike — is drawn on
+     this one radius, so a field and the button beside it are the same shape. */
+  --radius-sm: 8px;
   --control-h: 2.75rem;
 
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
@@ -107,6 +113,7 @@
     --field-border: #2b3242;
     --field-border-hover: #414b60;
     --field-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
+    --field-focus: #c3cddc;
     color-scheme: dark;
   }
 }
@@ -150,6 +157,7 @@
   --field-border: #2b3242;
   --field-border-hover: #414b60;
   --field-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
+  --field-focus: #c3cddc;
   color-scheme: dark;
 }
 /* Explicit light choice overrides the system dark preference. */
@@ -189,6 +197,7 @@
   --field-border: #e7eaf0;
   --field-border-hover: #cfd6e2;
   --field-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.045);
+  --field-focus: #334155;
   color-scheme: light;
 }
 
