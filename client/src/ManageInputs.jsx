@@ -20,6 +20,7 @@ import {
 } from './options'
 import { FALLBACK, useCodeMap, variantsOf } from './codes'
 import SearchSelect from './SearchSelect'
+import { advanceOnEnter } from './focusNav'
 
 // Add / edit / delete the dropdown option lists. Changes are pushed up via
 // onChange(categoryKey, newList); the parent persists them to the backend.
@@ -236,6 +237,12 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
     setEditInitials3('')
   }
 
+  // Escape abandons the open edit. Enter is NOT handled per input any more —
+  // the row container steps focus forward and saves from the last field.
+  const cancelOnEscape = (e) => {
+    if (e.key === 'Escape') setEditIndex(-1)
+  }
+
   function remove(i) {
     onChange(cat, list.filter((_, idx) => idx !== i))
     if (editIndex === i) setEditIndex(-1)
@@ -270,6 +277,9 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
             className={`manage-controls${isIssues ? ' cat-issues' : ''}${isTechnicians ? ' cat-tech' : ''}${
               isMaterials ? ' cat-materials' : ''
             }`}
+            /* Enter walks Category -> the code fields -> Name -> Description,
+               and adds from the last one. */
+            onKeyDown={(e) => advanceOnEnter(e, add)}
           >
             <label className="field-category">
               Category
@@ -298,7 +308,6 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                   <input
                     value={newParts}
                     onChange={(e) => setNewParts(e.target.value.replace(/\D/g, '').slice(0, 2))}
-                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), add())}
                     placeholder="19"
                     aria-invalid={noticeField === 'code' || undefined}
                     className={noticeField === 'code' ? 'invalid' : undefined}
@@ -311,7 +320,6 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                   <input
                     value={newVariant}
                     onChange={(e) => setNewVariant(e.target.value.replace(/[^A-Za-z]/g, '').slice(0, 1).toUpperCase())}
-                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), add())}
                     placeholder="B"
                     aria-invalid={noticeField === 'code' || undefined}
                     className={noticeField === 'code' ? 'invalid' : undefined}
@@ -327,7 +335,6 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                   <input
                     value={newId}
                     onChange={(e) => setNewId(e.target.value.replace(/\D/g, ''))}
-                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), add())}
                     placeholder="1"
                     aria-invalid={noticeField === 'id' || undefined}
                     className={noticeField === 'id' ? 'invalid' : undefined}
@@ -340,7 +347,6 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                   <input
                     value={newInitials2}
                     onChange={(e) => setNewInitials2(e.target.value.replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase())}
-                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), add())}
                     placeholder="MA"
                     aria-invalid={noticeField === 'initials2' || undefined}
                     className={noticeField === 'initials2' ? 'invalid' : undefined}
@@ -352,7 +358,6 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                   <input
                     value={newInitials3}
                     onChange={(e) => setNewInitials3(e.target.value.replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase())}
-                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), add())}
                     placeholder="MRA"
                     aria-invalid={noticeField === 'initials3' || undefined}
                     className={noticeField === 'initials3' ? 'invalid' : undefined}
@@ -370,7 +375,6 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
               <input
                 value={newValue}
                 onChange={(e) => setNewValue(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), add())}
                 aria-invalid={noticeField === 'name' || undefined}
                 className={noticeField === 'name' ? 'invalid' : undefined}
                 placeholder={
@@ -390,7 +394,6 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                 <input
                   value={newDesc}
                   onChange={(e) => setNewDesc(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), add())}
                   placeholder="Description (optional)"
                 />
               </label>
@@ -446,7 +449,8 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
               <li key={`${nameOf(value)}-${i}`} className={editIndex === i ? 'editing' : undefined}>
                 {editIndex === i ? (
                   <>
-                    <div className="edit-fields">
+                    {/* Enter walks this row's fields and saves from the last. */}
+                    <div className="edit-fields" onKeyDown={(e) => advanceOnEnter(e, saveEdit)}>
                       {isIssues && (
                         <div className="edit-code-row">
                           <label className="field-code">
@@ -455,13 +459,7 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                               className="edit-input"
                               value={editParts}
                               onChange={(e) => setEditParts(e.target.value.replace(/\D/g, '').slice(0, 2))}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault()
-                                  saveEdit()
-                                }
-                                if (e.key === 'Escape') setEditIndex(-1)
-                              }}
+                              onKeyDown={cancelOnEscape}
                               placeholder="19"
                               inputMode="numeric"
                             />
@@ -474,13 +472,7 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                               onChange={(e) =>
                                 setEditVariant(e.target.value.replace(/[^A-Za-z]/g, '').slice(0, 1).toUpperCase())
                               }
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault()
-                                  saveEdit()
-                                }
-                                if (e.key === 'Escape') setEditIndex(-1)
-                              }}
+                              onKeyDown={cancelOnEscape}
                               placeholder="B"
                             />
                           </label>
@@ -494,13 +486,7 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                               className="edit-input"
                               value={editId}
                               onChange={(e) => setEditId(e.target.value.replace(/\D/g, ''))}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault()
-                                  saveEdit()
-                                }
-                                if (e.key === 'Escape') setEditIndex(-1)
-                              }}
+                              onKeyDown={cancelOnEscape}
                               placeholder="1"
                               inputMode="numeric"
                             />
@@ -511,13 +497,7 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                               className="edit-input"
                               value={editInitials2}
                               onChange={(e) => setEditInitials2(e.target.value.replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase())}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault()
-                                  saveEdit()
-                                }
-                                if (e.key === 'Escape') setEditIndex(-1)
-                              }}
+                              onKeyDown={cancelOnEscape}
                               placeholder="MA"
                             />
                           </label>
@@ -527,13 +507,7 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                               className="edit-input"
                               value={editInitials3}
                               onChange={(e) => setEditInitials3(e.target.value.replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase())}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault()
-                                  saveEdit()
-                                }
-                                if (e.key === 'Escape') setEditIndex(-1)
-                              }}
+                              onKeyDown={cancelOnEscape}
                               placeholder="MRA"
                             />
                           </label>
@@ -543,13 +517,7 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                         className="edit-input"
                         value={editValue}
                         onChange={(e) => setEditValue(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault()
-                            saveEdit()
-                          }
-                          if (e.key === 'Escape') setEditIndex(-1)
-                        }}
+                        onKeyDown={cancelOnEscape}
                         placeholder={
                           isMaterials ? 'Material name' : isIssues ? 'Description' : isTechnicians ? 'Technician name' : undefined
                         }
@@ -560,13 +528,7 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                           className="edit-input"
                           value={editDesc}
                           onChange={(e) => setEditDesc(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault()
-                              saveEdit()
-                            }
-                            if (e.key === 'Escape') setEditIndex(-1)
-                          }}
+                          onKeyDown={cancelOnEscape}
                           placeholder="Description (optional)"
                         />
                       )}

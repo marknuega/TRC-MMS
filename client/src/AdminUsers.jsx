@@ -18,6 +18,7 @@ import {
   getCredentialRequests, updateCredentialRequest, deleteCredentialRequest,
 } from './api'
 import { BRANCHES } from './options'
+import { advanceOnEnter } from './focusNav'
 
 const BLANK = { username: '', password: '', role: 'user', branch: BRANCHES[0] ?? '', region: '' }
 const ROLE_OPTIONS = [
@@ -222,7 +223,8 @@ export default function AdminUsers({ currentUser, embedded = false, branches = B
       {/* Create user */}
       <div className="admin-block" id="admin-new-user">
         <h3 className="sp-brand-h">Create login</h3>
-        <form className="admin-form" onSubmit={addUser}>
+        {/* Enter steps through the fields; the last one adds the user. */}
+        <form className="admin-form" onSubmit={addUser} onKeyDown={(e) => advanceOnEnter(e, addUser)}>
           <label>Username<input value={form.username} onChange={set('username')} required /></label>
           <label>Password<input value={form.password} onChange={set('password')} required /></label>
           {isAdminCaller && (

@@ -24,6 +24,7 @@ import {
   syncNow,
 } from './api'
 import { onSyncChange } from './offline'
+import { advanceOnEnter } from './focusNav'
 import {
   DEFAULT_OPTIONS, mergeOptions, MODEL_TYPE, BRANCHES, ALL_BRANCHES,
   materialName, materialDescMap, issueName, issueCode, technicianName,
@@ -1597,7 +1598,10 @@ function App({ user, onLogout }) {
               <span className="chev">{deviceOpen ? '▲' : '▼'}</span>
             </button>
             {deviceOpen && (
-            <div className="grid">
+            /* Enter walks Model -> Type -> Tel -> ISSI -> Technician, in DOM
+               order. No action on the last field — the entry is not complete
+               until the faults below are filled in — so it wraps. */
+            <div className="grid" onKeyDown={advanceOnEnter}>
               <label>
                 Model {form.type === 'OTHER' && <span className="opt">(optional)</span>}
                 <SearchSelect value={form.model} onChange={setModel} options={options.models} />
@@ -1865,7 +1869,7 @@ function App({ user, onLogout }) {
               </div>
               <form onSubmit={handleUpdateEntry} className="entry-form modal-body">
                 {!isTransmittal && (
-                  <div className="grid">
+                  <div className="grid" onKeyDown={advanceOnEnter}>
                     <label>
                       Model {editForm.type === 'OTHER' && <span className="opt">(optional)</span>}
                       <SearchSelect value={editForm.model} onChange={eSetModel} options={options.models} />

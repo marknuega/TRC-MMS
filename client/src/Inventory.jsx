@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { getInventory, createInventory, updateInventory, deleteInventory, importInventory, getInventoryTxns } from './api'
 import { COPYRIGHT_HTML } from './copyright'
 import SearchSelect from './SearchSelect'
+import { advanceOnEnter } from './focusNav'
 
 const TYPE_LABEL = { usage: 'Usage', adjustment: 'Adjustment', import: 'Import' }
 const esc = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -350,7 +351,8 @@ export default function Inventory({ embedded = false, branch = '' }) {
           {edit !== null && (
             <form className="inv-form" onSubmit={save}>
               <h3>{edit === 'new' ? 'Add item' : `Edit ${form.sku}`}</h3>
-              <div className="inv-form-grid">
+              {/* Enter steps through the fields; the last one saves. */}
+              <div className="inv-form-grid" onKeyDown={(e) => advanceOnEnter(e, save)}>
                 <label>
                   SKU
                   <input value={form.sku} onChange={set('sku')} required />
