@@ -104,11 +104,50 @@ test('unknown codes are reported rather than guessed', () => {
   assert.match(badVariant.errors.join(' '), /Unknown variant "Q"/)
 })
 
-test('a malformed tail fails loudly instead of producing a half entry', () => {
-  const r = parseCodeReport('H43AC1MT 22 65 1', FALLBACK, OPTS)
+test('a truly unparseable tail fails loudly instead of producing a half entry', () => {
+  const r = parseCodeReport('H43AC1MT@@@', FALLBACK, OPTS)
   assert.equal(r.ok, false)
   assert.equal(r.entry, null)
-  assert.match(r.errors.join(' '), /tel\(4\)|Missing the tail/)
+  assert.match(r.errors.join(' '), /Could not read|Missing the tail/)
+})
+
+test('an empty tail after a fault code fails loudly', () => {
+  const r = parseCodeReport('H43AC1MT', FALLBACK, OPTS)
+  assert.equal(r.ok, false)
+  assert.equal(r.entry, null)
+  assert.match(r.errors.join(' '), /Missing the tail/)
+})
+
+test('tel and ISSI are optional together — a bare numeric technician ID still decodes', () => {
+  const r = parseCodeReport('H43AC1MT1', FALLBACK, OPTS)
+  assert.equal(r.ok, true, r.errors.join('; '))
+  assert.equal(r.telNumber, '')
+  assert.equal(r.issiNumber, '')
+  assert.equal(r.entry.technician, 'AMIR')
+})
+
+test('tel and ISSI are optional together — a letter-initials technician ID decodes the same way', () => {
+  const map = { ...FALLBACK, technicians: { ...FALLBACK.technicians, MA: 'Muhammad Amir' } }
+  // Technicians list left empty so matchOption() can't fuzzy-match "Muhammad
+  // Amir" onto an unrelated "AMIR" already in OPTS — this test is about the
+  // tail grammar accepting letters, not the name-matching heuristic.
+  const r = parseCodeReport('H43AC1MT MA', map, { ...OPTS, technicians: [] })
+  assert.equal(r.ok, true, r.errors.join('; '))
+  assert.equal(r.telNumber, '')
+  assert.equal(r.issiNumber, '')
+  assert.equal(r.entry.technician, 'MUHAMMAD AMIR')
+})
+
+test('a stray, too-short digit run for tel/issi is read as a (probably unknown) technician ID, not silently split', () => {
+  // There is no way to tell "5 stray digits meant to be a truncated tel+issi"
+  // from "a genuinely 5-digit technician ID" apart — both are the same shape.
+  // It must not silently misread as a partial tel/issi; it warns instead.
+  const r = parseCodeReport('H43AC1MT 22 65 1', FALLBACK, OPTS)
+  assert.equal(r.ok, true, r.errors.join('; '))
+  assert.equal(r.telNumber, '')
+  assert.equal(r.issiNumber, '')
+  assert.equal(r.entry.technician, '')
+  assert.match(r.warnings.join(' '), /No technician with ID 22651/)
 })
 
 test('matchOption bridges the two vocabularies without guessing', () => {

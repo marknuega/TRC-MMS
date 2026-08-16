@@ -50,8 +50,9 @@ export default function CodeEntry({ options, agencies = [], reportDate, onCreate
       {open && (
         <div className="manage-body">
           <p className="manage-hint">
-            Paste a CDS report — <code>[TYPE][PARTS][VARIANT]</code> then action, qty, company, last 4 of tel, last 4 of
-            ISSI, technician ID. Spaces, hyphens, underscores, colons or nothing at all all work.
+            Paste a CDS report — <code>[TYPE][PARTS][VARIANT]</code> then action, qty, company, technician ID. Tel and
+            ISSI are optional — give the last 4 of both together right before the technician ID, or leave both off if
+            neither is known. Spaces, hyphens, underscores, colons or nothing at all all work.
             Example: <code>{EXAMPLE}</code>
             {status === 'offline' && ' · using built-in codes (code map unreachable)'}
           </p>

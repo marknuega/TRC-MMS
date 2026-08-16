@@ -156,8 +156,13 @@ const FAULT_RE = /^([A-Z])(\d{2})([A-Z])([A-Z])(\d*)([A-Z]{1,2})/
 // on, inheriting the device from the one before it. One report is one device
 // (enforced below), so repeating the letter was only ever a restatement.
 const SHORT_FAULT_RE = /^(\d{2})([A-Z])([A-Z])(\d*)([A-Z]{1,2})/
-// tel(4) issi(4) technician(1+)
-const TAIL_RE = /^(\d{4})(\d{4})(\d+)$/
+// tel(4) issi(4) technician(1+, letters or digits — a numeric ID or an
+// initials claim), OR just the technician alone with tel/issi both left off.
+// Mirrors decodeBatch() in server/src/whatsapp/decoder.js, which only ever
+// consumes tel+issi as a PAIR (the last two tokens, both purely digits) —
+// there is no way to supply just one of them; give a placeholder digit for
+// the other if only one is known.
+const TAIL_RE = /^(?:(\d{4})(\d{4}))?([A-Z0-9]+)$/
 
 /**
  * Resolve a company code, accepting a one-letter shorthand: "I" is MOI, "T" is
@@ -328,12 +333,12 @@ export function parseCodeReport(text, map = FALLBACK, options = {}) {
   let technician = ''
   const tail = TAIL_RE.exec(rest)
   if (!rest) {
-    errors.push('Missing the tail — expected last 4 of tel, last 4 of ISSI, then the technician ID.')
+    errors.push('Missing the tail — expected the technician ID, with last 4 of tel + last 4 of ISSI in front if known.')
   } else if (!tail) {
-    errors.push(`Could not read "${rest}" as tel(4) + ISSI(4) + technician ID.`)
+    errors.push(`Could not read "${rest}" as the technician ID, optionally preceded by tel(4) + ISSI(4).`)
   } else {
-    telNumber = tail[1]
-    issiNumber = tail[2]
+    telNumber = tail[1] ?? ''
+    issiNumber = tail[2] ?? ''
     const techName = technicians[tail[3]] ?? technicians[Number(tail[3])]
     if (!techName) warnings.push(`No technician with ID ${tail[3]} — leave the field blank or pick one.`)
     else {
