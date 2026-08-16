@@ -2432,9 +2432,24 @@ h2 {
 }
 
 /* ---- Item cards ---- */
+/* Multi-column, not grid: a grid fills row-major, so a list sorted by code
+   reads 11A, 12A, 12B across the first row and only then drops down. Columns
+   fill top-to-bottom before moving right, so each column reads in order. */
 .manage-inputs .manage-list {
-  grid-template-columns: 1fr; /* mobile default; widened per band below */
-  gap: 0.75rem;
+  display: block;
+  columns: 1; /* mobile default; widened per band below */
+  column-gap: 0.75rem;
+}
+.manage-inputs .manage-list li {
+  /* A card must not be split across a column break. */
+  break-inside: avoid;
+  /* Column layout has no row gap — the margin is what separates the cards. */
+  margin-bottom: 0.75rem;
+}
+/* An item being edited, and the empty notice, still take the full width. */
+.manage-inputs .manage-list li.editing,
+.manage-inputs .manage-empty {
+  column-span: all;
 }
 .manage-inputs .manage-list li {
   align-items: flex-start; /* the pencil sits at the card's top-right */
@@ -2478,7 +2493,6 @@ h2 {
 
 /* The row being edited: a heavier border marks it as the one thing in hand. */
 .manage-inputs .manage-list li.editing {
-  grid-column: 1 / -1;
   flex-direction: column;
   align-items: stretch;
   gap: 0.85rem;
@@ -2520,8 +2534,11 @@ h2 {
     min-width: 10rem;
   }
   .manage-inputs .manage-list {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 1rem;
+    columns: 2;
+    column-gap: 1rem;
+  }
+  .manage-inputs .manage-list li {
+    margin-bottom: 1rem;
   }
   .manage-inputs .manage-list li.editing .manage-item-actions {
     flex-direction: row;
@@ -2574,8 +2591,11 @@ h2 {
     grid-column: span 3;
   }
   .manage-inputs .manage-list {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 1rem;
+    columns: 3;
+    column-gap: 1rem;
+  }
+  .manage-inputs .manage-list li {
+    margin-bottom: 1rem;
   }
   .manage-inputs .manage-list li.editing .manage-item-actions {
     flex-direction: row;
