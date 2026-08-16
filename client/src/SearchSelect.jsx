@@ -40,7 +40,13 @@ export default function SearchSelect({
   )
   const labelFor = (v) => normalized.find((o) => o.value === v)?.label ?? ''
 
-  const [text, setText] = useState(labelFor(value))
+  const [text, setText] = useState(labelFor(value)) // what the input displays
+  // What's actually been typed to search since the menu opened. Kept
+  // separate from `text` on purpose: opening the menu (focus or the caret)
+  // must show every option even though `text` already reads the selected
+  // label — filtering on `text` directly hid everything but the current
+  // pick the instant a value was already selected.
+  const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
   const [activeIndex, setActiveIndex] = useState(-1) // keyboard-highlighted row, within `filtered`
   const ref = useRef(null)
@@ -50,16 +56,27 @@ export default function SearchSelect({
   // fresh form, a reset after submit, an edit-row opening, ...).
   useEffect(() => setText(labelFor(value)), [value, normalized]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  function openMenu() {
+    setQuery('') // show every option, not just ones matching the current label
+    setOpen(true)
+  }
+  function closeMenu() {
+    setOpen(false)
+    setQuery('')
+    setText(labelFor(value)) // revert any unconfirmed typing back to the real value
+  }
+
   useEffect(() => {
     if (!open) return
     const onDoc = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false)
+      if (ref.current && !ref.current.contains(e.target)) closeMenu()
     }
     document.addEventListener('mousedown', onDoc)
     return () => document.removeEventListener('mousedown', onDoc)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 
-  const q = text.trim().toLowerCase()
+  const q = query.trim().toLowerCase()
   const filtered = q ? normalized.filter((o) => o.label.toLowerCase().includes(q)) : normalized
 
   // The highlighted row resets whenever the filtered set changes shape, and
@@ -69,10 +86,11 @@ export default function SearchSelect({
     if (!open) return
     const current = filtered.findIndex((o) => o.value === value)
     setActiveIndex(current >= 0 ? current : filtered.length ? 0 : -1)
-  }, [open, text]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, query]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function choose(opt) {
     setText(opt.label)
+    setQuery('')
     setOpen(false)
     onChange({ target: { value: opt.value } })
   }
@@ -80,6 +98,7 @@ export default function SearchSelect({
   function change(e) {
     const v = e.target.value
     setText(v)
+    setQuery(v)
     setOpen(true)
     // Typing the option's label out in full (not just picking from the
     // list) still commits it.
@@ -89,13 +108,13 @@ export default function SearchSelect({
 
   function onKeyDown(e) {
     if (e.key === 'Escape') {
-      setOpen(false)
+      closeMenu()
       return
     }
     if (e.key === 'ArrowDown') {
       e.preventDefault()
       if (!open) {
-        setOpen(true)
+        openMenu()
         return
       }
       setActiveIndex((i) => (filtered.length ? (i + 1) % filtered.length : -1))
@@ -104,7 +123,7 @@ export default function SearchSelect({
     if (e.key === 'ArrowUp') {
       e.preventDefault()
       if (!open) {
-        setOpen(true)
+        openMenu()
         return
       }
       setActiveIndex((i) => (filtered.length ? (i - 1 + filtered.length) % filtered.length : -1))
@@ -138,7 +157,7 @@ export default function SearchSelect({
         aria-activedescendant={activeId}
         value={text}
         onChange={change}
-        onFocus={() => setOpen(true)}
+        onFocus={openMenu}
         onKeyDown={onKeyDown}
         placeholder={placeholder}
         aria-label={ariaLabel}
@@ -149,7 +168,7 @@ export default function SearchSelect({
         type="button"
         className={`search-select-caret${open ? ' open' : ''}`}
         tabIndex={-1}
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => (open ? closeMenu() : openMenu())}
         disabled={disabled}
         aria-label="Show all options"
       >

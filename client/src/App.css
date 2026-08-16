@@ -974,8 +974,12 @@ h2 {
 }
 /* Capped, scrollable, and sized off our own tokens — unlike a native
    <datalist> popup, which the browser renders at OS-controlled size and
-   can balloon up to cover most of the screen. */
+   can balloon up to cover most of the screen. Height is pinned to exactly
+   5 rows (--search-select-row-h below) plus the menu's own padding, so a
+   6th+ option scrolls instead of growing the menu — and never touches the
+   input's own size, since this is an absolutely-positioned overlay. */
 .search-select-menu {
+  --search-select-row-h: 2rem;
   position: absolute;
   top: calc(100% + 0.3rem);
   left: 0;
@@ -983,7 +987,7 @@ h2 {
   width: max-content;
   min-width: 100%;
   max-width: 16rem;
-  max-height: 14rem;
+  max-height: calc(var(--search-select-row-h) * 5 + 0.6rem);
   overflow-y: auto;
   background: var(--surface);
   border: 1.5px solid var(--border-strong);
@@ -996,13 +1000,14 @@ h2 {
    ".manage-body button" that would otherwise turn every option into a
    full-size filled button. */
 .search-select-menu .search-select-opt {
-  display: block;
+  display: flex;
+  align-items: center;
   width: 100%;
-  height: auto;
+  height: var(--search-select-row-h);
   text-align: left;
   font: inherit;
   font-size: 0.85rem;
-  padding: 0.4rem 0.6rem;
+  padding: 0 0.6rem;
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
