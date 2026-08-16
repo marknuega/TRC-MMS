@@ -44,6 +44,9 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
   const [editInitials2, setEditInitials2] = useState('')
   const [editInitials3, setEditInitials3] = useState('')
   const [notice, setNotice] = useState('')
+  // Which field the current notice is about, so it can be outlined in red
+  // rather than leaving the reader to match a message to a box themselves.
+  const [noticeField, setNoticeField] = useState('')
 
   // Only to describe what a code already means in the shared vocabulary — the
   // issue type itself carries no device.
@@ -150,22 +153,40 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
     return `Code map: ${p} = ${part}${v ? ` · ${variant.trim().toUpperCase()} = ${v.label}` : ''}`
   }
 
-  function flash(msg) {
+  function flash(msg, field = '') {
     setNotice(msg)
-    setTimeout(() => setNotice(''), 4000)
+    setNoticeField(field)
+    setTimeout(() => {
+      setNotice('')
+      setNoticeField('')
+    }, 4000)
+  }
+
+  // Which input a validation message belongs to. The checks return prose, so
+  // the field is derived from which check produced it rather than parsed back
+  // out of the sentence.
+  const problemFor = (parts, variant, id, i2, i3, exceptIndex = -1) => {
+    const code = codeProblem(parts, variant, exceptIndex)
+    if (code) return [code, 'code']
+    const tech = techIdProblem(id, exceptIndex)
+    if (tech) return [tech, 'id']
+    const a = initials2Problem(i2, exceptIndex)
+    if (a) return [a, 'initials2']
+    const b = initials3Problem(i3, exceptIndex)
+    if (b) return [b, 'initials3']
+    return ['', '']
   }
 
   function add() {
     const value = newValue.trim()
     if (!value) return
     if (exists(value)) {
-      flash(`"${value}" is already in the list.`)
+      flash(`"${value}" is already in the list.`, 'name')
       return
     }
-    const problem =
-      codeProblem(newParts, newVariant) || techIdProblem(newId) || initials2Problem(newInitials2) || initials3Problem(newInitials3)
+    const [problem, field] = problemFor(newParts, newVariant, newId, newInitials2, newInitials3)
     if (problem) {
-      flash(problem)
+      flash(problem, field)
       return
     }
     onChange(cat, [...list, makeItem(value, newDesc, newParts, newVariant, newId, newInitials2, newInitials3)])
@@ -193,16 +214,12 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
     const value = editValue.trim()
     if (!value) return
     if (exists(value, editIndex)) {
-      flash(`"${value}" is already in the list.`)
+      flash(`"${value}" is already in the list.`, 'name')
       return
     }
-    const problem =
-      codeProblem(editParts, editVariant, editIndex) ||
-      techIdProblem(editId, editIndex) ||
-      initials2Problem(editInitials2, editIndex) ||
-      initials3Problem(editInitials3, editIndex)
+    const [problem, field] = problemFor(editParts, editVariant, editId, editInitials2, editInitials3, editIndex)
     if (problem) {
-      flash(problem)
+      flash(problem, field)
       return
     }
     onChange(
@@ -225,7 +242,10 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
   }
 
   return (
-    <section className="manage">
+    // manage-inputs scopes this page's own layout. .manage-controls,
+    // .manage-list and .field-code are shared with Code Reference and Admin
+    // users, so nothing below may restyle them unscoped.
+    <section className="manage manage-inputs">
       {embedded ? (
         <h2 className="page-title">⚙️ Manage inputs</h2>
       ) : (
@@ -280,6 +300,8 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                     onChange={(e) => setNewParts(e.target.value.replace(/\D/g, '').slice(0, 2))}
                     onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), add())}
                     placeholder="19"
+                    aria-invalid={noticeField === 'code' || undefined}
+                    className={noticeField === 'code' ? 'invalid' : undefined}
                     inputMode="numeric"
                     title="The component number — exactly 2 digits, e.g. 19"
                   />
@@ -291,6 +313,8 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                     onChange={(e) => setNewVariant(e.target.value.replace(/[^A-Za-z]/g, '').slice(0, 1).toUpperCase())}
                     onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), add())}
                     placeholder="B"
+                    aria-invalid={noticeField === 'code' || undefined}
+                    className={noticeField === 'code' ? 'invalid' : undefined}
                     title="Which build or version of that part — 1 letter, e.g. B"
                   />
                 </label>
@@ -305,6 +329,8 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                     onChange={(e) => setNewId(e.target.value.replace(/\D/g, ''))}
                     onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), add())}
                     placeholder="1"
+                    aria-invalid={noticeField === 'id' || undefined}
+                    className={noticeField === 'id' ? 'invalid' : undefined}
                     inputMode="numeric"
                     title="The number this technician texts as the last part of a WhatsApp report, e.g. 1. Optional."
                   />
@@ -316,6 +342,8 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                     onChange={(e) => setNewInitials2(e.target.value.replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase())}
                     onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), add())}
                     placeholder="MA"
+                    aria-invalid={noticeField === 'initials2' || undefined}
+                    className={noticeField === 'initials2' ? 'invalid' : undefined}
                     title="An alternative to the ID above — exactly 2 letters, e.g. MA for Muhammad Amir. Optional."
                   />
                 </label>
@@ -326,41 +354,52 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                     onChange={(e) => setNewInitials3(e.target.value.replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase())}
                     onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), add())}
                     placeholder="MRA"
+                    aria-invalid={noticeField === 'initials3' || undefined}
+                    className={noticeField === 'initials3' ? 'invalid' : undefined}
                     title="A second alternative to the ID above — exactly 3 letters, e.g. MRA. Optional."
                   />
                 </label>
               </>
             )}
-            <label className="grow">
+            {/* Name, Description and Add are siblings of Category rather than
+                nested under it, so each breakpoint can place them independently
+                — on a tablet the description drops to its own full-width line
+                while Category and Name stay paired above it. */}
+            <label className="field-name">
               {isIssues ? 'Description' : isMaterials ? 'Material name' : isTechnicians ? 'Technician name' : 'Add new'}
-              <div className="add-row">
-                <input
-                  value={newValue}
-                  onChange={(e) => setNewValue(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), add())}
-                  placeholder={
-                    isIssues
-                      ? 'Belt Clip'
-                      : isMaterials
-                        ? 'Material name'
-                        : isTechnicians
-                          ? 'Muhammad Amir'
-                          : 'Type a value and press Add'
-                  }
-                />
-                {isMaterials && (
-                  <input
-                    value={newDesc}
-                    onChange={(e) => setNewDesc(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), add())}
-                    placeholder="Description (optional)"
-                  />
-                )}
-                <button type="button" onClick={add} disabled={!newValue.trim()}>
-                  Add
-                </button>
-              </div>
+              <input
+                value={newValue}
+                onChange={(e) => setNewValue(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), add())}
+                aria-invalid={noticeField === 'name' || undefined}
+                className={noticeField === 'name' ? 'invalid' : undefined}
+                placeholder={
+                  isIssues
+                    ? 'Belt Clip'
+                    : isMaterials
+                      ? 'Material name'
+                      : isTechnicians
+                        ? 'Muhammad Amir'
+                        : 'Type a value and press Add'
+                }
+              />
             </label>
+            {isMaterials && (
+              <label className="field-desc">
+                Description (optional)
+                <input
+                  value={newDesc}
+                  onChange={(e) => setNewDesc(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), add())}
+                  placeholder="Description (optional)"
+                />
+              </label>
+            )}
+            <div className="add-action">
+              <button type="button" onClick={add} disabled={!newValue.trim()}>
+                Add
+              </button>
+            </div>
           </div>
 
           {isIssues && (
@@ -555,7 +594,18 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                       {isMaterials && descOf(value) && <span className="manage-item-desc">{descOf(value)}</span>}
                     </span>
                     <div className="manage-item-actions">
-                      <button type="button" className="ghost" onClick={() => startEdit(i)}>Edit</button>
+                      {/* One edit at a time: a second open row would quietly
+                          discard the first one's unsaved changes. */}
+                      <button
+                        type="button"
+                        className="icon-edit"
+                        onClick={() => startEdit(i)}
+                        disabled={editIndex !== -1}
+                        aria-label={`Edit ${nameOf(value)}`}
+                        title={editIndex === -1 ? `Edit ${nameOf(value)}` : 'Finish the open edit first'}
+                      >
+                        ✎
+                      </button>
                     </div>
                   </>
                 )}

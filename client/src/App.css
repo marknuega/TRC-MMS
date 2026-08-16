@@ -2289,175 +2289,303 @@ h2 {
   font-weight: 600;
   color: var(--warn);
 }
-.manage-notice.error {
-  color: var(--danger);
+/* ===========================================================================
+   Manage inputs — responsive page
+   ===========================================================================
+   Everything here is scoped to .manage-inputs on purpose. .manage-controls,
+   .manage-list, .manage-item-* and .field-code are SHARED with Code Reference
+   and Admin users; restyling them unscoped would silently redesign those two
+   pages as well.
+
+   The form is a 12-column grid, so each band only restates column spans
+   instead of repositioning anything by hand:
+
+     <600px    1 col   every field on its own line
+     600-999   2 cols  Category + Name paired, Description full width
+     >=1000    12 cols Category 20% / Name 30% / Description 40% / Add 10%
+
+   Inputs stay at 16px on mobile: anything smaller makes iOS zoom the page on
+   focus. Controls are >=44px throughout for touch.
+   =========================================================================== */
+
+.manage-inputs .manage-controls {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.85rem;
+  align-items: end;
+  background: var(--mi-panel);
+  border: 1px solid var(--mi-panel-border);
+  border-radius: var(--radius-sm);
+  padding: 1rem;
 }
-/* ---------------------------------------------------------------------------
-   Manage inputs — responsive layout
-   ---------------------------------------------------------------------------
-   Three bands, matching how much room the row of fields actually needs:
+.manage-inputs .manage-controls > label,
+.manage-inputs .add-action {
+  min-width: 0; /* let a grid cell shrink below its content instead of overflowing */
+}
+.manage-inputs .manage-controls > label {
+  white-space: normal; /* long labels wrap rather than widening the row */
+}
+.manage-inputs .manage-controls input,
+.manage-inputs .manage-controls .search-select {
+  width: 100%;
+}
+/* The code fields drop their fixed 5.5rem here — the grid sizes them now. */
+.manage-inputs .field-code input {
+  width: 100%;
+}
+.manage-inputs .add-action button {
+  width: 100%;
+}
 
-     >=1024px  desktop — everything inline, as designed
-     768-1023  tablet  — the code fields give up their fixed width and reflow
-     <768px    mobile  — one field per line, full width, 44px touch targets
+/* Add / Save commit; Delete destroys. Both read as solid, filled actions
+   against the card list they sit in. */
+.manage-inputs .manage-body button {
+  background: var(--mi-action);
+  border-color: var(--mi-action);
+  color: #fff;
+  font-weight: 600;
+}
+.manage-inputs .manage-body button:hover:not(:disabled) {
+  background: var(--mi-action-hover);
+  border-color: var(--mi-action-hover);
+}
+.manage-inputs .manage-body button.ghost {
+  background: var(--surface-2);
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+.manage-inputs .manage-body button.ghost:hover:not(:disabled) {
+  background: var(--surface-3);
+  border-color: var(--muted);
+}
+.manage-inputs .manage-body button.danger {
+  background: var(--mi-danger);
+  border-color: var(--mi-danger);
+  color: #fff;
+}
+.manage-inputs .manage-body button.danger:hover:not(:disabled) {
+  background: var(--mi-danger-hover);
+  border-color: var(--mi-danger-hover);
+}
 
-   The controls row is a wrapping flexbox, so each band only has to restate the
-   flex-basis of the fields that need to move; nothing is repositioned by hand.
+/* An input the current validation message is about. */
+.manage-inputs input.invalid,
+.manage-inputs input[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+.manage-inputs input.invalid:focus {
+  box-shadow: 0 0 0 4px var(--danger-soft);
+}
 
-   Inputs stay at the base 1rem (16px) throughout: below 16px iOS zooms the
-   whole page on focus, so the mobile band raises the things that sit BELOW
-   that (the 2.2-2.3rem edit controls) rather than lowering anything.
-   --------------------------------------------------------------------------- */
+/* ---- Item cards ---- */
+.manage-inputs .manage-list {
+  grid-template-columns: 1fr; /* mobile default; widened per band below */
+  gap: 0.75rem;
+}
+.manage-inputs .manage-list li {
+  align-items: flex-start; /* the pencil sits at the card's top-right */
+  gap: 0.75rem;
+  background: var(--surface-2);
+  border-color: var(--border);
+  border-radius: var(--radius-sm);
+  padding: 1rem;
+  min-height: 0;
+}
+.manage-inputs .manage-item-label {
+  gap: 0.25rem;
+}
+.manage-inputs .manage-list li span,
+.manage-inputs .manage-list li span.manage-item-desc {
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+.manage-inputs .manage-list li span.manage-item-desc {
+  line-height: 1.5;
+}
+.manage-inputs .manage-item-actions .icon-edit {
+  flex: 0 0 auto;
+  width: 2.4rem;
+  height: 2.4rem;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-2);
+  color: var(--muted);
+  border-color: var(--border);
+  font-size: 1rem;
+}
+.manage-inputs .manage-item-actions .icon-edit:hover:not(:disabled) {
+  background: var(--surface-3);
+  color: var(--text-h);
+  border-color: var(--border-strong);
+}
 
-/* An item being edited takes the whole grid row whatever the column count is,
-   so a long description is never squeezed into one narrow cell. */
-.manage-list li.editing {
+/* The row being edited: a heavier border marks it as the one thing in hand. */
+.manage-inputs .manage-list li.editing {
   grid-column: 1 / -1;
+  flex-direction: column;
   align-items: stretch;
+  gap: 0.85rem;
+  border: 2px solid var(--mi-action);
+  background: var(--surface);
+  padding: 1.15rem;
+  box-shadow: var(--shadow);
+}
+.manage-inputs .manage-list li.editing .edit-input {
+  height: var(--control-h);
+  border-color: var(--border);
+}
+.manage-inputs .manage-list li.editing .edit-input:focus {
+  border-color: var(--primary);
+}
+.manage-inputs .manage-list li.editing .manage-item-actions {
+  gap: 0.75rem;
+}
+.manage-inputs .manage-list li.editing .manage-item-actions button {
+  height: var(--control-h);
+  font-size: 0.95rem;
 }
 
-/* ---- Tablet (768-1023px) ---- */
-@media (min-width: 768px) and (max-width: 1023px) {
-  .manage-controls {
-    gap: 0.75rem 0.9rem;
+/* ---- Tablet (600-999px) ---- */
+@media (min-width: 600px) and (max-width: 999px) {
+  .manage-inputs .manage-controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.9rem 1rem;
+    padding: 1.15rem;
   }
-  /* The category picker keeps roughly two-thirds of the row; the fields below
-     it are what wrap onto their own lines. */
-  .manage-controls .field-category {
-    flex: 1 1 65%;
-    min-width: 0;
+  /* Category and Name pair on the first line; everything wider spans both. */
+  .manage-inputs .field-desc,
+  .manage-inputs .add-action {
+    grid-column: 1 / -1;
   }
-  /* Two code fields (Parts Code + Variant) stack, each on its own full line,
-     so neither is read as a fragment of the other. */
-  .manage-controls.cat-issues .field-code {
-    flex: 1 1 100%;
+  /* Three technician fields would leave a ragged single cell — let the name
+     run the full width under them instead. */
+  .manage-inputs .manage-controls.cat-tech .field-name {
+    grid-column: 1 / -1;
   }
-  /* Three technician fields pair up instead: ID + 2-letter, then 3-letter
-     beside the name. */
-  .manage-controls.cat-tech .field-code,
-  .manage-controls.cat-tech .grow {
-    flex: 1 1 calc(50% - 0.45rem);
-    min-width: 0;
+  .manage-inputs .add-action {
+    justify-self: start;
+    min-width: 10rem;
   }
-  .manage-controls.cat-issues .grow,
-  .manage-controls.cat-materials .grow {
-    flex: 1 1 100%;
+  .manage-inputs .manage-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
   }
-  .field-code input {
-    width: 100%;
+  .manage-inputs .manage-list li.editing .manage-item-actions {
+    flex-direction: row;
   }
-  /* Let the code fields grow with the row rather than stay at 5.5rem, so the
-     description beside them is not the only thing that can breathe. */
-  .edit-code-row label {
+  .manage-inputs .manage-list li.editing .manage-item-actions button {
     flex: 1 1 0;
-    min-width: 0;
   }
 }
 
-/* ---- Mobile (<768px) ---- */
-@media (max-width: 767px) {
-  /* One field per line, every one of them full width. */
-  .manage-controls {
-    gap: 0.85rem;
+/* ---- Desktop (>=1000px) ---- */
+@media (min-width: 1000px) {
+  .manage-inputs .manage-controls {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 1rem;
+    padding: 1.25rem;
   }
-  .manage-controls > label {
-    flex: 1 1 100%;
-    width: 100%;
-    min-width: 0;
-    /* Labels wrap here rather than forcing the row wider than the screen. */
-    white-space: normal;
+  /* Every category's spans total exactly 12, so the row never wraps and the
+     Add button always lands on the same baseline as the fields.
+       materials  3 + 4 + 4 + 1
+       plain      3 + 8     + 1
+       issues     3 + 2+2 + 4 + 1
+       technicians 2 + 2+2+2 + 3 + 1                                        */
+  .manage-inputs .field-category {
+    grid-column: span 3;
   }
-  .field-code input {
-    width: 100%;
+  .manage-inputs .field-name {
+    grid-column: span 4;
   }
-  /* Description -> optional second field -> Add, each on its own line. */
-  .add-row {
-    flex-direction: column;
-    gap: 0.6rem;
+  .manage-inputs .field-desc {
+    grid-column: span 4;
   }
-  .add-row input,
-  .add-row button {
-    width: 100%;
+  .manage-inputs .add-action {
+    grid-column: span 1;
   }
+  /* Without a Description field the name takes that space instead. */
+  .manage-inputs .manage-controls:not(.cat-materials) .field-name {
+    grid-column: span 8;
+  }
+  /* Issue types and technicians add short code fields ahead of the name. */
+  .manage-inputs .field-code {
+    grid-column: span 2;
+  }
+  .manage-inputs .manage-controls.cat-issues .field-name {
+    grid-column: span 4;
+  }
+  .manage-inputs .manage-controls.cat-tech .field-category {
+    grid-column: span 2;
+  }
+  .manage-inputs .manage-controls.cat-tech .field-name {
+    grid-column: span 3;
+  }
+  .manage-inputs .manage-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+  }
+  .manage-inputs .manage-list li.editing .manage-item-actions {
+    flex-direction: row;
+  }
+}
 
-  /* One column, so an item is never half a screen wide. */
-  .manage-list {
-    grid-template-columns: 1fr;
+/* ---- Mobile (<600px) ---- */
+@media (max-width: 599px) {
+  .manage-inputs .manage-controls {
+    padding: 0.9rem;
+    gap: 0.9rem;
   }
-  /* Edit mode: fields above, actions below, nothing side by side. */
-  .manage-list li.editing {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.7rem;
-    padding: 0.75rem;
-  }
-  .edit-code-row {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.6rem;
-  }
-  .edit-code-row label {
-    width: 100%;
-  }
-  /* Only the edit-row labels move: at 0.78rem they were the one set under
-     13px. The controls labels are already 0.9rem and stay there. */
-  .edit-code-row label {
-    font-size: 0.85rem; /* ~13.6px */
-  }
-  .edit-fields {
-    gap: 0.6rem;
-  }
-  /* Back up to a full-size control: the desktop 2.3rem is under the 44px
-     minimum touch target. */
-  .manage-list .edit-input {
-    height: var(--control-h);
-    font-size: 1rem;
+  /* Full-size, full-width targets throughout. */
+  .manage-inputs .manage-controls input,
+  .manage-inputs .manage-list .edit-input {
+    font-size: 1rem; /* 16px — below this iOS zooms on focus */
     line-height: 1.55;
+    height: var(--control-h);
     padding: 0 0.9rem;
   }
-  /* Save / Cancel / Delete stack, each a full-width target. */
-  .manage-list li.editing .manage-item-actions {
+  .manage-inputs .add-action button {
+    height: 3rem; /* the primary action on the page, so a touch larger */
+    font-size: 1rem;
+  }
+  /* Save / Cancel / Delete stack, each its own full-width target. */
+  .manage-inputs .manage-list li.editing .manage-item-actions {
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.6rem;
   }
-  .manage-item-actions button {
-    height: var(--control-h);
-    min-height: 2.75rem;
-    font-size: 0.95rem;
-    padding: 0 1rem;
-  }
-  .manage-list li.editing .manage-item-actions button {
+  .manage-inputs .manage-list li.editing .manage-item-actions button {
     width: 100%;
   }
-
-  /* Long names and descriptions wrap instead of being clipped. */
-  .manage-item-label,
-  .manage-list li span.manage-item-desc,
-  .manage-list li span {
-    white-space: normal;
-    overflow-wrap: break-word;
-    word-break: break-word;
+  .manage-inputs .edit-code-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.6rem;
   }
-  .manage-list li span.manage-item-desc {
-    font-size: 0.85rem;
-    line-height: 1.5;
+  .manage-inputs .edit-code-row label {
+    width: 100%;
+    font-size: 0.85rem; /* ~13.6px — these were the one set under 13px */
   }
-  .manage-list li {
-    padding: 0.6rem 0.6rem 0.6rem 0.8rem;
+  .manage-inputs .manage-item-actions .icon-edit {
+    width: 2.75rem;
+    height: 2.75rem; /* 44px touch target */
   }
-
-  /* Hints, code hints and validation messages: readable and never overflowing. */
-  .manage-hint,
-  .manage-notice {
-    font-size: 0.88rem; /* ~14px */
+  .manage-inputs .manage-hint,
+  .manage-inputs .manage-notice {
+    font-size: 0.88rem;
     line-height: 1.55;
     overflow-wrap: break-word;
     word-break: break-word;
   }
-  .manage-code-hint {
+  .manage-inputs .manage-code-hint {
     display: inline-block;
     overflow-wrap: break-word;
   }
+}
+
+.manage-notice.error {
+  color: var(--danger);
 }
 /* External link buttons in Manage inputs (e.g. WhatsApp code-map admin). */
 .manage-links {

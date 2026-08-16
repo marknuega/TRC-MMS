@@ -26,6 +26,18 @@
   --shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 2px 8px rgba(15, 23, 42, 0.06);
   --shadow-lg: 0 4px 16px rgba(15, 23, 42, 0.1);
 
+  /* Manage inputs palette. Its buttons are deliberately darker than the app's
+     --primary blue: Add/Save/Delete sit inside a list of cards rather than on
+     a toolbar, and needed to read as the committing action there. Kept as
+     tokens (not literals at the call site) so the dark theme can restate them
+     below — the requested values are the LIGHT ones. */
+  --mi-action: #1e2d4d;
+  --mi-action-hover: #16233c;
+  --mi-danger: #d32f2f;
+  --mi-danger-hover: #b02525;
+  --mi-panel: #f7f8fa;
+  --mi-panel-border: #e3e7ee;
+
   --radius: 14px;
   --radius-sm: 10px;
   --control-h: 2.75rem;
@@ -72,6 +84,14 @@
     --ring: rgba(59, 130, 246, 0.42);
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 2px 10px rgba(0, 0, 0, 0.35);
     --shadow-lg: 0 6px 22px rgba(0, 0, 0, 0.5);
+    /* Manage inputs, dark: the navy action would vanish against the dark
+       surface, so it lifts to a readable slate; danger keeps its meaning. */
+    --mi-action: #3b5480;
+    --mi-action-hover: #4a679b;
+    --mi-danger: #c0392f;
+    --mi-danger-hover: #d4483d;
+    --mi-panel: #1c202b;
+    --mi-panel-border: #2f3646;
     color-scheme: dark;
   }
 }
@@ -101,6 +121,14 @@
   --ring: rgba(59, 130, 246, 0.42);
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 2px 10px rgba(0, 0, 0, 0.35);
   --shadow-lg: 0 6px 22px rgba(0, 0, 0, 0.5);
+  /* Manage inputs, dark: the navy action would vanish against the dark
+     surface, so it lifts to a readable slate; danger keeps its meaning. */
+  --mi-action: #3b5480;
+  --mi-action-hover: #4a679b;
+  --mi-danger: #c0392f;
+  --mi-danger-hover: #d4483d;
+  --mi-panel: #1c202b;
+  --mi-panel-border: #2f3646;
   color-scheme: dark;
 }
 /* Explicit light choice overrides the system dark preference. */
