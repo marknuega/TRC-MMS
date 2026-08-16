@@ -54,6 +54,28 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
   const isIssues = cat === 'issueTypes'
   const isTechnicians = cat === 'technicians'
   const list = options[cat] ?? []
+  // Issue types with a claimed CDS code display in ascending code order
+  // (parts number, then variant letter) — reading order left to right,
+  // top to bottom, not the order they happened to be added in. Uncoded
+  // items sort after every coded one, keeping their original relative
+  // order among themselves (stable sort). Every other category keeps its
+  // stored order, unchanged. `i` stays the item's real index into `list`
+  // — edit/save/delete are index-based — only the display order changes.
+  const displayList = isIssues
+    ? list
+        .map((value, i) => ({ value, i }))
+        .sort((a, b) => {
+          const ca = issueCode(a.value)
+          const cb = issueCode(b.value)
+          if (ca && cb) {
+            const partsDiff = Number(issueParts(a.value)) - Number(issueParts(b.value))
+            return partsDiff !== 0 ? partsDiff : issueVariant(a.value).localeCompare(issueVariant(b.value))
+          }
+          if (ca) return -1
+          if (cb) return 1
+          return 0
+        })
+    : list.map((value, i) => ({ value, i }))
   const nameOf = (v) => (isMaterials ? materialName(v) : isIssues ? issueName(v) : isTechnicians ? technicianName(v) : String(v))
   const descOf = (v) => (isMaterials ? materialDesc(v) : '')
   const makeItem = (name, desc, parts, variant, id, initials2, initials3) => {
@@ -376,7 +398,7 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
 
           <ul className="manage-list">
             {list.length === 0 && <li className="manage-empty">No values yet — add one above.</li>}
-            {list.map((value, i) => (
+            {displayList.map(({ value, i }) => (
               <li key={`${nameOf(value)}-${i}`}>
                 {editIndex === i ? (
                   <>
