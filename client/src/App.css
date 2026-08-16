@@ -2954,6 +2954,13 @@ h2 {
   font-weight: 700;
   font-size: 0.8rem;
 }
+.catalog-name {
+  color: var(--text-h);
+  font-size: 0.92rem;
+  font-weight: 500;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
 
 /* Parts Number Catalog — badge + name on the left, Edit on the right. */
 .parts-card {
@@ -2967,13 +2974,6 @@ h2 {
   flex-direction: column;
   gap: 0.3rem;
   min-width: 0;
-}
-.parts-card-name {
-  color: var(--text-h);
-  font-size: 0.92rem;
-  font-weight: 500;
-  line-height: 1.3;
-  overflow-wrap: anywhere;
 }
 .parts-card-edit {
   flex-shrink: 0;
@@ -3001,12 +3001,6 @@ h2 {
   flex-direction: column;
   gap: 0.35rem;
 }
-.device-card-name {
-  color: var(--text-h);
-  font-size: 0.92rem;
-  font-weight: 500;
-  overflow-wrap: anywhere;
-}
 .device-card-hit {
   font-weight: 800;
   color: var(--primary);
@@ -3015,24 +3009,17 @@ h2 {
   color: var(--muted);
   font-size: 0.8rem;
 }
-.ref-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
-  gap: 0.9rem 1.2rem;
-  align-items: start;
+
+/* Actions, Companies, Technician ID, Agencies — a plain badge + name pair,
+   laid out in a row rather than the stacked column the other cards use. */
+.code-card {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
 }
-.ref-block {
-  min-width: 0;
-  /* Last-resort guard: a table that still cannot shrink scrolls inside its own
-     block rather than bleeding into the next one. */
-  overflow-x: auto;
-}
-.ref-grp-title {
-  margin: 0 0 0.4rem;
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--muted);
+.code-card .catalog-badge {
+  align-self: center;
+  flex-shrink: 0;
 }
 /* A calm reference table reads as rows, not a spreadsheet grid — horizontal
    dividers between rows only (no vertical cell borders), one outer border

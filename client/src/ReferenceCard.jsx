@@ -170,20 +170,18 @@ function printReference(data) {
   }, 250)
 }
 
-function CodeTable({ rows }) {
+// Actions, Companies, Technician ID, Agencies — same card design as the
+// Parts Number Catalog: a blue code badge beside its plain-text meaning.
+function CodeCards({ rows }) {
   return (
-    <table className="ref-table">
-      <tbody>
-        {rows.map(([code, name]) => (
-          <tr key={code}>
-            <td className="ref-code">
-              <span className="ref-code-badge">{code}</span>
-            </td>
-            <td>{name}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <div className="catalog-grid">
+      {rows.map(([code, name]) => (
+        <div className="catalog-card code-card" key={code}>
+          <span className="catalog-badge">{code}</span>
+          <span className="catalog-name">{name}</span>
+        </div>
+      ))}
+    </div>
   )
 }
 
@@ -232,7 +230,7 @@ function DeviceCards({ rows }) {
         return (
           <div className="catalog-card device-card" key={code}>
             <span className="catalog-badge">{code}</span>
-            <span className="device-card-name">
+            <span className="catalog-name">
               {p.before}
               <strong className="device-card-hit">{p.hit}</strong>
               {p.after}
@@ -650,8 +648,6 @@ export default function ReferenceCard({ isAdmin = false, issueTypes = [] }) {
     }
   }, [map, issueTypes])
 
-  const actHalf = Math.ceil(data.actions.length / 2)
-
   const statusLabel =
     status === 'live'
       ? `Live from admin${updatedAt ? ` · updated ${updatedAt.toLocaleTimeString('en-GB')}` : ''}`
@@ -747,7 +743,7 @@ export default function ReferenceCard({ isAdmin = false, issueTypes = [] }) {
                 <div className="catalog-card parts-card" key={code}>
                   <div className="parts-card-info">
                     <span className="catalog-badge">{code}</span>
-                    <span className="parts-card-name">{name}</span>
+                    <span className="catalog-name">{name}</span>
                   </div>
                   <button type="button" className="parts-card-edit">
                     Edit
@@ -769,47 +765,28 @@ export default function ReferenceCard({ isAdmin = false, issueTypes = [] }) {
       <details className="ref-sec">
         <summary className="ref-section">Actions</summary>
         <div className="ref-sec-body">
-          <div className="ref-grid">
-            <div className="ref-block">
-              <CodeTable rows={data.actions.slice(0, actHalf)} />
-            </div>
-            <div className="ref-block">
-              <CodeTable rows={data.actions.slice(actHalf)} />
-            </div>
-          </div>
+          <CodeCards rows={data.actions} />
         </div>
       </details>
 
       <details className="ref-sec">
         <summary className="ref-section">Companies</summary>
         <div className="ref-sec-body">
-          <div className="ref-grid">
-            <div className="ref-block">
-              <CodeTable rows={data.companies} />
-            </div>
-          </div>
+          <CodeCards rows={data.companies} />
         </div>
       </details>
 
       <details className="ref-sec">
         <summary className="ref-section">Technician ID</summary>
         <div className="ref-sec-body">
-          <div className="ref-grid">
-            <div className="ref-block">
-              <CodeTable rows={data.technicians} />
-            </div>
-          </div>
+          <CodeCards rows={data.technicians} />
         </div>
       </details>
 
       <details className="ref-sec">
         <summary className="ref-section">Agencies (verification)</summary>
         <div className="ref-sec-body">
-          <div className="ref-grid">
-            <div className="ref-block">
-              <CodeTable rows={data.agencies} />
-            </div>
-          </div>
+          <CodeCards rows={data.agencies} />
         </div>
       </details>
     </section>
