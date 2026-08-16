@@ -381,36 +381,23 @@ function App({ user, onLogout }) {
   const [deviceOpen, setDeviceOpen] = useState(true)
   const [faultsOpen, setFaultsOpen] = useState(true)
   // Quick Code Entry and the manual Device/Faults form are two alternate ways
-  // to do the same thing — only one is ever the one actually in use, so
-  // opening either side closes the other rather than letting all three cards
-  // sit open and eat vertical space at once. Device and Faults open/close as
-  // a pair since manual entry always needs both.
-  const [codeOpen, setCodeOpen] = useState(false)
-  const toggleCodeOpen = () =>
-    setCodeOpen((o) => {
-      const next = !o
-      if (next) {
-        setDeviceOpen(false)
-        setFaultsOpen(false)
-      }
-      return next
-    })
+  // to do the same thing — only one is ever the one actually in use. Rather
+  // than just collapsing the other to a header (still a whole row of dead
+  // space per card), the inactive side isn't rendered at all; a small
+  // persistent switcher is what moves between them.
+  const [entryMode, setEntryMode] = useState('manual') // 'manual' | 'quick'
+  // Device and Faults still open/close as a pair within manual mode — manual
+  // entry always needs both.
   const toggleDeviceOpen = () =>
     setDeviceOpen((o) => {
       const next = !o
-      if (next) {
-        setFaultsOpen(true)
-        setCodeOpen(false)
-      }
+      if (next) setFaultsOpen(true)
       return next
     })
   const toggleFaultsOpen = () =>
     setFaultsOpen((o) => {
       const next = !o
-      if (next) {
-        setDeviceOpen(true)
-        setCodeOpen(false)
-      }
+      if (next) setDeviceOpen(true)
       return next
     })
   const [lastAgency, setLastAgency] = useState(() => loadLast().agency ?? '')
@@ -1507,9 +1494,32 @@ function App({ user, onLogout }) {
           </section>
         )}
 
-        {/* Code entry is a shortcut into the SAME create path as the form below.
-            Transmittals move materials and have no CDS code, so it is hidden there. */}
+        {/* Code entry is a shortcut into the SAME create path as the form below —
+            two alternate ways to create the same entry, so only one is ever
+            shown. Transmittals move materials and have no CDS code, so the
+            switch (and Quick Code Entry itself) is hidden there. */}
         {!isTransmittal && (
+          <div className="entry-mode-switch">
+            <button
+              type="button"
+              className={entryMode === 'quick' ? 'active' : ''}
+              onClick={() => setEntryMode('quick')}
+              aria-pressed={entryMode === 'quick'}
+            >
+              🔤 Quick code entry
+            </button>
+            <button
+              type="button"
+              className={entryMode === 'manual' ? 'active' : ''}
+              onClick={() => setEntryMode('manual')}
+              aria-pressed={entryMode === 'manual'}
+            >
+              📋 Manual entry
+            </button>
+          </div>
+        )}
+
+        {!isTransmittal && entryMode === 'quick' && (
           <CodeEntry
             options={options}
             agencies={agencyOptions}
@@ -1517,13 +1527,11 @@ function App({ user, onLogout }) {
             reportDate={form.reportDate}
             onCreate={handleCodeCreate}
             busy={busy}
-            open={codeOpen}
-            onToggle={toggleCodeOpen}
           />
         )}
 
         <form ref={entryFormRef} onSubmit={handleSubmit} className="entry-form">
-          {!isTransmittal && (
+          {!isTransmittal && entryMode === 'manual' && (
           <div className="form-card">
             <button
               type="button"
@@ -1579,6 +1587,7 @@ function App({ user, onLogout }) {
           </div>
           )}
 
+          {(entryMode === 'manual' || isTransmittal) && (
           <div className="form-card">
             <button
               type="button"
@@ -1713,7 +1722,7 @@ function App({ user, onLogout }) {
                 </button>
               ) : (
                 <>
-                  <label className="agency-field footer-agency">
+                  <label className="footer-agency">
                     Agency
                     {/* Not `required`: our own logic already guarantees a
                         non-empty value before handleSubmit ever runs (see the
@@ -1764,6 +1773,7 @@ function App({ user, onLogout }) {
             </>
             )}
           </div>
+          )}
         </form>
 
         <section className="entries">

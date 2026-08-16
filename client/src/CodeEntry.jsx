@@ -16,7 +16,7 @@ import { parseCodeReport, useCodeMap, VARIANTS } from './codes'
 
 const EXAMPLE = 'H43A C 1 MT 2221 6575 1'
 
-export default function CodeEntry({ options, agencies = [], topAgencies = [], reportDate, onCreate, busy = false, open, onToggle }) {
+export default function CodeEntry({ options, agencies = [], topAgencies = [], reportDate, onCreate, busy = false }) {
   const [text, setText] = useState('')
   const [agency, setAgency] = useState('')
   const [notice, setNotice] = useState('')
@@ -42,12 +42,6 @@ export default function CodeEntry({ options, agencies = [], topAgencies = [], re
 
   return (
     <section className="manage code-entry">
-      <button type="button" className="manage-toggle" onClick={onToggle} aria-expanded={open}>
-        <span>🔤 Quick code entry</span>
-        <span className="chev">{open ? '▲' : '▼'}</span>
-      </button>
-
-      {open && (
         <div className="manage-body">
           {status === 'offline' && (
             <p className="manage-hint">Using built-in codes — the live code map is unreachable.</p>
@@ -203,7 +197,6 @@ export default function CodeEntry({ options, agencies = [], topAgencies = [], re
             </div>
           </details>
         </div>
-      )}
     </section>
   )
 }

@@ -634,9 +634,7 @@ h2 {
 /* Picking the agency IS the "Add entry" action (see handleSubmit's
    agencyOverride) — styled like the compact topbar fields, not the tall
    Device-grid labels, so it reads as the footer control it now is. */
-/* Shared "label on top, control below" look for an Agency picker — used in
-   the faults footer and in Quick Code Entry, wherever it replaced a plain
-   inline <label>text + control</label> row. */
+/* "Label on top, control below" look for Quick Code Entry's Agency picker. */
 .agency-field {
   display: flex;
   flex-direction: column;
@@ -649,8 +647,20 @@ h2 {
 .agency-field select {
   min-width: 11rem;
 }
+/* The faults-footer Agency picker instead sits label-beside-input, in one
+   row — it shares that row with the "+ Add fault" button and the quick-pick
+   pills, so it needs to match their single-line height, not stack taller. */
 .footer-agency {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--muted);
   margin-left: auto;
+}
+.footer-agency input {
+  min-width: 11rem;
 }
 .add-fault {
   height: var(--control-h);
@@ -767,6 +777,39 @@ h2 {
 .saved-body,
 .manage-body {
   padding-top: 1rem;
+}
+/* Quick Code Entry no longer has its own collapse toggle — the switch above
+   it is what shows/hides the whole card — so it doesn't need the top gap
+   that made room for that toggle. */
+.code-entry .manage-body {
+  padding-top: 0;
+}
+
+/* ---- Quick code entry / Manual entry switch ---- */
+.entry-mode-switch {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.9rem;
+}
+.entry-mode-switch button {
+  font: inherit;
+  font-weight: 700;
+  font-size: 0.88rem;
+  padding: 0.55rem 1rem;
+  border: 1.5px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+}
+.entry-mode-switch button:hover:not(.active) {
+  border-color: var(--primary);
+  color: var(--text);
+}
+.entry-mode-switch button.active {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #fff;
 }
 .saved-hint,
 .manage-hint {

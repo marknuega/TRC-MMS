@@ -113,6 +113,7 @@ function printReference(data) {
     <div class="sub">Full report: <code>H43A C 1 MT 2221 6575 1</code> &nbsp;(code · action · qty · company · last 4 of tel · last 4 of ISSI · technician&nbsp;ID). Then send the agency code alone, e.g. <code>PSD</code>, to verify.</div>
     <div class="sub">Separators are free: <code>H43AC1MT222165751</code>, <code>H43A-C-1-MT-2221-6575-1</code>, <code>H43A_C_1_MT_2221_6575_1</code> and <code>H43A:C:1:MT:2221:6575:1</code> all read the same.</div>
     <div class="sub"><b>Short cuts.</b> Leave the <b>quantity</b> out for 1: <code>H43ACMT</code>. Leave the <b>type letter</b> off every code after the first — one report is one radio, so it carries down: <code>H11AC1MT 11AC1MI 2221 6666 1</code>. Write the <b>company</b> with one letter: <code>T</code> = MOTECO, <code>I</code> = MOI, so <code>H11AC1T</code>. All three together: <code>H11ACT 11ACI 2221 6666 1</code>.</div>
+    <div class="sub"><b>Technician ID.</b> A number or a 2/3-letter initials claim (Manage Inputs &rarr; Technicians) — both work anywhere. Tel and ISSI are <b>optional</b>: give the last 4 of both, together, right before the technician, or leave both off — <code>H43ACT MA</code> needs no tel/ISSI at all. State the technician once — right after any fault's company works too, not just at the end: <code>H43ACT1 43BNI 48ACI</code> reads the same as <code>H43ACT 43BNI 48ACI 1</code>.</div>
   </div>
 
   ${
@@ -714,6 +715,16 @@ export default function ReferenceCard({ isAdmin = false, issueTypes = [] }) {
           <code>H11AC1MT 11AC1MI 2221 6666 1</code>. Write the <strong>company</strong> with one
           letter — <code>T</code> = MOTECO, <code>I</code> = MOI — so <code>H11AC1T</code>. All three
           together: <code>H11ACT 11ACI 2221 6666 1</code>.
+        </div>
+        <div className="muted">
+          <strong>Technician ID.</strong> A number or a 2/3-letter initials claim (Manage Inputs →
+          Technicians) — both work anywhere a technician ID is expected. Tel and ISSI are{' '}
+          <strong>optional</strong>: give the last 4 of both, together, right before the technician,
+          or leave both off if neither is known — <code>H43ACT MA</code> needs no tel/ISSI at all.
+          The technician only needs stating <strong>once</strong>: give it right after any fault's
+          company instead of waiting for the end — <code>H43ACT1 43BNI 48ACI</code> reads as
+          technician <code>1</code> for both faults, exactly the same as{' '}
+          <code>H43ACT 43BNI 48ACI 1</code>.
         </div>
       </div>
 
