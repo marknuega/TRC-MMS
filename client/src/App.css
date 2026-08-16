@@ -845,8 +845,21 @@ h2 {
    gets a height cap. Short tables never reach it, so they look unchanged; long
    ones scroll inside while `thead` stays pinned to the top of this box. */
 /* ---- Quick code entry (CDS short codes) ---- */
+/* Agency + Create sit beside the textarea instead of below it, so confirming
+   a decode costs one row instead of two. Wraps back to stacked on narrow
+   screens, where a fixed-width action block would squeeze the input. */
+.code-input-row {
+  display: flex;
+  gap: 0.8rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.code-input-row .code-actions {
+  flex: 0 0 auto;
+  margin-top: 0;
+}
 .code-input {
-  width: 100%;
+  flex: 1 1 260px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 1rem;
   letter-spacing: 0.06em;

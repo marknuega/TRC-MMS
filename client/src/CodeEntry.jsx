@@ -62,14 +62,30 @@ export default function CodeEntry({ options, agencies = [], reportDate, onCreate
             letter — <code>T</code> for MOTECO, <code>I</code> for MOI (<code>H11AC1T</code>).
           </p>
 
-          <textarea
-            className="code-input"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            rows={3}
-            placeholder={EXAMPLE}
-            spellCheck={false}
-          />
+          <div className="code-input-row">
+            <div className="code-actions">
+              <label>
+                Agency <span className="opt">(verification)</span>
+                <select value={agency} onChange={(e) => setAgency(e.target.value)} required>
+                  <option value="">— select —</option>
+                  {agencies.map((a) => (
+                    <option key={a}>{a}</option>
+                  ))}
+                </select>
+              </label>
+              <button type="button" className="submit" onClick={create} disabled={!canCreate}>
+                Create entry
+              </button>
+            </div>
+            <textarea
+              className="code-input"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              rows={3}
+              placeholder={EXAMPLE}
+              spellCheck={false}
+            />
+          </div>
 
           {result && (
             <div className="code-preview">
@@ -123,21 +139,6 @@ export default function CodeEntry({ options, agencies = [], reportDate, onCreate
               )}
             </div>
           )}
-
-          <div className="code-actions">
-            <label>
-              Agency <span className="opt">(verification)</span>
-              <select value={agency} onChange={(e) => setAgency(e.target.value)} required>
-                <option value="">— select —</option>
-                {agencies.map((a) => (
-                  <option key={a}>{a}</option>
-                ))}
-              </select>
-            </label>
-            <button type="button" className="submit" onClick={create} disabled={!canCreate}>
-              Create entry
-            </button>
-          </div>
 
           {result?.ok && !agency && (
             <p className="manage-hint">Pick the agency to verify this report before it is added.</p>
