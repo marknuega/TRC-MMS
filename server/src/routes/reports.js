@@ -49,6 +49,7 @@ router.post('/', async (req, res, next) => {
     const { data, error } = parseEntry(req.body)
     if (error) return res.status(400).json({ error })
     data.branch = writeBranch(req, req.body?.branch) // tag with the owning branch
+    if (data.branch === null) return res.status(400).json({ error: 'That branch is outside your region' })
 
     res.status(201).json(await createEntry(data))
   } catch (err) {

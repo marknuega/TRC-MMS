@@ -36,11 +36,19 @@ describe('writeBranch', () => {
     assert.equal(writeBranch(adminReq, ALL), '')
   })
 
-  test('director: writes an in-region branch, rejects out-of-region and ALL', () => {
+  test('director: writes an in-region branch; no branch / ALL collapse to unscoped', () => {
     assert.equal(writeBranch(directorReq, 'Jeddah'), 'Jeddah')
-    assert.equal(writeBranch(directorReq, 'Dammam'), '') // not in this director's region
     assert.equal(writeBranch(directorReq, ALL), '')
     assert.equal(writeBranch(directorReq, ''), '')
+  })
+
+  test('director: an explicit out-of-region branch is `null` — a hard reject, not the same blank as "no branch"', () => {
+    // Regression: these two cases used to collapse to the same '', which let an
+    // out-of-region write through tagged branch: '' — silently orphaned, since
+    // no non-admin's branchWhere() ever matches ''. Every writeBranch() call
+    // site must check for null and reject with 400, never write it.
+    assert.equal(writeBranch(directorReq, 'Dammam'), null)
+    assert.notEqual(writeBranch(directorReq, 'Dammam'), writeBranch(directorReq, ''))
   })
 
   test('user: always writes their own branch, ignoring whatever was requested', () => {

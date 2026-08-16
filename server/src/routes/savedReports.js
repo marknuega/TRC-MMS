@@ -74,6 +74,7 @@ router.get('/', async (req, res, next) => {
   try {
     // Preview the next id for the branch in view (client also derives its own).
     const previewBranch = writeBranch(req, req.query.branch)
+    if (previewBranch === null) return res.status(400).json({ error: 'That branch is outside your region' })
     const [reports, repNo, transNo] = await Promise.all([
       prisma.savedReport.findMany({
         where: branchWhere(req, req.query.branch),
@@ -130,6 +131,7 @@ router.post('/', async (req, res, next) => {
     // Only snapshot the working entries for the branch being saved, so a
     // non-admin never sweeps up another branch's entries.
     const branch = writeBranch(req, req.body?.branch)
+    if (branch === null) return res.status(400).json({ error: 'That branch is outside your region' })
     const entries = await prisma.reportEntry.findMany({
       where: { mode, branch },
       orderBy: [{ reportDate: 'asc' }, { id: 'asc' }],

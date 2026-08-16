@@ -15,7 +15,16 @@ const ALL = 'All Branches'
 export const isAdmin = (req) => req.user?.role === 'admin'
 export const isDirector = (req) => req.user?.role === 'director'
 
-// The branch a WRITE (create/save) should be tagged with.
+// The branch a WRITE (create/save) should be tagged with. Returns `null` —
+// never a string — when the caller must reject the request outright rather
+// than write/query anything: a director naming a branch outside their
+// region is a real deny, not the same as "no branch specified" (which
+// legitimately resolves to '', mirroring how admin's ALL_BRANCHES already
+// works). Collapsing those two into one blank string let an out-of-region
+// write through silently, tagged with branch: '' — invisible to the
+// director who made it and to every other non-admin, a write that looks
+// like it succeeded but effectively vanishes. Every call site must check
+// for `null` and reject with 400 before touching the database.
 export function writeBranch(req, requested) {
   if (isAdmin(req)) {
     const b = String(requested ?? '').trim()
@@ -25,7 +34,7 @@ export function writeBranch(req, requested) {
     const b = String(requested ?? '').trim()
     const region = req.regionBranches || []
     if (b === ALL || !b) return ''
-    return region.includes(b) ? b : ''
+    return region.includes(b) ? b : null
   }
   return req.user?.branch || ''
 }

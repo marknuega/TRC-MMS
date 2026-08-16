@@ -9,6 +9,7 @@ router.get('/', async (req, res, next) => {
   try {
     const monthKey = String(req.query.month ?? '')
     const branch = writeBranch(req, req.query.branch) // non-admins forced to their own branch
+    if (branch === null) return res.status(400).json({ error: 'That branch is outside your region' })
     if (!/^\d{4}-\d{2}$/.test(monthKey)) return res.status(400).json({ error: 'month must be YYYY-MM' })
     const row = await prisma.monthlySheet.findUnique({ where: { monthKey_branch: { monthKey, branch } } })
     res.json({ data: row?.data ?? null, updatedAt: row?.updatedAt ?? null })
@@ -22,6 +23,7 @@ router.put('/', async (req, res, next) => {
   try {
     const monthKey = String(req.body?.month ?? '')
     const branch = writeBranch(req, req.body?.branch)
+    if (branch === null) return res.status(400).json({ error: 'That branch is outside your region' })
     const data = req.body?.data
     if (!/^\d{4}-\d{2}$/.test(monthKey)) return res.status(400).json({ error: 'month must be YYYY-MM' })
     if (!data || typeof data !== 'object' || Array.isArray(data)) {
@@ -43,6 +45,7 @@ router.delete('/', async (req, res, next) => {
   try {
     const monthKey = String(req.query.month ?? '')
     const branch = writeBranch(req, req.query.branch)
+    if (branch === null) return res.status(400).json({ error: 'That branch is outside your region' })
     await prisma.monthlySheet.deleteMany({ where: { monthKey, branch } })
     res.status(204).end()
   } catch (err) {

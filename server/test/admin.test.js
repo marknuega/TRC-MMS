@@ -174,3 +174,74 @@ describe('admin account management (unchanged)', () => {
     assert.ok(users.some((u) => u.id === directorId))
   })
 })
+
+// Regression: a director's POST naming a branch outside their region used to
+// be silently accepted, tagged branch: '' — an orphaned write, invisible to
+// the director who made it (and to any plain user), with no error returned.
+// writeBranch() now returns null for this case and every call site must
+// reject with 400 instead of writing it. See scope.test.js for the unit-level
+// coverage of writeBranch() itself; this exercises the real routes.
+describe('data routes reject an out-of-region branch (never orphan a write)', () => {
+  let entryId
+
+  test('POST /api/reports with an out-of-region branch is rejected, not silently orphaned', async () => {
+    const res = await asDirector('/api/reports', {
+      method: 'POST',
+      body: JSON.stringify({
+        branch: OUT_OF_REGION_BRANCH,
+        reportDate: '2026-08-15',
+        agency: 'PSD',
+        type: 'SEPURA',
+        model: 'TH1N',
+        faults: [{ issue: 'A COVER', action: 'CHANGE', quantity: 1, company: 'MOI' }],
+      }),
+    })
+    assert.equal(res.status, 400)
+  })
+
+  test('POST /api/reports with an in-region branch still works normally', async () => {
+    const res = await asDirector('/api/reports', {
+      method: 'POST',
+      body: JSON.stringify({
+        branch: IN_REGION_BRANCH,
+        reportDate: '2026-08-15',
+        agency: 'PSD',
+        type: 'SEPURA',
+        model: 'TH1N',
+        faults: [{ issue: 'A COVER', action: 'CHANGE', quantity: 1, company: 'MOI' }],
+      }),
+    })
+    assert.equal(res.status, 201)
+    const created = await res.json()
+    assert.equal(created.branch, IN_REGION_BRANCH)
+    entryId = created.id
+  })
+
+  test('POST /api/inventory with an out-of-region branch is rejected', async () => {
+    const res = await asDirector('/api/inventory', {
+      method: 'POST',
+      body: JSON.stringify({ sku: `TEST-OOR-${randomBytes(4).toString('hex')}`, branch: OUT_OF_REGION_BRANCH }),
+    })
+    assert.equal(res.status, 400)
+  })
+
+  test('POST /api/inventory/import with an out-of-region branch is rejected up front, not per-row skipped', async () => {
+    const res = await asDirector('/api/inventory/import', {
+      method: 'POST',
+      body: JSON.stringify({ branch: OUT_OF_REGION_BRANCH, items: [{ sku: `TEST-IMP-${randomBytes(4).toString('hex')}` }] }),
+    })
+    assert.equal(res.status, 400)
+  })
+
+  test('PUT /api/monthly with an out-of-region branch is rejected', async () => {
+    const res = await asDirector('/api/monthly', {
+      method: 'PUT',
+      body: JSON.stringify({ month: '2026-08', branch: OUT_OF_REGION_BRANCH, data: { 1: { counts: {}, description: '' } } }),
+    })
+    assert.equal(res.status, 400)
+  })
+
+  after(async () => {
+    if (entryId) await prisma.reportEntry.delete({ where: { id: entryId } }).catch(() => {})
+  })
+})

@@ -46,6 +46,7 @@ router.post('/', async (req, res, next) => {
     const { data, error } = parseItem(req.body)
     if (error) return res.status(400).json({ error })
     data.branch = writeBranch(req, req.body?.branch)
+    if (data.branch === null) return res.status(400).json({ error: 'That branch is outside your region' })
     const item = await prisma.inventoryItem.create({ data })
     res.status(201).json(shape(item))
   } catch (err) {
@@ -129,6 +130,7 @@ router.post('/import', async (req, res, next) => {
   try {
     const rows = Array.isArray(req.body?.items) ? req.body.items : []
     const branch = writeBranch(req, req.body?.branch)
+    if (branch === null) return res.status(400).json({ error: 'That branch is outside your region' })
     let created = 0
     let updated = 0
     let skipped = 0
