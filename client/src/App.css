@@ -649,15 +649,21 @@ h2 {
 }
 /* The faults-footer Agency picker instead sits label-beside-input, in one
    row — it shares that row with the "+ Add fault" button and the quick-pick
-   pills, so it needs to match their single-line height, not stack taller. */
-.footer-agency {
+   pills, so it needs to match their single-line height, not stack taller.
+   Qualified with .entry-form to outrank ".entry-form label" (line ~545),
+   which sets flex-direction: column for every other label in this form —
+   at equal specificity that rule wins by source order and stacks this one
+   too, so a bare ".footer-agency" here is not enough on its own. */
+.entry-form .footer-agency {
   display: flex;
+  flex-direction: row;
   align-items: center;
   gap: 0.5rem;
   font-size: 0.85rem;
   font-weight: 700;
   color: var(--muted);
   margin-left: auto;
+  white-space: nowrap;
 }
 .footer-agency input {
   min-width: 11rem;
