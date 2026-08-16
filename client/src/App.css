@@ -2675,8 +2675,10 @@ h2 {
 }
 
 /* Company color themes — MOI blue, MOTECO (MOT) green — so the two are easy
-   to tell apart at a glance. Kept to a small badge pill plus a subtle card
-   accent (border + faint tint); the table body underneath stays plain. */
+   to tell apart at a glance. The card's whole surface (table rows included,
+   since they have no background of their own) carries the soft tint; the
+   badge sits on top in a deeper shade of the same color so it stays legible
+   against that tint instead of blending into it. */
 .sp-co-badge {
   display: inline-flex;
   align-items: center;
@@ -2687,20 +2689,20 @@ h2 {
   letter-spacing: 0.02em;
 }
 .sp-co-badge.co-blue {
-  background: var(--primary-soft);
+  background: color-mix(in srgb, var(--primary) 22%, var(--surface));
   color: var(--primary-ink);
 }
 .sp-co-badge.co-green {
-  background: var(--success-soft);
+  background: color-mix(in srgb, var(--success) 22%, var(--surface));
   color: var(--success-ink);
 }
 .sp-brand.co-blue {
-  border-left: 3px solid var(--primary);
-  background: color-mix(in srgb, var(--primary) 5%, var(--surface));
+  background: var(--primary-soft);
+  border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
 }
 .sp-brand.co-green {
-  border-left: 3px solid var(--success);
-  background: color-mix(in srgb, var(--success) 5%, var(--surface));
+  background: var(--success-soft);
+  border-color: color-mix(in srgb, var(--success) 35%, var(--border));
 }
 
 /* ---- Pie charts ---- */
