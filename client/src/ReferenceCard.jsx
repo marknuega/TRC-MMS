@@ -35,7 +35,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { COPYRIGHT_HTML } from './copyright'
-import { FALLBACK, VARIANTS, useCodeMap } from './codes'
+import { FALLBACK, useCodeMap } from './codes'
 import { issueCodeIndex } from './options'
 import { groupComponents, PARTS_RE, COMPONENT_BUCKETS } from './refGroups'
 import { getCodeMap, saveCodeMap } from './api'

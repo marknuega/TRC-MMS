@@ -10,10 +10,12 @@
  *   type parts variant action qty company  tel  issi tech
  *   └──── the 4-char CDS code ────┘
  *
- * The 4-char head (H43A) is the CDS code proper: [TYPE][PARTS][VARIANT], where
- * the variant separates otherwise-identical parts — H43A is the original side
- * grip, H43B the 3D-printed one. It replaces the older 3-char 26H form, which
- * put the component first and had no variant at all.
+ * The 4-char head (H43A) is the CDS code proper: [TYPE][PARTS][VARIANT]. The
+ * variant letter is part of the code's identity, not a build of the part
+ * before it: 12A is an A Cover and 12B a B Cover, two different items. Where
+ * two codes ARE builds of one part the claim says so in its own name, as 43A
+ * "Side Grip" and 43B "Side Grip 3D" do. It replaces the older 3-char 26H
+ * form, which put the component first and had no variant at all.
  *
  * A fault code — the parts number plus the variant letter, e.g. 99B — is
  * defined by an Issue type CLAIMING it (Manage inputs -> Issue types). That is
@@ -78,9 +80,11 @@ export const FALLBACK = {
     44: 'Microphone', 45: 'Speaker Low', 46: 'Speaker Mid', 95: 'Battery Pack',
     97: 'Charging Pin', 98: 'Power Supply', 99: 'Charger',
   },
-  // Suffix appended to the part name. '' is a real value, not "missing" — an
-  // empty suffix is what makes A the default build.
-  variants: { A: '', B: '3D' },
+  // Variant letters. They no longer carry a suffix: B is not "the 3D build of
+  // A" — 12A is A Cover and 12B is B Cover, a different part. A code's meaning
+  // comes from the issue type claiming it, so 43B says "Side Grip 3D" in its
+  // own name rather than having 3D appended to 43A's.
+  variants: { A: '', B: '' },
   // RTO is keyed by its full three letters — see ACTION_ALT below.
   actions: { C: 'Change', N: 'New', R: 'Repair', I: 'Install/Re-Install', P: 'Program/Re-program', D: 'Dismantle', RTO: 'RTO' },
   companies: { MI: 'MOI', MT: 'MOTECO' },
@@ -90,26 +94,6 @@ export const FALLBACK = {
   },
   technicians: { 1: 'Amir', 2: 'Muhammad Rashid', 3: 'Imran', 4: 'Rasheedullah', 5: 'Maroof', 6: 'Baghdad', 7: 'Engr. Khalid', 8: 'Engr. Hamed' },
 }
-
-// The VARIANT character does not name a different part — it selects between
-// builds of the SAME part, which is why its suffix is appended to the component
-// name to land on the existing issue option ("SIDE GRIP" / "SIDE GRIP 3D").
-//
-// The suffixes live in the code map (admin-editable, shared with the WhatsApp
-// bridge), so this turns that raw { code: suffix } map into { label, suffix }.
-// A blank suffix reads as "Original" in the UI while adding nothing to the name.
-export function variantsOf(map) {
-  const raw = map?.variants ?? FALLBACK.variants
-  const out = {}
-  for (const [code, suffix] of Object.entries(raw)) {
-    const s = String(suffix ?? '').trim()
-    out[code] = { label: s || 'Original', suffix: s ? ` ${s}` : '' }
-  }
-  return out
-}
-
-// Convenience for the places that only need to describe the scheme, not decode.
-export const VARIANTS = variantsOf(FALLBACK)
 
 const up = (v) => String(v ?? '').trim().toUpperCase()
 // Comparison key: case and punctuation carry no meaning across the two lists.

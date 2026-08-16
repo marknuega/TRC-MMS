@@ -11,8 +11,8 @@
  *
  * `variants` is included even though the bridge never published it: the client
  * carried it as a hardcoded fallback, and folding it in makes the whole
- * vocabulary editable in one place. An empty suffix is a REAL value — it is
- * what makes A the default build of a part, not a missing entry.
+ * vocabulary editable in one place. The letters carry no suffix — a variant is
+ * part of a code's identity, not a build of the part before it.
  */
 
 export const CODEMAP_SEED = {
@@ -68,9 +68,10 @@ export const CODEMAP_SEED = {
     // inputs -> Issue types: 98+A "Power Supply - PSE65-12", 99+A "Charger818",
     // 99+B "ChargerDC"), which is the mechanism built for exactly this case.
   },
+  // No suffix: B is not "the 3D build of A" — see FALLBACK in client/src/codes.js.
   variants: {
     A: "",
-    B: "3D",
+    B: "",
   },
   actions: {
     C: "Change",

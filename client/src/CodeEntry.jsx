@@ -12,7 +12,7 @@
  */
 
 import { useMemo, useState } from 'react'
-import { parseCodeReport, useCodeMap, VARIANTS } from './codes'
+import { parseCodeReport, useCodeMap } from './codes'
 import SearchSelect from './SearchSelect'
 
 const EXAMPLE = 'H43A C 1 MT 2221 6575 1'
@@ -178,14 +178,10 @@ export default function CodeEntry({ options, agencies = [], topAgencies = [], re
                       <span className="ref-code-badge">VARIANT</span>
                     </td>
                     <td>
-                      1 letter — which build of that part:{' '}
-                      {Object.entries(VARIANTS).map(([k, v], i) => (
-                        <span key={k}>
-                          {i ? ', ' : ''}
-                          <strong>{k}</strong> = {v.label}
-                        </span>
-                      ))}
-                      .
+                      1 letter, and part of the code's identity rather than a build of
+                      the part before it. What <code>43A</code> and <code>43B</code> each mean
+                      is set by the issue type claiming it, so they can be two different
+                      items.
                     </td>
                   </tr>
                 </tbody>

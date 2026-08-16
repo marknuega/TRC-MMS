@@ -50,7 +50,7 @@ async function main() {
   for (const parts of partsNumbers) {
     for (const variant of variantLetters) {
       const code = `${parts}${variant}`
-      if (!claimed[code]) losing.push({ code, wouldHaveMeant: `${components[parts]}${variants[variant] ? ` ${variants[variant]}` : ''}` })
+      if (!claimed[code]) losing.push({ code, wouldHaveMeant: components[parts] })
     }
   }
 

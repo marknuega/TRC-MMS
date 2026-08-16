@@ -18,7 +18,7 @@ import {
   technicianInitials2,
   technicianInitials3,
 } from './options'
-import { FALLBACK, useCodeMap, variantsOf } from './codes'
+import { FALLBACK, useCodeMap } from './codes'
 import SearchSelect from './SearchSelect'
 import { advanceOnEnter } from './focusNav'
 
@@ -145,13 +145,12 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
   // Whether the parts number being typed already means something, so defining
   // it as something else is a visible decision rather than a silent one — a
   // number in use decodes technicians' existing reports.
-  function codeInUseHint(parts, variant) {
+  function codeInUseHint(parts) {
     const p = parts.trim()
     if (!PARTS_RE.test(p)) return ''
     const part = (map?.components ?? FALLBACK.components)[p]
-    const v = variantsOf(map)[variant.trim().toUpperCase()]
     if (!part) return `${p} is free — nothing uses it yet.`
-    return `${p} is already in use for ${part}${v ? ` · ${variant.trim().toUpperCase()} = ${v.label}` : ''} — defining it here replaces that.`
+    return `${p} is already in use for ${part} — defining it here replaces that.`
   }
 
   function flash(msg, field = '') {
@@ -433,7 +432,7 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
               on the <strong>Code Reference</strong> under <em>Claimed Codes</em>, which is what technicians
               read.
               {newParts.trim() && (
-                <span className="manage-code-hint"> {codeInUseHint(newParts, newVariant)}</span>
+                <span className="manage-code-hint"> {codeInUseHint(newParts)}</span>
               )}
             </p>
           )}
