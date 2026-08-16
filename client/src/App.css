@@ -206,17 +206,22 @@
 }
 
 /* ---- Shared control base (inputs / selects / textareas) ---- */
+/* A field is marked out by its fill, not by a drawn box: the border is a
+   near-invisible seam that only firms up on hover, and focus is carried by an
+   offset outline. Nothing here changes an input's size between states, so a
+   form does not shift as you tab through it. */
 .app input,
 .app select,
 .app textarea {
   font-family: inherit;
   font-size: 1rem;
   color: var(--text-h);
-  background: var(--surface-2);
-  border: 1.5px solid var(--border);
+  background: var(--field-bg);
+  border: 1px solid var(--field-border);
   border-radius: var(--radius-sm);
+  box-shadow: var(--field-shadow);
   box-sizing: border-box;
-  transition: border-color 0.12s, box-shadow 0.12s;
+  transition: border-color 0.12s, background-color 0.12s;
 }
 .app input,
 .app select {
@@ -235,14 +240,18 @@
 .app input:hover,
 .app select:hover,
 .app textarea:hover {
-  border-color: var(--border-strong);
+  border-color: var(--field-border-hover);
 }
+/* An offset outline instead of a thick coloured border and a 4px glow: it
+   reads clearly at a glance, does not recolour the field, and cannot be
+   confused with the red border that marks a validation failure. */
 .app input:focus,
 .app select:focus,
 .app textarea:focus {
-  outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 4px var(--ring);
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-color: var(--field-border-hover);
+  background: var(--surface-2);
 }
 .app select {
   -webkit-appearance: none;
@@ -270,19 +279,23 @@
   font: inherit;
   text-align: left;
   color: var(--text-h);
-  background: var(--surface-2);
-  border: 1.5px solid var(--border);
+  /* Reads as a field, so it is styled as one — see the control base above. */
+  background: var(--field-bg);
+  border: 1px solid var(--field-border);
   border-radius: var(--radius-sm);
+  box-shadow: var(--field-shadow);
   box-sizing: border-box;
   cursor: pointer;
-  transition: border-color 0.12s, box-shadow 0.12s;
+  transition: border-color 0.12s, background-color 0.12s;
 }
 .multi-toggle:hover {
-  border-color: var(--border-strong);
+  border-color: var(--field-border-hover);
 }
 .multi-toggle[aria-expanded='true'] {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 4px var(--ring);
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-color: var(--field-border-hover);
+  background: var(--surface-2);
 }
 .multi-toggle > span:first-child {
   overflow: hidden;
@@ -1681,7 +1694,7 @@ h2 {
   box-sizing: border-box;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.82rem;
-  background: var(--surface-3);
+  background: var(--field-bg);
   resize: vertical;
 }
 .paste-actions {
@@ -2199,7 +2212,11 @@ h2 {
   flex: 1;
   min-width: 0;
   height: 2.3rem;
-  border-color: var(--primary);
+  /* No blue outline-by-border here: the row being edited already carries its
+     own heavier frame, so recolouring each field inside it just adds noise.
+     The fill inverts though — these sit on a tinted row, where the normal
+     recessed fill would land on top of an almost identical grey. */
+  background: var(--surface-2);
 }
 .manage-item-actions {
   display: flex;
@@ -2368,13 +2385,16 @@ h2 {
   border-color: var(--mi-danger-hover);
 }
 
-/* An input the current validation message is about. */
+/* An input the current validation message is about. The one place a visible
+   border is worth drawing — against fields whose own borders are near
+   invisible, it is unmistakably the box being complained about. */
 .manage-inputs input.invalid,
 .manage-inputs input[aria-invalid='true'] {
-  border-color: var(--danger);
+  border: 1.5px solid var(--danger);
 }
 .manage-inputs input.invalid:focus {
-  box-shadow: 0 0 0 4px var(--danger-soft);
+  outline-color: var(--danger);
+  border-color: var(--danger);
 }
 
 /* ---- Item cards ---- */
@@ -2435,10 +2455,6 @@ h2 {
 }
 .manage-inputs .manage-list li.editing .edit-input {
   height: var(--control-h);
-  border-color: var(--border);
-}
-.manage-inputs .manage-list li.editing .edit-input:focus {
-  border-color: var(--primary);
 }
 .manage-inputs .manage-list li.editing .manage-item-actions {
   gap: 0.75rem;

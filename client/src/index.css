@@ -38,6 +38,15 @@
   --mi-panel: #f7f8fa;
   --mi-panel-border: #e3e7ee;
 
+  /* Form fields. The filled background is what marks an input as an input;
+     the border is deliberately near-invisible and only firms up on hover.
+     Focus is carried by an offset outline rather than a heavy border, so the
+     box never changes size or colour weight as you tab through a form. */
+  --field-bg: #f6f7f9;
+  --field-border: #e7eaf0;
+  --field-border-hover: #cfd6e2;
+  --field-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.045);
+
   --radius: 14px;
   --radius-sm: 10px;
   --control-h: 2.75rem;
@@ -92,6 +101,12 @@
     --mi-danger-hover: #d4483d;
     --mi-panel: #1c202b;
     --mi-panel-border: #2f3646;
+    /* Form fields, dark: recessed below the card surface rather than lifted,
+       which is what reads as "type here" without needing a border. */
+    --field-bg: #171b25;
+    --field-border: #2b3242;
+    --field-border-hover: #414b60;
+    --field-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
     color-scheme: dark;
   }
 }
@@ -129,6 +144,12 @@
   --mi-danger-hover: #d4483d;
   --mi-panel: #1c202b;
   --mi-panel-border: #2f3646;
+  /* Form fields, dark: recessed below the card surface rather than lifted,
+     which is what reads as "type here" without needing a border. */
+  --field-bg: #171b25;
+  --field-border: #2b3242;
+  --field-border-hover: #414b60;
+  --field-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
   color-scheme: dark;
 }
 /* Explicit light choice overrides the system dark preference. */
@@ -158,6 +179,16 @@
   --ring: rgba(37, 99, 235, 0.32);
   --shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 2px 8px rgba(15, 23, 42, 0.06);
   --shadow-lg: 0 4px 16px rgba(15, 23, 42, 0.1);
+  --mi-action: #1e2d4d;
+  --mi-action-hover: #16233c;
+  --mi-danger: #d32f2f;
+  --mi-danger-hover: #b02525;
+  --mi-panel: #f7f8fa;
+  --mi-panel-border: #e3e7ee;
+  --field-bg: #f6f7f9;
+  --field-border: #e7eaf0;
+  --field-border-hover: #cfd6e2;
+  --field-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.045);
   color-scheme: light;
 }
 
