@@ -311,7 +311,7 @@ const CATS = [
     codeLabel: 'Letter',
     blankOk: true,
     hint:
-      'The letter after the parts number. It is part of a code's identity, not a build of the part before it — 12A is an A Cover and 12B a B Cover. Nothing decodes through this list any more; a code means whatever the issue type claiming it says, so these entries are left blank.',
+      'The letter after the parts number. It belongs to the code itself, not to the part before it — 12A is an A Cover and 12B a B Cover. Nothing decodes through this list any more; a code means whatever the issue type claiming it says, so these entries are left blank.',
   },
   { key: 'actions', label: 'Actions', codeLabel: 'Letter', hint: 'What was done. C = Change.' },
   { key: 'companies', label: 'Companies', codeLabel: 'Code', hint: 'Who owns or funds the work. MT = MOTECO.' },
