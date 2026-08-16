@@ -191,25 +191,28 @@ function fullyConsumesAsShortFaultChain(str) {
   return true
 }
 
-// Look for a technician ID sitting right after a company, with a REAL fault
-// code immediately following it. The token must be a REGISTERED technician
-// — matching only on shape (like the end-of-line tail does) would risk
-// silently swallowing a typo'd fault code as a bogus "technician ID" instead
-// of surfacing a clear parse error.
+// Look for a technician ID sitting right after a company. The token must be
+// a REGISTERED technician — matching only on shape (like the end-of-line
+// tail does) would risk silently swallowing a typo'd fault code as a bogus
+// "technician ID" instead of surfacing a clear parse error.
 //
-// Requiring the remainder to start with an actual fault (2 digits + a
-// variant LETTER, per SHORT_FAULT_RE) is what tells an inline technician
-// ("...T1 43BNI...", a letter right after the split) apart from the
-// ordinary end-of-line tail ("...MT 2221 6575 1", nothing but digits after
-// it) — a run of plain digits is never accepted as "more faults", however
-// it happens to end.
+// A token containing a LETTER (initials, e.g. "MA") is unambiguous on its
+// own — the ordinary end-of-line tail is nothing but digits, so a lettered
+// token can never be confused with it. It is accepted whatever follows:
+// nothing, a bare tel+ISSI block, or more real fault codes.
+//
+// A PURELY NUMERIC token has no such anchor: read backwards, it is exactly
+// as plausible as the start of the ordinary tel(4)+ISSI(4)+technician tail
+// (also nothing but digits), so it is only accepted when a real fault code
+// (2 digits + a variant LETTER, per SHORT_FAULT_RE) immediately follows —
+// proof this position is genuinely mid-message, not the trailing tail.
 function inlineTechnicianSplit(str, technicians) {
   for (let len = 1; len <= Math.min(MAX_INLINE_TECH_LEN, str.length); len++) {
     const token = str.slice(0, len)
     const known = technicians[token] ?? technicians[Number(token)]
     if (!known) continue
     const remainder = str.slice(len)
-    if (!SHORT_FAULT_RE.test(remainder)) continue
+    if (!/[A-Z]/.test(token) && !SHORT_FAULT_RE.test(remainder)) continue
     if (fullyConsumesAsShortFaultChain(remainder)) return { token, remainder }
   }
   return null

@@ -130,6 +130,34 @@ describe('an inline technician ID (beside a company, not just at the end)', () =
     assert.equal(r.issiNumber, '6575')
     assert.match(r.warnings.join(' '), /No technician with ID 12/)
   })
+
+  test('a lettered (initials) id is recognized even with nothing but tel+ISSI after it — no fault code required to follow', () => {
+    // Unlike a purely numeric id, a lettered token can never be confused
+    // with the ordinary all-digit tail, so it doesn't need a following
+    // fault code to prove its position — "MA" here sits right after the
+    // second fault's company (I = MOI), with only tel+ISSI after it.
+    const map = { ...FALLBACK, technicians: { ...FALLBACK.technicians, MA: 'Muhammad Amir' } }
+    // Technicians list left empty — see the earlier letter-initials test for
+    // why (avoids matchOption() fuzzy-matching onto the unrelated "AMIR").
+    const r = parseCodeReport('H43ACT 43ACIMA 2222 6666', map, { ...OPTS, technicians: [] })
+    assert.equal(r.ok, true, r.errors.join('; '))
+    assert.equal(r.faults.length, 2)
+    assert.equal(r.faults[1].company, 'MOI')
+    assert.equal(r.telNumber, '2222')
+    assert.equal(r.issiNumber, '6666')
+    assert.equal(r.entry.technician, 'MUHAMMAD AMIR')
+  })
+
+  test('a lettered id with nothing at all after it also decodes', () => {
+    const map = { ...FALLBACK, technicians: { ...FALLBACK.technicians, MA: 'Muhammad Amir' } }
+    const r = parseCodeReport('H43ACIMA', map, { ...OPTS, technicians: [] })
+    assert.equal(r.ok, true, r.errors.join('; '))
+    assert.equal(r.faults.length, 1)
+    assert.equal(r.faults[0].company, 'MOI')
+    assert.equal(r.telNumber, '')
+    assert.equal(r.issiNumber, '')
+    assert.equal(r.entry.technician, 'MUHAMMAD AMIR')
+  })
 })
 
 test('mixing devices in one report is rejected, not silently merged', () => {
