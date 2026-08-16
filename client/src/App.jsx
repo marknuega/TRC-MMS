@@ -34,6 +34,7 @@ import SparePartsReport from './SparePartsReport'
 import Dashboard from './Dashboard'
 import AdminUsers from './AdminUsers'
 import ReferenceCard from './ReferenceCard'
+import Toast from './Toast'
 import CodeEntry from './CodeEntry'
 import SearchSelect from './SearchSelect'
 import { Credit, Copyright, COPYRIGHT_HTML } from './copyright'
@@ -355,6 +356,7 @@ function App({ user, onLogout }) {
   const [entries, setEntries] = useState([])
   const [form, setForm] = useState(emptyForm)
   const [error, setError] = useState(null)
+  const [saveToast, setSaveToast] = useState('')
   const [copied, setCopied] = useState(false)
   const [loading, setLoading] = useState(true)
   const [options, setOptions] = useState(DEFAULT_OPTIONS)
@@ -681,7 +683,7 @@ function App({ user, onLogout }) {
       await refresh() // saving auto-clears the working set server-side — reflect it
       await refreshSaved()
       refreshInventory() // stock was deducted server-side for matched items
-      window.alert(`Saved as ${repLabel(rep.reportId, rep.branch, rep.mode)}.`)
+      setSaveToast(`Saved as report number ${repLabel(rep.reportId, rep.branch, rep.mode)}.`)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -1985,6 +1987,7 @@ function App({ user, onLogout }) {
               <button type="button" className="btn-pdf" onClick={() => window.print()} disabled={!reports.length}>
                 ⭳ PDF
               </button>
+              <Toast message={saveToast} onDone={() => setSaveToast('')} />
             </div>
           </div>
           {/* One box: the Agency Summary is now part of the report text itself,

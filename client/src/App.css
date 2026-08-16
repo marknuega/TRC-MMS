@@ -710,6 +710,7 @@ h2 {
   margin: 0;
 }
 .breakdown-actions {
+  position: relative;
   display: flex;
   gap: 0.5rem;
 }
@@ -752,6 +753,58 @@ h2 {
 .breakdown-head .btn-whatsapp:active {
   transform: translateY(1px);
 }
+/* Success notice anchored under the Save report button — replaces
+   window.alert() so it doesn't block the page or need dismissing. */
+.toast-success {
+  position: absolute;
+  top: calc(100% + 0.6rem);
+  right: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  max-width: min(22rem, calc(100vw - 2rem));
+  padding: 0.65rem 0.9rem;
+  background: color-mix(in srgb, var(--success) 12%, var(--surface));
+  border: 1px solid var(--success);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg);
+  color: var(--text-h);
+  font-size: 0.88rem;
+  font-weight: 500;
+  line-height: 1.35;
+  animation: toast-in 0.2s ease-out;
+}
+.toast-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.3rem;
+  height: 1.3rem;
+  border-radius: 50%;
+  background: var(--success);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-0.4rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (max-width: 560px) {
+  .toast-success {
+    right: -0.4rem;
+    max-width: calc(100vw - 2.5rem);
+  }
+}
+
 .breakdown textarea {
   width: 100%;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
