@@ -63,7 +63,7 @@ export default function CodeEntry({ options, agencies = [], topAgencies = [], re
               spellCheck={false}
             />
             <div className="code-actions">
-              <label>
+              <label className="agency-field">
                 Agency <span className="opt">(verification)</span>
                 <input
                   list="qce-agency-options"

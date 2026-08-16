@@ -1016,10 +1016,13 @@ function App({ user, onLogout }) {
     // Only pin the last pick if it is still an option — a renamed or deleted
     // agency must not resurrect itself at the top of the list.
     const agencyOptions = all.includes(lastAgency) ? [lastAgency, ...rest] : rest
-    // The busiest 5 — real usage only, so a never-used agency never crowds out
-    // one technicians actually pick, and Quick Code Entry can offer them as
-    // one-tap picks right beside the search field.
-    const topAgencies = byUsage.filter((a) => uses(a) > 0).slice(0, 5)
+    // The busiest 3 — real usage only, so a never-used agency never crowds out
+    // one technicians actually pick, and the quick-pick buttons stay tight.
+    // The blank/whitespace/'-' guard is belt-and-suspenders: bump() already
+    // keeps those out of `counts`, so this only matters if that ever changes.
+    const topAgencies = byUsage
+      .filter((a) => String(a ?? '').trim() && a !== '-' && uses(a) > 0)
+      .slice(0, 3)
     return { agencyOptions, topAgencies }
   }, [options.agencies, saved, entries, lastAgency])
 
@@ -1709,25 +1712,53 @@ function App({ user, onLogout }) {
                   Add entry
                 </button>
               ) : (
-                <label className="footer-agency">
-                  Agency
-                  <select
-                    value={form.agency}
-                    onChange={(e) => {
-                      const v = e.target.value
-                      setForm((f) => ({ ...f, agency: v }))
-                      // Picking an agency IS "Add entry" — but only once every
-                      // other required field already checks out.
-                      if (v && entryFormRef.current?.reportValidity()) handleSubmit(undefined, v)
-                    }}
-                    required
-                  >
-                    <option value="">— select to add entry —</option>
-                    {agencyOptions.map((a) => (
-                      <option key={a}>{a}</option>
-                    ))}
-                  </select>
-                </label>
+                <>
+                  <label className="agency-field footer-agency">
+                    Agency
+                    {/* Not `required`: our own logic already guarantees a
+                        non-empty value before handleSubmit ever runs (see the
+                        `if (hit ...)` / quick-pick handlers below), and
+                        reportValidity() reads the DOM synchronously — a
+                        quick-pick click updates React state, not this
+                        element's live value, so marking it required here
+                        would block a perfectly good submission on stale DOM. */}
+                    <input
+                      list="entry-agency-options"
+                      value={form.agency}
+                      onChange={(e) => {
+                        const v = e.target.value
+                        setForm((f) => ({ ...f, agency: v }))
+                        const hit = agencyOptions.find((a) => a.toUpperCase() === v.trim().toUpperCase())
+                        // Picking an agency IS "Add entry" — but only once every
+                        // other required field already checks out.
+                        if (hit && entryFormRef.current?.reportValidity()) handleSubmit(undefined, hit)
+                      }}
+                      placeholder="Type to search, or pick —"
+                      autoComplete="off"
+                    />
+                    <datalist id="entry-agency-options">
+                      {agencyOptions.map((a) => (
+                        <option key={a} value={a} />
+                      ))}
+                    </datalist>
+                  </label>
+                  {topAgencies.length > 0 && (
+                    <div className="agency-quickpicks">
+                      {topAgencies.map((a) => (
+                        <button
+                          key={a}
+                          type="button"
+                          onClick={() => {
+                            setForm((f) => ({ ...f, agency: a }))
+                            if (entryFormRef.current?.reportValidity()) handleSubmit(undefined, a)
+                          }}
+                        >
+                          {a}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
             </div>
             </>

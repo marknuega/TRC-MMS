@@ -634,17 +634,23 @@ h2 {
 /* Picking the agency IS the "Add entry" action (see handleSubmit's
    agencyOverride) — styled like the compact topbar fields, not the tall
    Device-grid labels, so it reads as the footer control it now is. */
-.footer-agency {
+/* Shared "label on top, control below" look for an Agency picker — used in
+   the faults footer and in Quick Code Entry, wherever it replaced a plain
+   inline <label>text + control</label> row. */
+.agency-field {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
   font-size: 0.8rem;
   font-weight: 700;
   color: var(--muted);
-  margin-left: auto;
 }
-.footer-agency select {
+.agency-field input,
+.agency-field select {
   min-width: 11rem;
+}
+.footer-agency {
+  margin-left: auto;
 }
 .add-fault {
   height: var(--control-h);
@@ -927,7 +933,11 @@ h2 {
   font: inherit;
   font-size: 0.78rem;
   font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   height: var(--control-h);
+  min-width: 3.4rem;
   padding: 0 0.7rem;
   border: 1.5px solid var(--border-strong);
   border-radius: 999px;
