@@ -311,7 +311,7 @@ const CATS = [
     codeLabel: 'Letter',
     blankOk: true,
     hint:
-      'The letter after the parts number, added to the part name as a suffix. A is blank on purpose — an empty suffix is what makes A the default build, so leaving it empty is a real entry, not an unfinished one.',
+      'The letter after the parts number. It is part of a code's identity, not a build of the part before it — 12A is an A Cover and 12B a B Cover. Nothing decodes through this list any more; a code means whatever the issue type claiming it says, so these entries are left blank.',
   },
   { key: 'actions', label: 'Actions', codeLabel: 'Letter', hint: 'What was done. C = Change.' },
   { key: 'companies', label: 'Companies', codeLabel: 'Code', hint: 'Who owns or funds the work. MT = MOTECO.' },
@@ -521,7 +521,7 @@ function CodeMapEditor() {
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), add())}
-                  placeholder={meta.blankOk ? 'Suffix — leave empty for the default build' : 'What this code means'}
+                  placeholder={meta.blankOk ? 'Leave empty — a variant carries no suffix' : 'What this code means'}
                 />
                 {isComponents && (
                   <input
