@@ -28,15 +28,16 @@ export default function CodeEntry({ options, agencies = [], reportDate, onCreate
     [text, map, options],
   )
 
-  const canCreate = !!result?.ok && !!agency && !busy
-
-  async function create() {
-    if (!canCreate) return
+  // Picking an agency IS "Create entry" — there is nothing left to confirm
+  // once a verified agency is attached to an already-decoded report.
+  async function create(selectedAgency) {
+    if (!result?.ok || !selectedAgency || busy) return
     // The agency is the verification step, so it is attached here rather than
     // decoded — nothing in the code itself identifies it.
-    await onCreate({ ...result.entry, agency, reportDate })
-    setNotice(`Added ${result.faults.map((f) => f.code).join(', ')} · ${agency}`)
+    await onCreate({ ...result.entry, agency: selectedAgency, reportDate })
+    setNotice(`Added ${result.faults.map((f) => f.code).join(', ')} · ${selectedAgency}`)
     setText('')
+    setAgency('')
     setTimeout(() => setNotice(''), 5000)
   }
 
@@ -65,16 +66,22 @@ export default function CodeEntry({ options, agencies = [], reportDate, onCreate
             <div className="code-actions">
               <label>
                 Agency <span className="opt">(verification)</span>
-                <select value={agency} onChange={(e) => setAgency(e.target.value)} required>
-                  <option value="">— select —</option>
+                <select
+                  value={agency}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    setAgency(v)
+                    if (v) create(v)
+                  }}
+                  disabled={!result?.ok || busy}
+                  required
+                >
+                  <option value="">— select to add entry —</option>
                   {agencies.map((a) => (
                     <option key={a}>{a}</option>
                   ))}
                 </select>
               </label>
-              <button type="button" className="submit" onClick={create} disabled={!canCreate}>
-                Create entry
-              </button>
             </div>
           </div>
 
@@ -132,7 +139,7 @@ export default function CodeEntry({ options, agencies = [], reportDate, onCreate
           )}
 
           {result?.ok && !agency && (
-            <p className="manage-hint">Pick the agency to verify this report before it is added.</p>
+            <p className="manage-hint">Pick the agency to verify and add this report.</p>
           )}
           {notice && <p className="manage-notice">✅ {notice}</p>}
 

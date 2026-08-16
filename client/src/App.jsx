@@ -399,6 +399,11 @@ function App({ user, onLogout }) {
   const [editForm, setEditForm] = useState(null)
   const lastEntriesSig = useRef('') // baseline for the live-refresh poll
   const lastSavedSig = useRef('') // baseline for saved-report changes (any source)
+  // Picking the Agency submits the entry directly (see handleSubmit's
+  // agencyOverride) rather than through a submit-button click, which
+  // bypasses the browser's native required-field check — reportValidity()
+  // below puts that check back before anything is sent.
+  const entryFormRef = useRef(null)
 
   // Plain users are pinned to their own branch everywhere.
   useEffect(() => {
@@ -768,11 +773,17 @@ function App({ user, onLogout }) {
   const removeFault = (i) =>
     setForm((f) => ({ ...f, faults: f.faults.length === 1 ? f.faults : f.faults.filter((_, idx) => idx !== i) }))
 
-  async function handleSubmit(e) {
-    e.preventDefault()
+  // `agencyOverride` lets the Agency picker submit itself the instant a value
+  // is chosen — it fires before the setForm() that records the same value has
+  // actually re-rendered, so the fresh value has to be passed through rather
+  // than read back off (still-stale) form state.
+  async function handleSubmit(e, agencyOverride) {
+    e?.preventDefault?.()
     try {
+      const agency = agencyOverride ?? form.agency
       const payload = {
         ...form,
+        agency,
         mode, // keep report vs transmittal working sets separate
         branch: isAllBranches ? '' : branch, // owning branch (admins pick; non-admins forced server-side)
         // Transmittal carries a Type (no agency/model); Type falls back to OTHER.
@@ -789,10 +800,10 @@ function App({ user, onLogout }) {
       }
       await createEntry(payload)
       // Remember Model/Type/Agency so the next entry pre-selects them.
-      saveLast({ model: form.model, type: form.type, agency: form.agency })
+      saveLast({ model: form.model, type: form.type, agency: payload.agency })
       // Mirrored into state so the Agency dropdown re-sorts straight away —
       // localStorage on its own would not re-render anything.
-      setLastAgency(form.agency)
+      setLastAgency(payload.agency)
       setForm((f) => ({ ...emptyForm(), reportDate: f.reportDate, technician: f.technician }))
       setError(null)
       refresh()
@@ -1466,7 +1477,7 @@ function App({ user, onLogout }) {
           />
         )}
 
-        <form onSubmit={handleSubmit} className="entry-form">
+        <form ref={entryFormRef} onSubmit={handleSubmit} className="entry-form">
           {!isTransmittal && (
           <div className="form-card">
             <button
@@ -1495,15 +1506,6 @@ function App({ user, onLogout }) {
                   <option value="">— select —</option>
                   {options.types.map((t) => (
                     <option key={t}>{t}</option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Agency
-                <select value={form.agency} onChange={set('agency')} required>
-                  <option value="">— select —</option>
-                  {agencyOptions.map((a) => (
-                    <option key={a}>{a}</option>
                   ))}
                 </select>
               </label>
@@ -1660,9 +1662,31 @@ function App({ user, onLogout }) {
               <button type="button" className="add-fault" onClick={addFault}>
                 {isTransmittal ? '+ Add material' : '+ Add fault'}
               </button>
-              <button type="submit" className="submit">
-                Add entry
-              </button>
+              {isTransmittal ? (
+                <button type="submit" className="submit">
+                  Add entry
+                </button>
+              ) : (
+                <label className="footer-agency">
+                  Agency
+                  <select
+                    value={form.agency}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      setForm((f) => ({ ...f, agency: v }))
+                      // Picking an agency IS "Add entry" — but only once every
+                      // other required field already checks out.
+                      if (v && entryFormRef.current?.reportValidity()) handleSubmit(undefined, v)
+                    }}
+                    required
+                  >
+                    <option value="">— select to add entry —</option>
+                    {agencyOptions.map((a) => (
+                      <option key={a}>{a}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
             </div>
             </>
             )}

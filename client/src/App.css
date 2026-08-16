@@ -631,6 +631,21 @@ h2 {
   flex-wrap: wrap;
   margin-top: 1rem;
 }
+/* Picking the agency IS the "Add entry" action (see handleSubmit's
+   agencyOverride) — styled like the compact topbar fields, not the tall
+   Device-grid labels, so it reads as the footer control it now is. */
+.footer-agency {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--muted);
+  margin-left: auto;
+}
+.footer-agency select {
+  min-width: 11rem;
+}
 .add-fault {
   height: var(--control-h);
   padding: 0 1.1rem;
