@@ -16,7 +16,7 @@ import { parseCodeReport, useCodeMap, VARIANTS } from './codes'
 
 const EXAMPLE = 'H43A C 1 MT 2221 6575 1'
 
-export default function CodeEntry({ options, agencies = [], reportDate, onCreate, busy = false, open, onToggle }) {
+export default function CodeEntry({ options, agencies = [], topAgencies = [], reportDate, onCreate, busy = false, open, onToggle }) {
   const [text, setText] = useState('')
   const [agency, setAgency] = useState('')
   const [notice, setNotice] = useState('')
@@ -65,22 +65,46 @@ export default function CodeEntry({ options, agencies = [], reportDate, onCreate
             <div className="code-actions">
               <label>
                 Agency <span className="opt">(verification)</span>
-                <select
+                <input
+                  list="qce-agency-options"
                   value={agency}
                   onChange={(e) => {
                     const v = e.target.value
                     setAgency(v)
-                    if (v) create(v)
+                    // Only an exact match (typed in full, or picked from the
+                    // caret's list) counts as a real pick — a partial string
+                    // while still typing must never fire a create.
+                    const hit = agencies.find((a) => a.toUpperCase() === v.trim().toUpperCase())
+                    if (hit) create(hit)
                   }}
                   disabled={!result?.ok || busy}
+                  placeholder="Type to search, or pick —"
+                  autoComplete="off"
                   required
-                >
-                  <option value="">— select to add entry —</option>
+                />
+                <datalist id="qce-agency-options">
                   {agencies.map((a) => (
-                    <option key={a}>{a}</option>
+                    <option key={a} value={a} />
                   ))}
-                </select>
+                </datalist>
               </label>
+              {topAgencies.length > 0 && (
+                <div className="agency-quickpicks">
+                  {topAgencies.map((a) => (
+                    <button
+                      key={a}
+                      type="button"
+                      onClick={() => {
+                        setAgency(a)
+                        create(a)
+                      }}
+                      disabled={!result?.ok || busy}
+                    >
+                      {a}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
@@ -105,7 +129,6 @@ export default function CodeEntry({ options, agencies = [], reportDate, onCreate
                         <th>Code</th>
                         <th>Device</th>
                         <th>Part</th>
-                        <th>Variant</th>
                         <th>Action</th>
                         <th className="num">Qty</th>
                         <th>Company</th>
@@ -117,7 +140,6 @@ export default function CodeEntry({ options, agencies = [], reportDate, onCreate
                           <td className="ref-code nowrap">{f.code}</td>
                           <td className="nowrap">{f.type} {f.model}</td>
                           <td>{f.issue}</td>
-                          <td className="nowrap">{f.variantLabel}</td>
                           <td className="nowrap">{f.action}</td>
                           <td className="num">{f.quantity}</td>
                           <td className="nowrap">{f.company}</td>
@@ -137,9 +159,6 @@ export default function CodeEntry({ options, agencies = [], reportDate, onCreate
             </div>
           )}
 
-          {result?.ok && !agency && (
-            <p className="manage-hint">Pick the agency to verify and add this report.</p>
-          )}
           {notice && <p className="manage-notice">✅ {notice}</p>}
 
           <details className="ref-sec code-legend">

@@ -1000,7 +1000,7 @@ function App({ user, onLogout }) {
   // often they have actually been used (saved reports + the working set), with
   // A–Z breaking ties. Usage is counted from real entries rather than a separate
   // tally, so the list can never drift out of step with the data.
-  const agencyOptions = useMemo(() => {
+  const { agencyOptions, topAgencies } = useMemo(() => {
     const counts = new Map()
     const bump = (v) => {
       const a = String(v ?? '').trim().toUpperCase()
@@ -1011,10 +1011,16 @@ function App({ user, onLogout }) {
 
     const all = options.agencies ?? []
     const uses = (a) => counts.get(String(a).trim().toUpperCase()) ?? 0
-    const rest = all.filter((a) => a !== lastAgency).sort((a, b) => uses(b) - uses(a) || a.localeCompare(b))
+    const byUsage = [...all].sort((a, b) => uses(b) - uses(a) || a.localeCompare(b))
+    const rest = byUsage.filter((a) => a !== lastAgency)
     // Only pin the last pick if it is still an option — a renamed or deleted
     // agency must not resurrect itself at the top of the list.
-    return all.includes(lastAgency) ? [lastAgency, ...rest] : rest
+    const agencyOptions = all.includes(lastAgency) ? [lastAgency, ...rest] : rest
+    // The busiest 5 — real usage only, so a never-used agency never crowds out
+    // one technicians actually pick, and Quick Code Entry can offer them as
+    // one-tap picks right beside the search field.
+    const topAgencies = byUsage.filter((a) => uses(a) > 0).slice(0, 5)
+    return { agencyOptions, topAgencies }
   }, [options.agencies, saved, entries, lastAgency])
 
   // Plain names for every place that just needs to list or match a
@@ -1504,6 +1510,7 @@ function App({ user, onLogout }) {
           <CodeEntry
             options={options}
             agencies={agencyOptions}
+            topAgencies={topAgencies}
             reportDate={form.reportDate}
             onCreate={handleCodeCreate}
             busy={busy}

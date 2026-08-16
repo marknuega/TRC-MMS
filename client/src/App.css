@@ -916,6 +916,33 @@ h2 {
   gap: 0.8rem;
   margin-top: 1rem;
 }
+/* The 5 most-used agencies, one tap away right beside the search field. */
+.agency-quickpicks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+.agency-quickpicks button {
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  height: var(--control-h);
+  padding: 0 0.7rem;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text);
+  cursor: pointer;
+}
+.agency-quickpicks button:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.agency-quickpicks button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 .code-legend {
   margin-top: 1rem;
 }
