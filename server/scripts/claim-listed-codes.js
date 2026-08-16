@@ -50,7 +50,10 @@ const CLAIMS = {
   '20A': 'PowerCable', //            was listed as Programming
   '21A': 'Hand-MicroLoudSpeaker', // was listed as Dismantle
   '22A': 'Installation',
-  '23A': 'PCB',
+  // 23A is deliberately absent. PCB moved to its own series — 50A PCB, 50B
+  // PCBShort, 50C PCBWater, 50D PCBBroken, 50E PCBBurned, 50F DefectivePCB —
+  // so 23 is retired and a report using it should be refused, not filed
+  // against a code nothing has used since.
   '24A': 'Handset',
   '25A': 'Keymate', //               was listed as Keypad
   '26A': 'LCD',
