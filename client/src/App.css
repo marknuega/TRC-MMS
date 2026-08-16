@@ -2292,12 +2292,171 @@ h2 {
 .manage-notice.error {
   color: var(--danger);
 }
-@media (max-width: 640px) {
-  .field-code {
-    flex: 1 1 6rem;
+/* ---------------------------------------------------------------------------
+   Manage inputs — responsive layout
+   ---------------------------------------------------------------------------
+   Three bands, matching how much room the row of fields actually needs:
+
+     >=1024px  desktop — everything inline, as designed
+     768-1023  tablet  — the code fields give up their fixed width and reflow
+     <768px    mobile  — one field per line, full width, 44px touch targets
+
+   The controls row is a wrapping flexbox, so each band only has to restate the
+   flex-basis of the fields that need to move; nothing is repositioned by hand.
+
+   Inputs stay at the base 1rem (16px) throughout: below 16px iOS zooms the
+   whole page on focus, so the mobile band raises the things that sit BELOW
+   that (the 2.2-2.3rem edit controls) rather than lowering anything.
+   --------------------------------------------------------------------------- */
+
+/* An item being edited takes the whole grid row whatever the column count is,
+   so a long description is never squeezed into one narrow cell. */
+.manage-list li.editing {
+  grid-column: 1 / -1;
+  align-items: stretch;
+}
+
+/* ---- Tablet (768-1023px) ---- */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .manage-controls {
+    gap: 0.75rem 0.9rem;
+  }
+  /* The category picker keeps roughly two-thirds of the row; the fields below
+     it are what wrap onto their own lines. */
+  .manage-controls .field-category {
+    flex: 1 1 65%;
+    min-width: 0;
+  }
+  /* Two code fields (Parts Code + Variant) stack, each on its own full line,
+     so neither is read as a fragment of the other. */
+  .manage-controls.cat-issues .field-code {
+    flex: 1 1 100%;
+  }
+  /* Three technician fields pair up instead: ID + 2-letter, then 3-letter
+     beside the name. */
+  .manage-controls.cat-tech .field-code,
+  .manage-controls.cat-tech .grow {
+    flex: 1 1 calc(50% - 0.45rem);
+    min-width: 0;
+  }
+  .manage-controls.cat-issues .grow,
+  .manage-controls.cat-materials .grow {
+    flex: 1 1 100%;
   }
   .field-code input {
     width: 100%;
+  }
+  /* Let the code fields grow with the row rather than stay at 5.5rem, so the
+     description beside them is not the only thing that can breathe. */
+  .edit-code-row label {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+}
+
+/* ---- Mobile (<768px) ---- */
+@media (max-width: 767px) {
+  /* One field per line, every one of them full width. */
+  .manage-controls {
+    gap: 0.85rem;
+  }
+  .manage-controls > label {
+    flex: 1 1 100%;
+    width: 100%;
+    min-width: 0;
+    /* Labels wrap here rather than forcing the row wider than the screen. */
+    white-space: normal;
+  }
+  .field-code input {
+    width: 100%;
+  }
+  /* Description -> optional second field -> Add, each on its own line. */
+  .add-row {
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+  .add-row input,
+  .add-row button {
+    width: 100%;
+  }
+
+  /* One column, so an item is never half a screen wide. */
+  .manage-list {
+    grid-template-columns: 1fr;
+  }
+  /* Edit mode: fields above, actions below, nothing side by side. */
+  .manage-list li.editing {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.7rem;
+    padding: 0.75rem;
+  }
+  .edit-code-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.6rem;
+  }
+  .edit-code-row label {
+    width: 100%;
+  }
+  /* Only the edit-row labels move: at 0.78rem they were the one set under
+     13px. The controls labels are already 0.9rem and stay there. */
+  .edit-code-row label {
+    font-size: 0.85rem; /* ~13.6px */
+  }
+  .edit-fields {
+    gap: 0.6rem;
+  }
+  /* Back up to a full-size control: the desktop 2.3rem is under the 44px
+     minimum touch target. */
+  .manage-list .edit-input {
+    height: var(--control-h);
+    font-size: 1rem;
+    line-height: 1.55;
+    padding: 0 0.9rem;
+  }
+  /* Save / Cancel / Delete stack, each a full-width target. */
+  .manage-list li.editing .manage-item-actions {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .manage-item-actions button {
+    height: var(--control-h);
+    min-height: 2.75rem;
+    font-size: 0.95rem;
+    padding: 0 1rem;
+  }
+  .manage-list li.editing .manage-item-actions button {
+    width: 100%;
+  }
+
+  /* Long names and descriptions wrap instead of being clipped. */
+  .manage-item-label,
+  .manage-list li span.manage-item-desc,
+  .manage-list li span {
+    white-space: normal;
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
+  .manage-list li span.manage-item-desc {
+    font-size: 0.85rem;
+    line-height: 1.5;
+  }
+  .manage-list li {
+    padding: 0.6rem 0.6rem 0.6rem 0.8rem;
+  }
+
+  /* Hints, code hints and validation messages: readable and never overflowing. */
+  .manage-hint,
+  .manage-notice {
+    font-size: 0.88rem; /* ~14px */
+    line-height: 1.55;
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
+  .manage-code-hint {
+    display: inline-block;
+    overflow-wrap: break-word;
   }
 }
 /* External link buttons in Manage inputs (e.g. WhatsApp code-map admin). */

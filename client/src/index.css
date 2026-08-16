@@ -38,6 +38,10 @@
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  /* Stop iOS inflating text in rotated/narrow layouts — the app sets its own
+     sizes, and controls are already 16px so focus never triggers a zoom. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 /* Dark palette — shared by the system preference and the explicit toggle. */

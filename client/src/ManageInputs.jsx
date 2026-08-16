@@ -243,8 +243,15 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
           </p>
 
 
-          <div className="manage-controls">
-            <label>
+          {/* The category modifier tells the stylesheet how many extra fields
+              are on the row, which is what decides how they reflow on a
+              tablet — two code fields stack, three initials pair up. */}
+          <div
+            className={`manage-controls${isIssues ? ' cat-issues' : ''}${isTechnicians ? ' cat-tech' : ''}${
+              isMaterials ? ' cat-materials' : ''
+            }`}
+          >
+            <label className="field-category">
               Category
               <SearchSelect
                 value={cat}
@@ -394,8 +401,10 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
 
           <ul className="manage-list">
             {list.length === 0 && <li className="manage-empty">No values yet — add one above.</li>}
+            {/* An item being edited takes the whole grid row: the description is
+                the longest field and the one that must stay readable. */}
             {displayList.map(({ value, i }) => (
-              <li key={`${nameOf(value)}-${i}`}>
+              <li key={`${nameOf(value)}-${i}`} className={editIndex === i ? 'editing' : undefined}>
                 {editIndex === i ? (
                   <>
                     <div className="edit-fields">
