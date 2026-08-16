@@ -142,16 +142,16 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
     return ''
   }
 
-  // What the code map already reads a code as, e.g. 19 + B -> "19 Fistmic · B
-  // 3D". Shown while typing so a code about to be claimed for something else is
-  // visible BEFORE it starts decoding that way.
-  function codeMapHint(parts, variant) {
+  // Whether the parts number being typed already means something, so defining
+  // it as something else is a visible decision rather than a silent one — a
+  // number in use decodes technicians' existing reports.
+  function codeInUseHint(parts, variant) {
     const p = parts.trim()
     if (!PARTS_RE.test(p)) return ''
     const part = (map?.components ?? FALLBACK.components)[p]
     const v = variantsOf(map)[variant.trim().toUpperCase()]
-    if (!part) return 'New parts number — nothing in the code map uses it yet.'
-    return `Code map: ${p} = ${part}${v ? ` · ${variant.trim().toUpperCase()} = ${v.label}` : ''}`
+    if (!part) return `${p} is free — nothing uses it yet.`
+    return `${p} is already in use for ${part}${v ? ` · ${variant.trim().toUpperCase()} = ${v.label}` : ''} — defining it here replaces that.`
   }
 
   function flash(msg, field = '') {
@@ -422,19 +422,18 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
               here: the numeric <strong>Tech ID</strong> (e.g. <code>1</code>), a <strong>2-Letter Initial</strong>{' '}
               (e.g. <code>MA</code> for Muhammad Amir), or a <strong>3-Letter Initial</strong> (e.g. <code>MRA</code>{' '}
               for a middle initial too) — any combination, or none. Leave all three blank for a technician who only
-              appears in the app's own dropdowns. A Tech ID set here <strong>outranks</strong> the same ID in Code
-              Map's older Technician IDs list, so moving one over is a safe, incremental edit.
+              appears in the app's own dropdowns. This is where a technician's IDs are defined; what is set here is
+              what a report resolves to.
             </p>
           )}
           {isIssues && (
             <p className="manage-hint">
-              A code given here <strong>outranks</strong> the Parts Numbers and Variants lists in{' '}
-              <strong>Code Map</strong>: where a claim exists, those are not consulted at all. That is what makes
-              this the place to define a code, and Code Map the place for the shared vocabulary underneath it.
-              Everything claimed here appears on the <strong>Code Reference</strong> under{' '}
-              <em>Claimed Codes</em>, which is what technicians read.
+              This is the primary code reference for the app: a code defined here is the authoritative
+              meaning of that code, and nothing else is consulted for it. Everything defined here appears
+              on the <strong>Code Reference</strong> under <em>Claimed Codes</em>, which is what technicians
+              read.
               {newParts.trim() && (
-                <span className="manage-code-hint"> {codeMapHint(newParts, newVariant)}</span>
+                <span className="manage-code-hint"> {codeInUseHint(newParts, newVariant)}</span>
               )}
             </p>
           )}
