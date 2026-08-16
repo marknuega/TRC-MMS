@@ -733,7 +733,7 @@ export default function ReferenceCard({ isAdmin = false, issueTypes = [] }) {
           Parts Number Catalog ({data.claims.length})
         </summary>
         <div className="ref-sec-body">
-          <p className="muted">
+          <p className="muted parts-catalog-hint">
             Parts numbers claimed by an <strong>Issue type</strong> in{' '}
             <strong>Manage Inputs → Faulty / Parts</strong> — the parts+variant code (e.g.{' '}
             <code>11A</code>) alongside what it names. This list updates the instant it changes in
@@ -745,11 +745,16 @@ export default function ReferenceCard({ isAdmin = false, issueTypes = [] }) {
               Faulty / Parts.
             </p>
           ) : (
-            <div className="ref-grid">
-              {chunk(data.claims, 3).map((rows, i) => (
-                // eslint-disable-next-line react/no-array-index-key
-                <div className="ref-block" key={i}>
-                  <CodeTable rows={rows} />
+            <div className="parts-catalog-grid">
+              {data.claims.map(([code, name]) => (
+                <div className="parts-card" key={code}>
+                  <div className="parts-card-info">
+                    <span className="parts-card-badge">{code}</span>
+                    <span className="parts-card-name">{name}</span>
+                  </div>
+                  <button type="button" className="parts-card-edit">
+                    Edit
+                  </button>
                 </div>
               ))}
             </div>
