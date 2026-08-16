@@ -8,7 +8,23 @@ import assert from 'node:assert/strict'
 import { parseCodeReport, matchOption, denseCode, FALLBACK } from './codes.js'
 import { DEFAULT_OPTIONS, issueCode, issueCodeIndex, issueNames } from './options.js'
 
-const OPTS = DEFAULT_OPTIONS
+// A fault code resolves through an issue type's CLAIM or not at all — the
+// parts+variant fallback through the code map is gone. So the fixture claims
+// every code these tests decode; anything left unclaimed is expected to be
+// refused, which several tests below rely on.
+const OPTS = {
+  ...DEFAULT_OPTIONS,
+  issueTypes: [
+    ...DEFAULT_OPTIONS.issueTypes,
+    { name: 'ANTENNA CONNECTOR', parts: '11', variant: 'A' },
+    { name: 'LCD', parts: '26', variant: 'A' },
+    { name: 'ROT KNOB', parts: '41', variant: 'A' },
+    { name: 'SIDE GRIP', parts: '43', variant: 'A' },
+    { name: 'SIDE GRIP 3D', parts: '43', variant: 'B' },
+  ],
+}
+// 99A/99B are deliberately left unclaimed above so the tests below can show
+// both halves of the rule: unclaimed is refused, and CODED's claim decides.
 
 // Issue types that own a CDS code outright — what Manage inputs now writes.
 // Plain strings stay in the list alongside them, as a real one always will.
@@ -42,12 +58,14 @@ test('all separator styles decode identically', () => {
   }
 })
 
-test('H43A decodes to the original side grip on a TH1N', () => {
+test('H43A decodes to the side grip claiming it, on a TH1N', () => {
   const r = parseCodeReport('H43A C 1 MT 2221 6575 1', FALLBACK, OPTS)
   assert.equal(r.ok, true, r.errors.join('; '))
   assert.equal(r.faults.length, 1)
   assert.equal(r.faults[0].code, 'H43A')
-  assert.equal(r.faults[0].variantLabel, 'Original')
+  // A claim has no build to name — the trailing letter is part of the code's
+  // identity, not a variant of some other part.
+  assert.equal(r.faults[0].variantLabel, '—')
   assert.equal(r.entry.type, 'AIRBUS')
   assert.equal(r.entry.model, 'TH1N')
   assert.equal(r.entry.faults[0].issue, 'SIDE GRIP')
@@ -59,10 +77,10 @@ test('H43A decodes to the original side grip on a TH1N', () => {
   assert.equal(r.entry.technician, 'AMIR')
 })
 
-test('H43B selects the 3D side grip', () => {
+test('H43B is its own claim, not a build of H43A', () => {
   const r = parseCodeReport('H43B C 1 MT 2221 6575 1', FALLBACK, OPTS)
   assert.equal(r.ok, true, r.errors.join('; '))
-  assert.equal(r.faults[0].variantLabel, '3D')
+  assert.equal(r.faults[0].variantLabel, '—')
   assert.equal(r.entry.faults[0].issue, 'SIDE GRIP 3D')
 })
 
@@ -200,9 +218,11 @@ test('unknown codes are reported rather than guessed', () => {
   assert.equal(bad.ok, false)
   assert.match(bad.errors.join(' '), /Unknown type letter "Z"/)
 
-  const badVariant = parseCodeReport('H43QC1MT 2221 6575 1', FALLBACK, OPTS)
-  assert.equal(badVariant.ok, false)
-  assert.match(badVariant.errors.join(' '), /Unknown variant "Q"/)
+  // 43Q is well-formed but nothing claims it, so it is refused rather than
+  // guessed at from the parts number alone.
+  const unclaimed = parseCodeReport('H43QC1MT 2221 6575 1', FALLBACK, OPTS)
+  assert.equal(unclaimed.ok, false)
+  assert.match(unclaimed.errors.join(' '), /43Q .*is not a defined code/)
 })
 
 test('a truly unparseable tail fails loudly instead of producing a half entry', () => {
@@ -272,10 +292,11 @@ test('denseCode collapses every supported separator', () => {
 
 // ---- Issue types that own a CDS code (Manage inputs -> Issue types) ----
 
-test('a code claimed by an issue type outranks the parts + variant lookup', () => {
-  // Without a claim, 99 + B reads as "Charger" + "3D" and lands on CHARGER.
+test('a code means whatever claims it, and nothing without a claim', () => {
+  // 99 is a real parts number in the code map, but that is no longer enough.
   const plain = parseCodeReport('H99B C 1 MT 2221 6575 1', FALLBACK, OPTS)
-  assert.equal(plain.entry.faults[0].issue, 'CHARGER')
+  assert.equal(plain.ok, false)
+  assert.match(plain.errors.join(' '), /99B .*is not a defined code/)
 
   // The claim makes B part of the identity, not a build of the same charger.
   const r = parseCodeReport('H99B C 1 MT 2221 6575 1', FALLBACK, CODED)
@@ -311,14 +332,25 @@ test('a claim is device-agnostic — the technician supplies the device letter',
   assert.equal(t.faults[0].code, 'T99B')
 })
 
-test('an unclaimed code still fails loudly on an unknown part or variant', () => {
+// The whole point of dropping the fallback: a code nobody has defined is
+// refused, and the message says where to define it — rather than resolving to
+// an approximate name assembled from the parts number.
+test('an unclaimed code is refused, and says where to define it', () => {
   const r = parseCodeReport('H71Q C 1 MT 2221 6575 1', FALLBACK, CODED)
   assert.equal(r.ok, false)
-  assert.match(r.errors.join(' '), /Unknown parts number "71"/)
-  assert.match(r.errors.join(' '), /Unknown variant "Q"/)
+  assert.match(r.errors.join(' '), /71Q .*is not a defined code/)
+  assert.match(r.errors.join(' '), /Manage inputs/)
 })
 
-test('uncoded issue types decode exactly as before', () => {
+// 23 is a real parts number in the code map (PCB) — under the old fallback
+// that alone was enough to decode. It is not any more.
+test('a parts number known to the code map does not decode without a claim', () => {
+  const r = parseCodeReport('H23A C 1 MT 2221 6575 1', FALLBACK, OPTS)
+  assert.equal(r.ok, false)
+  assert.match(r.errors.join(' '), /23A .*is not a defined code/)
+})
+
+test('a claim is unaffected by other claims being added alongside it', () => {
   const before = parseCodeReport('H43A C 1 MT 2221 6575 1', FALLBACK, OPTS)
   const after = parseCodeReport('H43A C 1 MT 2221 6575 1', FALLBACK, CODED)
   assert.equal(after.entry.faults[0].issue, 'SIDE GRIP')
@@ -435,9 +467,11 @@ test('quantity stays optional in every shorthand combination', () => {
 test('the WhatsApp decoder reads the shorthand identically', async () => {
   const { decodeBatch, resolveCompany } = await import('../../server/src/whatsapp/decoder.js')
 
+  // The bot resolves a fault code purely from the published claims, so the
+  // map it is given must carry the same ones the app is using.
   const map = {
     ...FALLBACK,
-    faults: {},
+    faults: issueCodeIndex(OPTS.issueTypes),
     technicians: { 1: 'Amir' },
   }
 

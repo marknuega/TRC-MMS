@@ -98,15 +98,10 @@ export function resolveCompany(code, companies = {}) {
  * @returns {{ok: true, batch: object} | {ok: false, reason: string}}
  */
 export function decodeBatch(rawText, map) {
-  const {
-    equipmentCodes = {},
-    components = {},
-    variants = {},
-    faults = {},
-    actions = {},
-    companies = {},
-    technicians = {},
-  } = map ?? {}
+  // `components` and `variants` are deliberately not read: a fault code
+  // resolves through `faults` (the issue-type claims) or not at all. They stay
+  // in the served map because the Code Reference page still lists them.
+  const { equipmentCodes = {}, faults = {}, actions = {}, companies = {}, technicians = {} } = map ?? {}
 
   const tokens = String(rawText ?? '').trim().split(/\s+/).filter(Boolean)
   if (tokens.length < 2) {
@@ -232,24 +227,24 @@ export function decodeBatch(rawText, map) {
     if (!actionName) missing.push(`action code "${actionCode}"`)
     if (!companyName) missing.push(`company code "${companyCode}"`)
 
-    // An issue type may CLAIM this parts+variant outright, and that claim wins:
-    // 99A and 99B are two different chargers, not two builds of one, so parts
-    // and variant are never consulted when a claim exists. Mirrors
-    // parseCodeReport() in client/src/codes.js.
-    const claimed = faults[`${partsNum}${variantLetter}`]
-    let componentName = claimed
-    if (!claimed) {
-      const partName = components[partsNum]
-      // '' is a REAL suffix — it is what makes A the default build — so this
-      // must test for absence, not falsiness.
-      const suffix = variants[variantLetter]
-      if (!partName) missing.push(`parts number "${partsNum}"`)
-      if (suffix === undefined) missing.push(`variant "${variantLetter}"`)
-      componentName = partName ? `${partName}${suffix ? ` ${suffix}` : ''}` : undefined
-    }
+    // An issue type CLAIMING this parts+variant is the only way it resolves.
+    // The old fallback — look the parts number up in the code map's
+    // `components` and append the variant's suffix — is gone, so a code that
+    // nothing claims is refused rather than decoded to an approximate name.
+    // Mirrors parseCodeReport() in client/src/codes.js.
+    const componentName = faults[`${partsNum}${variantLetter}`]
 
     if (missing.length > 0) {
       return { ok: false, reason: `In "${token}": Unknown ${missing.join(', ')}. Add it in TRC-MMS under Code Map.` }
+    }
+    if (!componentName) {
+      return {
+        ok: false,
+        reason:
+          `In "${token}": ${partsNum}${variantLetter} is not a defined code.\n` +
+          `Define it in TRC-MMS under Manage inputs → Issue types, giving the issue ` +
+          `Parts Code ${partsNum} and Variant ${variantLetter}.`,
+      }
     }
 
     const [equipmentType, ...modelParts] = equipmentLabel.split(' ')

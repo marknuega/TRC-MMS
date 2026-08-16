@@ -15,11 +15,13 @@
  * grip, H43B the 3D-printed one. It replaces the older 3-char 26H form, which
  * put the component first and had no variant at all.
  *
- * An Issue type (Manage inputs) may CLAIM a fault code — the parts number plus
- * the variant letter, e.g. 99B — and that claim wins over the code map's
- * parts + variant lookup, so 99A and 99B can be two different chargers rather
- * than two builds of one. It is keyed without the device letter, since that
- * letter is the technician's and the same part appears on every radio.
+ * A fault code — the parts number plus the variant letter, e.g. 99B — is
+ * defined by an Issue type CLAIMING it (Manage inputs -> Issue types). That is
+ * the only way one resolves: a code nothing claims is refused, not guessed at.
+ * So 99A and 99B are two different chargers rather than two builds of one, and
+ * a code always means exactly what someone said it means. Claims are keyed
+ * without the device letter, since that letter is the technician's and the
+ * same part appears on every radio.
  *
  * Every element may be run together or separated by a space, hyphen, underscore
  * or colon, so all of these are the same report:
@@ -48,7 +50,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 // Extension-ful so `node --test` resolves it too, not just Vite.
-import { issueCodeIndex, issueNames, technicianName } from './options.js'
+import { issueCodeIndex, technicianName } from './options.js'
 
 // This app now OWNS the code map, so the mirror is same-origin. It stays a
 // fetch rather than a bundled import because the map is edited at runtime and
@@ -293,17 +295,17 @@ export function parseCodeReport(text, map = FALLBACK, options = {}) {
   const warnings = []
   const src = denseCode(text)
 
+  // The shared vocabulary the code map still owns: which letter is which
+  // radio, which letter is which action, and the company/technician codes.
+  // `components` and `variants` are deliberately NOT read here — a fault code
+  // resolves through its claim or not at all.
   const devices = map?.equipmentCodes ?? FALLBACK.equipmentCodes
-  const components = map?.components ?? FALLBACK.components
   const actions = map?.actions ?? FALLBACK.actions
   const companies = map?.companies ?? FALLBACK.companies
   const technicians = map?.technicians ?? FALLBACK.technicians
-  const variants = variantsOf(map)
-  // An Issue type may claim a whole 4-char code (Manage inputs -> Issue types).
-  // That claim OUTRANKS the parts+variant lookup: it is the app's own statement
-  // of what H99B means, so it never has to survive a name match to be honoured.
+  // An Issue type claims a whole fault code (Manage inputs -> Issue types).
+  // This is the ONLY way parts + variant resolves to an issue.
   const claimed = issueCodeIndex(options.issueTypes)
-  const issueList = issueNames(options.issueTypes)
   // Manage Inputs technicians may carry an {name, id} shape now (for the
   // WhatsApp ID); matchOption below only ever needs the plain name.
   const technicianList = (options.technicians ?? []).map(technicianName)
@@ -386,22 +388,17 @@ export function parseCodeReport(text, map = FALLBACK, options = {}) {
       // part of the identity, and the code itself is already its own column.
       variantLabel = '—'
     } else {
-      const componentName = components[partNo] ?? components[Number(partNo)]
-      const v = variants[variant]
-      if (!componentName) errors.push(`Unknown parts number "${partNo}" in ${whole}.`)
-      if (!v) errors.push(`Unknown variant "${variant}" in ${whole} — expected ${Object.keys(variants).join(' or ')}.`)
-
-      // The variant selects a build of the part, so it is folded into the issue
-      // name before matching — "Side Grip" + " 3D" -> the SIDE GRIP 3D option.
-      const partIssue = `${componentName ?? ''}${v?.suffix ?? ''}`.trim()
-      const hit = matchOption(partIssue, issueList)
-      issue = hit ?? up(partIssue)
-      variantLabel = v?.label ?? variant
-      if (componentName && !hit) {
-        warnings.push(
-          `No issue type named "${partIssue}" — it will be saved as typed. Give an issue type the code ${code} under Manage inputs to decode it exactly.`,
-        )
-      }
+      // A claim is the ONLY way a fault code resolves. There used to be a
+      // fallback that looked the parts number up in the code map and appended
+      // the variant's suffix, which meant a code could decode to a name no
+      // issue type actually had — saved as typed, and only approximately what
+      // the technician meant. An undefined code is now refused outright, and
+      // the message says exactly where to define it.
+      errors.push(
+        `${partNo}${variant} in ${whole} is not a defined code. Give an issue type the code ${partNo}${variant} under Manage inputs → Issue types.`,
+      )
+      issue = ''
+      variantLabel = variant
     }
 
     const { type, model } = splitDevice(deviceName)

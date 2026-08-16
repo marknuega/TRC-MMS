@@ -14,9 +14,14 @@ let baseUrl
 // types, 19 is an ordinary component resolved through parts + variant.
 const MAP = {
   equipmentCodes: { H: 'Airbus TH1n', T: 'Sepura STP9000' },
+  // components/variants are still published for the Code Reference page, but
+  // the decoder no longer reads them — every fault code must be claimed.
   components: { 19: 'Fistmic', 41: 'Rotary Knob' },
   variants: { A: '', B: '3D' },
-  faults: { '43A': 'Side Grip', '43B': 'Side Grip-3D', '99A': 'Charger', '99B': 'Charger-818' },
+  faults: {
+    '43A': 'Side Grip', '43B': 'Side Grip-3D', '99A': 'Charger', '99B': 'Charger-818',
+    '19A': 'Fistmic', '19B': 'Fistmic 3D', '41A': 'Rotary Knob', '26A': 'LCD',
+  },
   // RTO is the one action written out in full — see ACTION_ALT in decoder.js.
   actions: { C: 'Change', R: 'Repair', RTO: 'RTO' },
   companies: { MT: 'MOTECO', MI: 'MOI' },
@@ -51,16 +56,17 @@ describe('whatsapp decoder', () => {
     assert.equal(one('H99BC1MT 1').componentName, 'Charger-818')
   })
 
-  test('an unclaimed code falls back to component + variant suffix', () => {
-    assert.equal(one('H19AC1MT 1').componentName, 'Fistmic')
-    assert.equal(one('H19BC1MT 1').componentName, 'Fistmic 3D')
+  test('an unclaimed code is refused, and names where to define it', () => {
+    // 19 IS in components, which used to be enough on its own.
+    const r = decodeBatch('H55AC1MT 1', MAP)
+    assert.equal(r.ok, false)
+    assert.match(r.reason, /55A is not a defined code/)
+    assert.match(r.reason, /Manage inputs/)
   })
 
-  test("variant A's blank suffix is a real value, not a missing one", () => {
-    // If the code tested falsiness rather than undefined, '' would read as
-    // absent and every ordinary code would be rejected as an unknown variant.
-    const r = decodeBatch('H19AC1MT 1', MAP)
-    assert.ok(r.ok, r.reason)
+  test('a claimed code resolves to exactly the claimed name', () => {
+    assert.equal(one('H19AC1MT 1').componentName, 'Fistmic')
+    assert.equal(one('H19BC1MT 1').componentName, 'Fistmic 3D')
   })
 
   test('quantity is optional and defaults to 1', () => {
@@ -101,8 +107,8 @@ describe('whatsapp decoder', () => {
 
   test('unknown codes are named individually', () => {
     assert.match(decodeBatch('X43AC1MT 1', MAP).reason, /device letter "X"/)
-    assert.match(decodeBatch('H77AC1MT 1', MAP).reason, /parts number "77"/)
-    assert.match(decodeBatch('H19ZC1MT 1', MAP).reason, /variant "Z"/)
+    assert.match(decodeBatch('H77AC1MT 1', MAP).reason, /77A is not a defined code/)
+    assert.match(decodeBatch('H19ZC1MT 1', MAP).reason, /19Z is not a defined code/)
     assert.match(decodeBatch('H43AC1MT 9', MAP).reason, /Unknown technician ID "9"/)
   })
 
