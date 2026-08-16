@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
-import { hasRtoAction } from '../src/routes/savedReports.js'
+import { hasRtoAction, isRtoAction } from '../src/routes/savedReports.js'
 
 // RTO (Return to Owner) = the device went back untouched, so no part was used.
 // A snapshot containing one is saved as reference-only.
@@ -9,6 +9,10 @@ describe('hasRtoAction', () => {
 
   test('detects an RTO fault anywhere in the snapshot', () => {
     assert.equal(hasRtoAction([entry('CHANGE'), entry('REPAIR', 'RTO')]), true)
+  })
+
+  test('PCBRTO counts as an RTO too', () => {
+    assert.equal(hasRtoAction([entry('PCBRTO')]), true)
   })
 
   test('is false when no fault is an RTO', () => {
@@ -28,5 +32,31 @@ describe('hasRtoAction', () => {
     assert.equal(hasRtoAction([]), false)
     assert.equal(hasRtoAction([{}]), false)
     assert.equal(hasRtoAction([{ faults: [{}] }]), false)
+  })
+})
+
+// Stock is skipped per FAULT, not per report — this is what lets a
+// reference-only report still deduct for the real parts it also records.
+describe('isRtoAction', () => {
+  test('an RTO or PCBRTO line draws no stock', () => {
+    assert.equal(isRtoAction('RTO'), true)
+    assert.equal(isRtoAction('PCBRTO'), true)
+    assert.equal(isRtoAction(' rto '), true)
+  })
+
+  test('a real service action still draws stock', () => {
+    for (const a of ['CHANGE', 'NEW', 'PCB', 'REPAIR', 'INSTALL', 'DISMANTLE']) {
+      assert.equal(isRtoAction(a), false, `${a} should still deduct`)
+    }
+  })
+
+  test('an action that merely contains "rto" is not an RTO', () => {
+    assert.equal(isRtoAction('RTOX'), false)
+    assert.equal(isRtoAction('PORTO'), false)
+  })
+
+  test('tolerates a missing action', () => {
+    assert.equal(isRtoAction(undefined), false)
+    assert.equal(isRtoAction(''), false)
   })
 })

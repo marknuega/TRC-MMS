@@ -29,6 +29,12 @@ const MAINTENANCE_ACTIONS = new Set(['CHANGE', 'REPAIR', 'NEW', 'PCB'])
 const PROGRAM_ACTIONS = new Set(['PROGRAM', 'RE-PROGRAM'])
 const INSTALL_ACTIONS = new Set(['INSTALL', 'RE-INSTALL'])
 const DISMANTLE_ACTIONS = new Set(['DISMANTLE'])
+// RTO (Return to Owner) hands the device back untouched: no work was performed
+// and no part was consumed. It is its own category rather than a service one,
+// so it never reaches the maintenance / programming / install / dismantle
+// totals that the monthly, agency and technician aggregations are built from.
+// PCBRTO is the PCB-specific variant and behaves identically.
+const RTO_ACTIONS = new Set(['RTO', 'PCBRTO'])
 
 const MODEL_DISPLAY = {
   'SRG3900 CARKIT': 'SRG CARKIT',
@@ -67,6 +73,7 @@ const isSparePartAction = (action) => {
 
 export function classify(action) {
   const a = up(action)
+  if (RTO_ACTIONS.has(a)) return 'rto'
   if (MAINTENANCE_ACTIONS.has(a)) return 'maintenance'
   if (PROGRAM_ACTIONS.has(a)) return 'programming'
   if (INSTALL_ACTIONS.has(a)) return 'install'
@@ -104,6 +111,9 @@ export function entryCounts(entry) {
   for (const f of entry?.faults ?? []) {
     const cat = classify(f.action)
     if (cat === 'maintenance') continue // handled by maintenanceCount (standalone rule)
+    // 'rto' is not a service category and has no counter here — writing c[cat]
+    // blindly would put a NaN on the object for it.
+    if (!(cat in c)) continue
     c[cat] = Math.max(c[cat], Math.max(0, Number(f.quantity) || 0))
   }
   c.maintenance = maintenanceCount(entry?.faults)

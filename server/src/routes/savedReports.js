@@ -14,20 +14,31 @@ const docId = (mode, n) => `${normMode(mode) === 'transmittal' ? 'TRANS' : 'REP'
 const withFaults = { faults: { orderBy: { position: 'asc' } } }
 
 // RTO (Return to Owner) means the device went back untouched — no part was
-// consumed — so a snapshot containing one is a reference/record-only document.
-// Detected here at save time; the saver can still override it either way, and
-// the flag stays editable afterwards via PATCH.
+// consumed. PCBRTO is the PCB-specific variant and means the same thing.
+// Mirrors RTO_ACTIONS in client/src/report.js, which keeps these out of the
+// service totals for the same reason.
+const RTO_ACTIONS = new Set(['RTO', 'PCBRTO'])
+export const isRtoAction = (action) => RTO_ACTIONS.has(String(action ?? '').trim().toUpperCase())
+
+// A snapshot containing an RTO is a reference/record-only document. Detected
+// here at save time; the saver can still override it either way, and the flag
+// stays editable afterwards via PATCH.
 export const hasRtoAction = (snapshot) =>
-  (snapshot ?? []).some((e) => (e.faults ?? []).some((f) => String(f.action ?? '').trim().toUpperCase() === 'RTO'))
+  (snapshot ?? []).some((e) => (e.faults ?? []).some((f) => isRtoAction(f.action)))
 
 // Deduct stock for materials/faults that match an inventory item (by itemCode,
 // case-insensitive). Quantities across the snapshot are summed per item, and
 // `out` is incremented (so `avail` = begin - out drops). Unmatched issues are
 // ignored. Runs inside the save transaction so it's all-or-nothing.
+//
+// The skip is per FAULT, not per report: an RTO line returns the device
+// untouched and must never draw stock, but a reference-only report that also
+// records real part usage still deducts for those parts normally.
 async function applyInventoryUsage(tx, snapshot, reference, branch) {
   const used = new Map() // itemCode(upper) -> total qty
   for (const e of snapshot) {
     for (const f of e.faults ?? []) {
+      if (isRtoAction(f.action)) continue // returned, not consumed
       const key = String(f.issue ?? '').trim().toUpperCase()
       if (!key) continue
       used.set(key, (used.get(key) || 0) + Math.max(0, Number(f.quantity) || 0))
