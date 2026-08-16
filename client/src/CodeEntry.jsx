@@ -162,15 +162,21 @@ export default function CodeEntry({ options, agencies = [], topAgencies = [], re
               <table className="ref-table">
                 <tbody>
                   <tr>
-                    <td className="ref-code">TYPE</td>
+                    <td className="ref-code">
+                      <span className="ref-code-badge">TYPE</span>
+                    </td>
                     <td>1 letter — the equipment model (H = Airbus TH1n).</td>
                   </tr>
                   <tr>
-                    <td className="ref-code">PARTS</td>
+                    <td className="ref-code">
+                      <span className="ref-code-badge">PARTS</span>
+                    </td>
                     <td>2 digits — the component (43 = Side Grip).</td>
                   </tr>
                   <tr>
-                    <td className="ref-code">VARIANT</td>
+                    <td className="ref-code">
+                      <span className="ref-code-badge">VARIANT</span>
+                    </td>
                     <td>
                       1 letter — which build of that part:{' '}
                       {Object.entries(VARIANTS).map(([k, v], i) => (

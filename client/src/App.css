@@ -2876,23 +2876,47 @@ h2 {
   letter-spacing: 0.05em;
   color: var(--muted);
 }
+/* A calm reference table reads as rows, not a spreadsheet grid — horizontal
+   dividers between rows only (no vertical cell borders), one outer border
+   for the whole table, and a subtle hover per row instead of per cell. */
 .ref-table {
   border-collapse: collapse;
   width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden; /* clips row corners to the table's own rounding */
 }
 .ref-table td {
-  border: 1px solid var(--border);
-  padding: 0.3rem 0.6rem;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  padding: 0.5rem 0.75rem;
   text-align: left;
   vertical-align: top;
 }
+.ref-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.ref-table tbody tr:not(.ref-grp-row):hover td {
+  background: var(--surface-2);
+}
 .ref-table .ref-code {
+  white-space: nowrap;
+  width: 1%; /* shrink to the badge's own width, not a fixed column guess */
+}
+/* The letter as its own tinted pill — kept off the cell background so a
+   row's hover state can still read cleanly underneath it. */
+.ref-code-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.7em;
+  padding: 0.15em 0.55em;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 14%, var(--surface));
+  color: var(--primary);
   font-family: ui-monospace, Consolas, monospace;
   font-weight: 700;
-  white-space: nowrap;
-  width: 3.4em;
-  color: var(--primary);
-  background: var(--surface-2);
+  font-size: 0.88em;
 }
 /* The source char of a device letter, highlighted in the model name. */
 .ref-table .ref-hit {

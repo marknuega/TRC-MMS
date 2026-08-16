@@ -176,7 +176,9 @@ function CodeTable({ rows }) {
       <tbody>
         {rows.map(([code, name]) => (
           <tr key={code}>
-            <td className="ref-code">{code}</td>
+            <td className="ref-code">
+              <span className="ref-code-badge">{code}</span>
+            </td>
             <td>{name}</td>
           </tr>
         ))}
@@ -228,7 +230,9 @@ function DeviceTable({ rows }) {
           const p = deviceSource(code, name)
           return (
             <tr key={code}>
-              <td className="ref-code">{code}</td>
+              <td className="ref-code">
+                <span className="ref-code-badge">{code}</span>
+              </td>
               <td className="ref-dev-name">
                 {p.before}
                 <strong className="ref-hit">{p.hit}</strong>
