@@ -52,7 +52,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 // Extension-ful so `node --test` resolves it too, not just Vite.
-import { issueCodeIndex, modelNames, technicianName } from './options.js'
+import { issueCodeIndex, optionNames, technicianName } from './options.js'
 
 // This app now OWNS the code map, so the mirror is same-origin. It stays a
 // fetch rather than a bundled import because the map is edited at runtime and
@@ -311,7 +311,7 @@ export function parseCodeReport(text, map = FALLBACK, options = {}) {
   const technicianList = (options.technicians ?? []).map(technicianName)
   // Models may carry a {name, prefixes} shape now (for the Tel auto-select);
   // matchOption below only ever needs the plain name.
-  const modelList = modelNames(options.models)
+  const modelList = optionNames(options.models)
 
   if (!src) return { ok: false, errors: ['Nothing to decode.'], warnings, faults: [], entry: null }
 

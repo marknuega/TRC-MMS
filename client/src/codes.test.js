@@ -6,7 +6,7 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 import { parseCodeReport, matchOption, denseCode, FALLBACK } from './codes.js'
-import { DEFAULT_OPTIONS, issueCode, issueCodeIndex, issueNames, modelNames } from './options.js'
+import { DEFAULT_OPTIONS, issueCode, issueCodeIndex, issueNames, optionNames } from './options.js'
 
 // A fault code resolves through an issue type's CLAIM or not at all — the
 // parts+variant fallback through the code map is gone. So the fixture claims
@@ -274,7 +274,7 @@ test('a stray, too-short digit run for tel/issi is read as a (probably unknown) 
 test('matchOption bridges the two vocabularies without guessing', () => {
   // A model may carry Tel prefixes now, so the list is reduced to names first —
   // exactly as parseCodeReport does before it gets here.
-  const models = modelNames(OPTS.models)
+  const models = optionNames(OPTS.models)
   assert.equal(matchOption('SRG Carkit', models), 'SRG3900 CARKIT')
   assert.equal(matchOption('TMR880i', models), 'TMR 880i')
   assert.equal(matchOption('TH1n', models), 'TH1N')

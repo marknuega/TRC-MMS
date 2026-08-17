@@ -2856,10 +2856,10 @@ h2 {
     grid-column: 1 / -1;
   }
   /* Three technician fields would leave a ragged single cell — let the name
-     run the full width under them instead. Models pair Category + Tel prefixes
-     on the first line for the same reason. */
+     run the full width under them instead. Models and Agencies pair Category +
+     Tel prefixes on the first line for the same reason. */
   .manage-inputs .manage-controls.cat-tech .field-name,
-  .manage-inputs .manage-controls.cat-models .field-name {
+  .manage-inputs .manage-controls.cat-prefixed .field-name {
     grid-column: 1 / -1;
   }
   .manage-inputs .add-action {
@@ -2894,7 +2894,7 @@ h2 {
        plain      3 + 8     + 1
        issues     3 + 2+2 + 4 + 1
        technicians 2 + 2+2+2 + 3 + 1
-       models     3 + 2   + 6 + 1                                          */
+       prefixed   3 + 2   + 6 + 1  (models, agencies)                    */
   .manage-inputs .field-category {
     grid-column: span 3;
   }
@@ -2918,7 +2918,7 @@ h2 {
   .manage-inputs .manage-controls.cat-issues .field-name {
     grid-column: span 4;
   }
-  .manage-inputs .manage-controls.cat-models .field-name {
+  .manage-inputs .manage-controls.cat-prefixed .field-name {
     grid-column: span 6;
   }
   .manage-inputs .manage-controls.cat-tech .field-category {

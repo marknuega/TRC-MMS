@@ -5,8 +5,12 @@
 export const DEFAULT_OPTIONS = {
   technicians: ['AMIR', 'M. RASHEED', 'RASHEEDULLAH', 'IMRAN', 'BAGHDAD', 'MAROOF'],
 
+  // `prefixes` work exactly as they do for models below — the same Tel number,
+  // matched against this list instead: 1804133 is the PSD, 1917670 the CD.
   agencies: [
-    'PSD', 'CD', 'DOT', 'BG', 'PASS', 'PRI', 'FSF', 'SSF', 'TA', 'KFSC',
+    { name: 'PSD', prefixes: ['180'] },
+    { name: 'CD', prefixes: ['191'] },
+    'DOT', 'BG', 'PASS', 'PRI', 'FSF', 'SSF', 'TA', 'KFSC',
     'VIP', 'MJ', 'NA', 'GIP', 'GDCSS', 'NIC', 'AVS', 'RA', 'SFH', 'SA',
     'AFW', 'MOH', 'IS', 'EMH', 'SRCA', 'GPH', 'MOD', 'NG', 'GSA', 'PSS',
     'MEWA', 'TM', 'Kingdom', 'MOF', 'MOMRA', 'MCIT', 'NCA', 'MEIM', 'MEDIA', 'CAI',
@@ -150,62 +154,71 @@ export const MODEL_TYPE = {
 }
 
 // ---------------------------------------------------------------------------
-// Models
+// Tel prefixes — shared by Models and Agencies
 //
-// A model entry may be a plain string (legacy, name only) or
+// A Tel number already says several things about the entry being written, and
+// two of its fields can be read straight off it. An entry in either of those
+// two lists may be a plain string (legacy, name only) or
 //   { name, prefixes: ['355', '06'] }
-// where each prefix is a run of leading digits of a Tel number that belongs to
-// this model — 190 is an STP9000, 355 and 06 are both TH1N. Entering the number
-// then selects the model, so the two fields that the number already implies are
-// not typed a second time.
+// where each prefix is a run of the number's leading digits that belongs to
+// that name: 190 is an STP9000 and 355 or 06 a TH1N; 180 is the PSD and 191 the
+// CD. Typing the number then selects it, so what the number already states is
+// not stated again by hand.
+//
+// Models and Agencies are matched INDEPENDENTLY, against their own list. They
+// are separate questions about the same digits — 190 naming a model says
+// nothing about which agency 190 might name — so one list never has to reserve
+// numbers the other is using, and both can be extended without consulting the
+// other.
 //
 // Prefixes are NOT one fixed length: they are whatever length distinguishes a
 // range, which is why the longest matching one wins below rather than the first.
 //
-// A prefix may be held by several models at once. That is not a mistake to be
+// A prefix may be held by several entries at once. That is not a mistake to be
 // validated away — 109 covers the SRG3900 car kit, desktop AND bike, and no Tel
 // number can say which of the three is on the bench. The first of them in the
-// Models list is selected anyway, because a model that is right two times in
-// three and one dropdown away from right the third beats an empty field that is
-// never right. Which one leads is the admin's to set: it is list order, and
-// Manage inputs is where the list is ordered.
+// list is selected anyway, because a value that is right two times in three and
+// one dropdown away from right the third beats an empty field that is never
+// right. Which one leads is the admin's to set: it is list order, and Manage
+// inputs is where the list is ordered.
 // ---------------------------------------------------------------------------
 
 // 2-6 digits. One digit would claim a tenth of every number in existence.
-export const MODEL_PREFIX_RE = /^\d{2,6}$/
-export const modelName = (v) => (typeof v === 'string' ? v : String(v?.name ?? ''))
-export const modelPrefixes = (v) =>
+export const PREFIX_RE = /^\d{2,6}$/
+export const optionName = (v) => (typeof v === 'string' ? v : String(v?.name ?? ''))
+export const optionPrefixes = (v) =>
   typeof v === 'string'
     ? []
     : (Array.isArray(v?.prefixes) ? v.prefixes : []).map((p) => String(p).replace(/\D/g, '')).filter(Boolean)
 
 /** Just the names, for the dropdowns and for matchOption. */
-export const modelNames = (list) => (list ?? []).map(modelName).filter(Boolean)
+export const optionNames = (list) => (list ?? []).map(optionName).filter(Boolean)
 
 /** A Tel number as bare digits — what a prefix is compared against, so the
  *  spacing or punctuation someone types into the field cannot defeat a match. */
 export const telDigits = (tel) => String(tel ?? '').replace(/\D/g, '')
 
 /**
- * The models a Tel number's leading digits point at, or null for none.
+ * The entries of one list whose prefix a Tel number's leading digits match, or
+ * null for none.
  *
  * Longest prefix wins, NOT the first: an installation that has both 06 and 0612
  * means 0612 to be the more specific of the two, and first-match order would
- * never let it be reached. Every model holding that winning prefix comes back,
+ * never let it be reached. Every entry holding that winning prefix comes back,
  * because a shared prefix is legitimate (see above).
  *
- * @returns {{ prefix: string, models: string[] } | null}
+ * @returns {{ prefix: string, names: string[] } | null}
  */
-export function modelsForTel(tel, models) {
+export function prefixOwners(tel, list) {
   const digits = telDigits(tel)
   if (!digits) return null
   let best = ''
   let hits = []
-  for (const it of models ?? []) {
-    const name = modelName(it).trim()
+  for (const it of list ?? []) {
+    const name = optionName(it).trim()
     if (!name) continue
-    for (const prefix of modelPrefixes(it)) {
-      if (!MODEL_PREFIX_RE.test(prefix) || !digits.startsWith(prefix)) continue
+    for (const prefix of optionPrefixes(it)) {
+      if (!PREFIX_RE.test(prefix) || !digits.startsWith(prefix)) continue
       if (prefix.length > best.length) {
         best = prefix
         hits = []
@@ -213,32 +226,31 @@ export function modelsForTel(tel, models) {
       if (prefix.length === best.length && !hits.includes(name)) hits.push(name)
     }
   }
-  return best ? { prefix: best, models: hits } : null
+  return best ? { prefix: best, names: hits } : null
 }
 
 /**
- * The Model a Tel number selects, or '' when no prefix claims it.
- *
- * Only the Model: the Type is already auto-selected FROM the model, by the
- * MODEL_TYPE map the Model dropdown has always used, so a number that names the
- * model has said everything it needs to. Returning a Type here would be a
- * second, competing source for a field that already has one.
- *
+ * The one entry a Tel number selects from a list, or '' when nothing claims it.
  * The first claimant wins a shared prefix — see the note above.
+ *
+ * A Model comes back without a Type, deliberately: the Type is already
+ * auto-selected FROM the model by the MODEL_TYPE map the Model dropdown has
+ * always used, so a number that names the model has said everything it needs
+ * to. Returning a Type here would be a second, competing source for a field
+ * that already has one.
  */
-export function telModel(tel, models) {
-  const hit = modelsForTel(tel, models)
-  return hit?.models[0] ?? ''
+export function telPick(tel, list) {
+  return prefixOwners(tel, list)?.names[0] ?? ''
 }
 
-/** Index of prefix -> the model names holding it, for Manage inputs' "who else
- *  uses this" hint. Built off the same accessors the matcher uses. */
-export function modelPrefixIndex(models) {
+/** Index of prefix -> the names holding it, for Manage inputs' "who else uses
+ *  this" hint. Built off the same accessors the matcher uses. */
+export function prefixIndex(list) {
   const index = {}
-  for (const it of models ?? []) {
-    const name = modelName(it).trim()
+  for (const it of list ?? []) {
+    const name = optionName(it).trim()
     if (!name) continue
-    for (const prefix of modelPrefixes(it)) {
+    for (const prefix of optionPrefixes(it)) {
       if (!index[prefix]) index[prefix] = []
       if (!index[prefix].includes(name)) index[prefix].push(name)
     }
@@ -422,36 +434,39 @@ export const isServiceAction = (action) => SERVICE_ACTIONS.includes(String(actio
 // its own wording keeps that wording — the claim is what matters, not ours.
 const REQUIRED_ISSUE_TYPES = [{ name: 'DEFECTIVE PCB', parts: '50', variant: 'F' }]
 
-// The shipped Tel prefixes, keyed by model name — read straight off the
-// defaults above so there is only ever one place they are written down.
-const SEED_MODEL_PREFIXES = Object.fromEntries(
-  DEFAULT_OPTIONS.models.map((m) => [modelName(m).toUpperCase(), modelPrefixes(m)]).filter(([, p]) => p.length > 0),
-)
+// The shipped Tel prefixes of one category, keyed by name — read straight off
+// the defaults above so there is only ever one place they are written down.
+const seedPrefixesOf = (list) =>
+  Object.fromEntries(list.map((it) => [optionName(it).toUpperCase(), optionPrefixes(it)]).filter(([, p]) => p.length > 0))
+const SEED_PREFIXES = {
+  models: seedPrefixesOf(DEFAULT_OPTIONS.models),
+  agencies: seedPrefixesOf(DEFAULT_OPTIONS.agencies),
+}
 
 /**
- * Give a stored models list the shipped prefixes it predates.
+ * Give a stored list the shipped prefixes it predates.
  *
- * Every install that has ever opened Manage inputs has a saved models list, and
- * a saved category fully replaces its default — so without this the defaults
- * above would reach nobody and the auto-select would be dead everywhere it
- * matters. Gap-filling only, on two rules:
+ * Every install that has ever opened Manage inputs has saved these categories,
+ * and a saved category fully replaces its default — so without this the
+ * defaults above would reach nobody and the auto-select would be dead
+ * everywhere it matters. Gap-filling only, on two rules:
  *
- *   - a model that already carries prefixes keeps exactly what was set; an
+ *   - an entry that already carries prefixes keeps exactly what was set; an
  *     admin's mapping is never edited by an upgrade.
- *   - a prefix some OTHER stored model already claims is skipped, so moving
+ *   - a prefix some OTHER stored entry already claims is skipped, so moving
  *     190 onto a different model is not undone by handing it back to STP9000.
  *
  * Claims are read from the stored list once, up front, rather than as the pass
  * goes: the three SRG3900 builds are each seeded 109 by name, and accumulating
  * would let whichever came first block the other two from the prefix they share.
  */
-function withSeededPrefixes(models) {
-  const claimed = new Set(models.flatMap(modelPrefixes))
-  return models.map((m) => {
-    if (modelPrefixes(m).length > 0) return m
-    const seed = (SEED_MODEL_PREFIXES[modelName(m).trim().toUpperCase()] ?? []).filter((p) => !claimed.has(p))
-    if (!seed.length) return m
-    return { ...(typeof m === 'string' ? {} : m), name: modelName(m), prefixes: seed }
+function withSeededPrefixes(list, seeds) {
+  const claimed = new Set(list.flatMap(optionPrefixes))
+  return list.map((it) => {
+    if (optionPrefixes(it).length > 0) return it
+    const seed = (seeds[optionName(it).trim().toUpperCase()] ?? []).filter((p) => !claimed.has(p))
+    if (!seed.length) return it
+    return { ...(typeof it === 'string' ? {} : it), name: optionName(it), prefixes: seed }
   })
 }
 
@@ -470,7 +485,8 @@ export function mergeOptions(stored) {
   for (const it of REQUIRED_ISSUE_TYPES) {
     if (!claimedCodes[issueCode(it)]) out.issueTypes.push({ ...it })
   }
-  out.models = withSeededPrefixes(out.models)
+  out.models = withSeededPrefixes(out.models, SEED_PREFIXES.models)
+  out.agencies = withSeededPrefixes(out.agencies, SEED_PREFIXES.agencies)
   // Chart toggles are a plain object, not a category list.
   const storedCharts = stored?.charts && typeof stored.charts === 'object' ? stored.charts : {}
   out.charts = { ...DEFAULT_CHARTS, ...storedCharts }

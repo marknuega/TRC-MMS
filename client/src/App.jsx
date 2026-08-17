@@ -27,7 +27,7 @@ import { onSyncChange } from './offline'
 import { advanceOnEnter } from './focusNav'
 import {
   DEFAULT_OPTIONS, mergeOptions, MODEL_TYPE, BRANCHES, ALL_BRANCHES, ALL_REGIONS,
-  materialName, materialDescMap, issueName, issueCode, technicianName, modelNames, telModel, isServiceAction,
+  materialName, materialDescMap, issueName, issueCode, technicianName, optionNames, telPick, isServiceAction,
 } from './options'
 import ManageInputs from './ManageInputs'
 import Inventory from './Inventory'
@@ -1132,22 +1132,34 @@ function App({ user, onLogout }) {
     set('type')(e)
   }
 
-  // A Tel number's leading digits say which model it is (Manage inputs →
-  // Models → Tel prefixes), so typing it selects the Model — and the Type comes
-  // off the model from there, through the same MODEL_TYPE map setModel uses.
-  // The number picks the Model; the Model still picks the Type.
+  // Whether the Agency was chosen by hand, the same idea as devicePicked but
+  // its own flag, because Model and Agency are separate questions about the
+  // number and answering one is no statement about the other.
+  const agencyPicked = useRef(false)
+
+  // A Tel number's leading digits say two things (both set in Manage inputs →
+  // Tel prefixes): which model it is, and whose it is. Typing it selects the
+  // Model — the Type comes off the model from there, through the same
+  // MODEL_TYPE map setModel uses — and selects the Agency from the agencies'
+  // own prefix list. The number picks the Model; the Model still picks the Type.
   //
-  // Touch the Model or the Type yourself and the number stops filling them for
-  // the rest of the entry: correct a wrong guess (109 leads with the car kit,
-  // the bench has the desktop) and the correction stands, however much of the
-  // number is typed afterwards.
+  // The two lists are read INDEPENDENTLY, so 190 naming a model and 191 naming
+  // an agency never have to be reconciled, and a number may well answer only
+  // one of the two.
+  //
+  // Touch the Model, the Type or the Agency yourself and the number stops
+  // filling that one for the rest of the entry: correct a wrong guess (109
+  // leads with the car kit, the bench has the desktop) and the correction
+  // stands, however much of the number is typed afterwards.
   const setTel = (e) => {
     const telNumber = e.target.value
-    const model = devicePicked.current ? '' : telModel(telNumber, options.models)
+    const model = devicePicked.current ? '' : telPick(telNumber, options.models)
+    const agency = agencyPicked.current ? '' : telPick(telNumber, options.agencies)
     setForm((f) => ({
       ...f,
       telNumber,
       ...(model && { model, type: MODEL_TYPE[model.toUpperCase()] ?? f.type }),
+      ...(agency && { agency }),
     }))
   }
   // One fault row after an edit to one of its fields. Shared by the entry form
@@ -1235,9 +1247,10 @@ function App({ user, onLogout }) {
       // Mirrored into state so the Agency dropdown re-sorts straight away —
       // localStorage on its own would not re-render anything.
       setLastAgency(payload.agency)
-      // A new entry, so the carried-over Model/Type are nobody's choice yet and
-      // the next Tel number is free to say what the device is.
+      // A new entry, so the carried-over Model/Type/Agency are nobody's choice
+      // yet and the next Tel number is free to say what the device is and whose.
       devicePicked.current = false
+      agencyPicked.current = false
       setForm((f) => ({ ...emptyForm(), reportDate: f.reportDate, technician: f.technician }))
       setError(null)
       refresh()
@@ -1280,8 +1293,10 @@ function App({ user, onLogout }) {
 
   // ---- Edit an existing entry (modal) ----
   const eDevicePicked = useRef(false)
+  const eAgencyPicked = useRef(false)
   function openEdit(e) {
     eDevicePicked.current = false
+    eAgencyPicked.current = false
     setEditForm({
       reportDate: String(e.reportDate).slice(0, 10),
       technician: e.technician || '',
@@ -1315,17 +1330,23 @@ function App({ user, onLogout }) {
     if (ev.target.value !== editForm.type) eDevicePicked.current = true
     eSet('type')(ev)
   }
+  const eSetAgency = (ev) => {
+    if (ev.target.value !== editForm.agency) eAgencyPicked.current = true
+    eSet('agency')(ev)
+  }
   // Same auto-select as setTel, on the edit modal's own copy of the fields. The
   // flag starts down per open (openEdit above): re-typing a saved entry's Tel
   // number is usually the correction, so the Model follows it, and picking the
   // Model by hand still ends the argument.
   const eSetTel = (ev) => {
     const telNumber = ev.target.value
-    const model = eDevicePicked.current ? '' : telModel(telNumber, options.models)
+    const model = eDevicePicked.current ? '' : telPick(telNumber, options.models)
+    const agency = eAgencyPicked.current ? '' : telPick(telNumber, options.agencies)
     setEditForm((f) => ({
       ...f,
       telNumber,
       ...(model && { model, type: MODEL_TYPE[model.toUpperCase()] ?? f.type }),
+      ...(agency && { agency }),
     }))
   }
   const eSetFault = (i, field) => (ev) => {
@@ -1509,7 +1530,8 @@ function App({ user, onLogout }) {
     for (const r of saved ?? []) for (const e of r.entries ?? []) bump(e.agency)
     for (const e of entries ?? []) bump(e.agency)
 
-    const all = options.agencies ?? []
+    // Agencies may carry Tel prefixes now; ordering and display are by name.
+    const all = optionNames(options.agencies)
     const uses = (a) => counts.get(String(a).trim().toUpperCase()) ?? 0
     const byUsage = [...all].sort((a, b) => uses(b) - uses(a) || a.localeCompare(b))
     const rest = byUsage.filter((a) => a !== lastAgency)
@@ -1532,7 +1554,7 @@ function App({ user, onLogout }) {
   // options.technicians directly.
   const technicianNames = useMemo(() => (options.technicians ?? []).map(technicianName), [options.technicians])
   // Models may carry Tel prefixes now; the dropdown only ever shows the name.
-  const modelOptions = useMemo(() => modelNames(options.models), [options.models])
+  const modelOptions = useMemo(() => optionNames(options.models), [options.models])
 
   // Collapse the entry card in All-Branches (read-only merged) mode.
   useEffect(() => {
@@ -2295,6 +2317,7 @@ function App({ user, onLogout }) {
                       options={agencyOptions}
                       onChange={(e) => {
                         const a = e.target.value
+                        agencyPicked.current = true
                         setForm((f) => ({ ...f, agency: a }))
                         handleSubmit(undefined, a)
                       }}
@@ -2307,6 +2330,7 @@ function App({ user, onLogout }) {
                           key={a}
                           type="button"
                           onClick={() => {
+                            agencyPicked.current = true
                             setForm((f) => ({ ...f, agency: a }))
                             handleSubmit(undefined, a)
                           }}
@@ -2410,7 +2434,7 @@ function App({ user, onLogout }) {
                     </label>
                     <label>
                       Agency
-                      <SearchSelect value={editForm.agency} onChange={eSet('agency')} options={agencyOptions} />
+                      <SearchSelect value={editForm.agency} onChange={eSetAgency} options={agencyOptions} />
                     </label>
                     <label>
                       <span className="cap">Technician <span className="opt">(optional · multiple)</span></span>

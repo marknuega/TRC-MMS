@@ -4,10 +4,10 @@ import {
   mergeOptions,
   DEFAULT_OPTIONS,
   issueCodeIndex,
-  modelNames,
-  modelPrefixes,
-  modelsForTel,
-  telModel,
+  optionNames,
+  optionPrefixes,
+  prefixOwners,
+  telPick,
   isServiceAction,
 } from './options.js'
 
@@ -65,35 +65,54 @@ describe('mergeOptions', () => {
   // pass the shipped Tel prefixes would reach nobody.
   test('the shipped Tel prefixes are attached to a stored models list that predates them', () => {
     const out = mergeOptions({ models: ['TH1N', 'STP9000', 'PT590'] })
-    assert.deepEqual(modelPrefixes(out.models[0]), ['355', '06'])
-    assert.deepEqual(modelPrefixes(out.models[1]), ['190'])
-    assert.deepEqual(modelPrefixes(out.models[2]), [], 'a model with no shipped prefix stays a plain string')
+    assert.deepEqual(optionPrefixes(out.models[0]), ['355', '06'])
+    assert.deepEqual(optionPrefixes(out.models[1]), ['190'])
+    assert.deepEqual(optionPrefixes(out.models[2]), [], 'a model with no shipped prefix stays a plain string')
     assert.equal(out.models[2], 'PT590')
   })
 
   test('all three SRG3900 builds are seeded the 109 they share', () => {
     const out = mergeOptions({ models: ['SRG3900 CARKIT', 'SRG3900 DESKTOP', 'SRG3900 BIKE'] })
-    assert.deepEqual(out.models.map(modelPrefixes), [['109'], ['109'], ['109']])
+    assert.deepEqual(out.models.map(optionPrefixes), [['109'], ['109'], ['109']])
   })
 
   test("a model that already carries prefixes keeps exactly what the admin set", () => {
     const out = mergeOptions({ models: [{ name: 'TH1N', prefixes: ['77'] }] })
-    assert.deepEqual(modelPrefixes(out.models[0]), ['77'])
+    assert.deepEqual(optionPrefixes(out.models[0]), ['77'])
   })
 
   test('a prefix another stored model already claims is not handed back', () => {
     // 190 was moved off STP9000 deliberately; seeding must not undo that.
     const out = mergeOptions({ models: [{ name: 'MT680', prefixes: ['190'] }, 'STP9000'] })
-    assert.deepEqual(modelPrefixes(out.models[1]), [])
+    assert.deepEqual(optionPrefixes(out.models[1]), [])
   })
 
   test('seeding never changes which models exist, or their order', () => {
     const stored = ['STP9000', 'TH1N', 'Something Custom']
-    assert.deepEqual(modelNames(mergeOptions({ models: stored }).models), stored)
+    assert.deepEqual(optionNames(mergeOptions({ models: stored }).models), stored)
+  })
+
+  // Agencies get the same treatment from the same pass — the 48-entry stored
+  // list every install has would otherwise carry no prefixes at all.
+  test('the shipped Tel prefixes are attached to a stored agencies list too', () => {
+    const out = mergeOptions({ agencies: ['PSD', 'CD', 'DOT'] })
+    assert.deepEqual(optionPrefixes(out.agencies[0]), ['180'])
+    assert.deepEqual(optionPrefixes(out.agencies[1]), ['191'])
+    assert.deepEqual(optionPrefixes(out.agencies[2]), [])
+  })
+
+  test('an agency the admin already gave prefixes is left alone', () => {
+    const out = mergeOptions({ agencies: [{ name: 'PSD', prefixes: ['77'] }, 'CD'] })
+    assert.deepEqual(optionPrefixes(out.agencies[0]), ['77'])
+  })
+
+  test('seeding never changes which agencies exist, or their order', () => {
+    const stored = ['DOT', 'PSD', 'CD']
+    assert.deepEqual(optionNames(mergeOptions({ agencies: stored }).agencies), stored)
   })
 })
 
-describe('modelsForTel', () => {
+describe('prefixOwners', () => {
   const MODELS = [
     { name: 'TH1N', prefixes: ['355', '06'] },
     { name: 'STP9000', prefixes: ['190'] },
@@ -103,60 +122,60 @@ describe('modelsForTel', () => {
   ]
 
   test('a number matches the model owning its leading digits', () => {
-    assert.deepEqual(modelsForTel('1903324096', MODELS), { prefix: '190', models: ['STP9000'] })
+    assert.deepEqual(prefixOwners('1903324096', MODELS), { prefix: '190', names: ['STP9000'] })
   })
 
   test('prefixes are not one fixed length', () => {
-    assert.deepEqual(modelsForTel('0612345678', MODELS), { prefix: '06', models: ['TH1N'] })
+    assert.deepEqual(prefixOwners('0612345678', MODELS), { prefix: '06', names: ['TH1N'] })
   })
 
   test('every model holding the winning prefix comes back', () => {
-    assert.deepEqual(modelsForTel('1093324096', MODELS), {
+    assert.deepEqual(prefixOwners('1093324096', MODELS), {
       prefix: '109',
-      models: ['SRG3900 CARKIT', 'SRG3900 DESKTOP'],
+      names: ['SRG3900 CARKIT', 'SRG3900 DESKTOP'],
     })
   })
 
   test('the longest matching prefix wins, not the first', () => {
     const models = [{ name: 'Wide', prefixes: ['06'] }, { name: 'Narrow', prefixes: ['0612'] }]
-    assert.deepEqual(modelsForTel('0612345678', models), { prefix: '0612', models: ['Narrow'] })
-    assert.deepEqual(modelsForTel('0699999999', models), { prefix: '06', models: ['Wide'] })
+    assert.deepEqual(prefixOwners('0612345678', models), { prefix: '0612', names: ['Narrow'] })
+    assert.deepEqual(prefixOwners('0699999999', models), { prefix: '06', names: ['Wide'] })
   })
 
   test('the digits are what is compared, so typed spacing cannot defeat a match', () => {
-    assert.deepEqual(modelsForTel('190-332 4096', MODELS), { prefix: '190', models: ['STP9000'] })
+    assert.deepEqual(prefixOwners('190-332 4096', MODELS), { prefix: '190', names: ['STP9000'] })
   })
 
   test('an unclaimed or empty number matches nothing', () => {
-    assert.equal(modelsForTel('0501234567', MODELS), null)
-    assert.equal(modelsForTel('', MODELS), null)
-    assert.equal(modelsForTel('190', []), null)
+    assert.equal(prefixOwners('0501234567', MODELS), null)
+    assert.equal(prefixOwners('', MODELS), null)
+    assert.equal(prefixOwners('190', []), null)
   })
 
   // A one-digit prefix would claim a tenth of every number in existence.
   test('a prefix outside 2-6 digits is ignored rather than matched', () => {
-    assert.equal(modelsForTel('1234567', [{ name: 'Greedy', prefixes: ['1'] }]), null)
-    assert.equal(modelsForTel('1234567', [{ name: 'Greedy', prefixes: ['1234567'] }]), null)
+    assert.equal(prefixOwners('1234567', [{ name: 'Greedy', prefixes: ['1'] }]), null)
+    assert.equal(prefixOwners('1234567', [{ name: 'Greedy', prefixes: ['1234567'] }]), null)
   })
 })
 
-describe('telModel', () => {
+describe('telPick', () => {
   const MODELS = mergeOptions(undefined).models
 
   test('a number selects the model owning its leading digits', () => {
-    assert.equal(telModel('1903324096', MODELS), 'STP9000')
+    assert.equal(telPick('1903324096', MODELS), 'STP9000')
   })
 
   // The one the reported form actually got wrong: 06 is TH1N, and the field it
   // has to win against is a THR9 carried over from the previous entry.
   test('a two-digit prefix selects its model', () => {
-    assert.equal(telModel('0625455', MODELS), 'TH1N')
+    assert.equal(telPick('0625455', MODELS), 'TH1N')
   })
 
   // 109 is the car kit, the desktop AND the bike. A number cannot say which,
   // but a model that is one dropdown away from right beats an empty field.
   test('a shared prefix selects the first of its owners in the list', () => {
-    assert.equal(telModel('1093324096', MODELS), 'SRG3900 CARKIT')
+    assert.equal(telPick('1093324096', MODELS), 'SRG3900 CARKIT')
   })
 
   test('list order is what decides a shared prefix, so Manage inputs controls it', () => {
@@ -164,16 +183,49 @@ describe('telModel', () => {
       { name: 'SRG3900 BIKE', prefixes: ['109'] },
       { name: 'SRG3900 CARKIT', prefixes: ['109'] },
     ]
-    assert.equal(telModel('1093324096', models), 'SRG3900 BIKE')
+    assert.equal(telPick('1093324096', models), 'SRG3900 BIKE')
   })
 
   test('a model with no Type mapping is still selected', () => {
-    assert.equal(telModel('7712345', [{ name: 'Something Custom', prefixes: ['77'] }]), 'Something Custom')
+    assert.equal(telPick('7712345', [{ name: 'Something Custom', prefixes: ['77'] }]), 'Something Custom')
   })
 
   test('a number nothing claims selects nothing', () => {
-    assert.equal(telModel('0501234567', MODELS), '')
-    assert.equal(telModel('', MODELS), '')
+    assert.equal(telPick('0501234567', MODELS), '')
+    assert.equal(telPick('', MODELS), '')
+  })
+
+  // The Agency reads the SAME number against its OWN list. The two are separate
+  // questions about the same digits, which is what lets 190 name a model while
+  // 191 names an agency without either list reserving the other's numbers.
+  describe('agencies, from the same number', () => {
+    const { models, agencies } = mergeOptions(undefined)
+
+    test('the reported numbers select their agency', () => {
+      assert.equal(telPick('1804133', agencies), 'PSD')
+      assert.equal(telPick('1917670', agencies), 'CD')
+    })
+
+    test('a number that names an agency need not name a model', () => {
+      assert.equal(telPick('1804133', models), '', '180 is no model')
+      assert.equal(telPick('1917670', models), '', '191 is no model')
+    })
+
+    test('a number that names a model need not name an agency', () => {
+      assert.equal(telPick('1903324096', models), 'STP9000')
+      assert.equal(telPick('1903324096', agencies), '', '190 is no agency')
+    })
+
+    // 180/190/191 differ only in their third digit, so a two-digit read would
+    // collapse all three together. The full prefix has to be what matches.
+    test('neighbouring prefixes do not bleed into each other', () => {
+      assert.equal(telPick('1804133', agencies), 'PSD')
+      assert.equal(telPick('1814133', agencies), '', '181 belongs to nobody')
+    })
+
+    test('an agency with no prefix is never selected', () => {
+      assert.equal(telPick('9999999', agencies), '')
+    })
   })
 })
 
