@@ -1553,7 +1553,16 @@ function App({ user, onLogout }) {
               — the device in a report, the handover pair in a transmittal —
               then a divider, then the lines being recorded against it. */}
           {(entryMode === 'manual' || isTransmittal) && (
-          <div className="form-card">
+          /* One Enter-scope for the whole card, not one per group: the card is
+             a single entry, so Enter walks it end to end in DOM order —
+             Model -> Type -> Tel -> ISSI -> Technician -> Issue -> Qty ->
+             Action -> Company -> Comment in a report, and Transmitted by ->
+             Received by -> Type -> Material -> Qty -> Company -> Status ->
+             Comment in a transmittal. With several fault rows the walk stays
+             in the row the cursor is already in, again because that is DOM
+             order. Enter stops at the Comment textarea, where it is a
+             newline. */
+          <div className="form-card" onKeyDown={advanceOnEnter}>
             <button
               type="button"
               className="manage-toggle"
@@ -1573,7 +1582,7 @@ function App({ user, onLogout }) {
                   <strong>{reportReceivedBy || '—'}</strong>. Set each branch's names by selecting that branch.
                 </p>
               ) : (
-                <div className="handover-grid" onKeyDown={advanceOnEnter}>
+                <div className="handover-grid">
                   <label>
                     Transmitted by
                     <SearchSelect value={transmittedBy} onChange={changeTransmittedBy} options={technicianNames} />
@@ -1585,10 +1594,7 @@ function App({ user, onLogout }) {
                 </div>
               )
             ) : (
-              /* Enter walks Model -> Type -> Tel -> ISSI -> Technician, in DOM
-                 order. No action on the last field — the entry is not complete
-                 until the faults below are filled in — so it wraps. */
-              <div className="grid" onKeyDown={advanceOnEnter}>
+              <div className="grid">
                 <label>
                   Model {form.type === 'OTHER' && <span className="opt">(optional)</span>}
                   <SearchSelect value={form.model} onChange={setModel} options={options.models} />
@@ -1719,7 +1725,10 @@ function App({ user, onLogout }) {
               />
             </label>
 
-            <div className="faults-footer">
+            {/* The footer is outside the Enter walk. Enter on Agency submits
+                the entry — that is the point of the field — so the card's
+                handler must not see it and turn it into a focus move. */}
+            <div className="faults-footer" onKeyDown={(e) => e.stopPropagation()}>
               <button type="button" className="add-fault" onClick={addFault}>
                 {isTransmittal ? '+ Add material' : '+ Add fault'}
               </button>
