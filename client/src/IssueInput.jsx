@@ -115,6 +115,19 @@ export default function IssueInput({
     setCoding({ name: s.name, parts: code.slice(0, 2), variant: code.slice(2, 3), error: '', row: s })
   }
 
+  // Enter saves the code and Escape abandons it, so the editor can be finished
+  // from the keyboard it is typed with. Both keys are handled here rather than
+  // left to bubble: Enter would otherwise reach the form's Enter-advances-a-
+  // field handler and step focus out to QTY, silently dropping the code, and
+  // Escape would close the whole menu out from under the row being edited.
+  function onCodeKeyDown(e) {
+    if (e.key === 'Enter') return saveCode(e)
+    if (e.key === 'Escape') {
+      e.stopPropagation()
+      setCoding(null)
+    }
+  }
+
   function saveCode(e) {
     e.preventDefault()
     e.stopPropagation()
@@ -158,7 +171,14 @@ export default function IssueInput({
               aria-selected={s.name === value}
               className={`issue-opt${i === activeIndex ? ' active' : ''}`}
               onMouseEnter={() => setActiveIndex(i)}
-              onMouseDown={(e) => e.preventDefault()} // keep focus; the click below decides
+              // Cancelling mousedown keeps focus in the text input while a row
+              // is picked — but it also cancels the focus a click would give
+              // anything INSIDE the row, and the code editor is made of inputs.
+              // With the editor open the click must land, or the variant is
+              // reachable only by Tab from the parts field that autofocused.
+              onMouseDown={(e) => {
+                if (!e.target.closest?.('.issue-code-form')) e.preventDefault()
+              }}
               onClick={() => commit(s.name)}
             >
               <span className="issue-opt-name" title={s.name}>
@@ -173,6 +193,7 @@ export default function IssueInput({
                   <input
                     value={coding.parts}
                     onChange={(e) => setCoding((c) => ({ ...c, parts: e.target.value, error: '' }))}
+                    onKeyDown={onCodeKeyDown}
                     placeholder="72"
                     maxLength={2}
                     inputMode="numeric"
@@ -182,6 +203,7 @@ export default function IssueInput({
                   <input
                     value={coding.variant}
                     onChange={(e) => setCoding((c) => ({ ...c, variant: e.target.value.toUpperCase(), error: '' }))}
+                    onKeyDown={onCodeKeyDown}
                     placeholder="A"
                     maxLength={1}
                     aria-label={`Variant for ${s.name}`}

@@ -29,7 +29,10 @@
 export const FIELD_SELECTOR = 'input, select, textarea, .multi-toggle'
 
 // Rows inside an OPEN dropdown are not fields of the form behind it.
-const MENU_SELECTOR = '.search-select-menu, .multi-menu'
+// The issue menu is listed too, and it is the case that shows why: its rows
+// hold real <input>s for editing a code, which Enter would otherwise step into
+// and back out of as though they were fields of the form behind the popup.
+const MENU_SELECTOR = '.search-select-menu, .multi-menu, .issue-menu'
 
 /**
  * Can focus actually land here? Skips hidden, disabled and out-of-flow
