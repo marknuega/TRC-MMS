@@ -25,7 +25,7 @@ const DEVICE_LEVEL = new Set(['PROGRAM', 'RE-PROGRAM', 'INSTALL', 'RE-INSTALL', 
 // name. Matched the same way the client does (client/src/options.js) — name
 // with case and punctuation stripped, prefix rather than exact, so "No
 // Activity", "No-Activity" and "No Activity Today" are all the one thing.
-const isNoActivityIssue = (issue) => /^NOACTIVITY/.test(String(issue ?? '').toUpperCase().replace(/[^A-Z0-9]/g, ''))
+export const isNoActivityIssue = (issue) => /^NOACTIVITY/.test(String(issue ?? '').toUpperCase().replace(/[^A-Z0-9]/g, ''))
 
 export const withFaults = { faults: { orderBy: { position: 'asc' } } }
 

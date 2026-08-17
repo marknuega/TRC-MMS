@@ -5,6 +5,7 @@ import { branchWhere, writeBranch, canAccessBranch } from '../scope.js'
 // built in one place rather than once per caller. See src/dailyText.js, which
 // also owns dmy() and repLabel().
 import { dailyReportText, dmy } from '../dailyText.js'
+import { isNoActivityIssue } from '../reportEntry.js'
 // The id a document is shown by, so a clash names the OTHER document the way
 // its holder would read it — same rendering the page and the print sheet use.
 import { shortIdOf } from '../../../client/src/report.js'
@@ -349,7 +350,13 @@ router.post('/:id/load', async (req, res, next) => {
               create: (e.faults ?? []).map((f, i) => ({
                 position: f.position ?? i,
                 issue: f.issue ?? '',
-                quantity: Math.max(1, Number(f.quantity) || 1),
+                // Loading must reproduce the saved row exactly — a No Activity
+                // fault was stored at quantity 0 (see reportEntry.js), and
+                // flooring it back to 1 here resurrected the Device/Agency
+                // Summary sections a no-activity day is supposed to have none of.
+                quantity: isNoActivityIssue(f.issue)
+                  ? Math.max(0, Number(f.quantity) || 0)
+                  : Math.max(1, Number(f.quantity) || 1),
                 action: String(f.action ?? '').toUpperCase(),
                 company: String(f.company ?? '').toUpperCase(),
                 status: String(f.status ?? ''),
