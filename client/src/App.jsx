@@ -500,16 +500,19 @@ function App({ user, onLogout }) {
   // e.g. "Admin · Western · all branches", or "Admin · all branches" unnarrowed.
   const adminScopeLabel = `Admin${region ? ` · ${regionShort}` : ''} · all branches`
 
-  // Live, admin-managed branch list (falls back to the built-in defaults).
+  // Every branch the app knows about: the admin-managed list, plus any branch a
+  // region claims. The two can differ — a region names branches by name, and
+  // seed-regions.js is what adds them to the managed list — so a branch could
+  // otherwise be selectable under its own region and vanish under All regions,
+  // taking the current selection with it into "— select —".
+  const allBranches = useMemo(() => {
+    const managed = options.branches?.length ? options.branches : BRANCHES
+    return [...new Set([...managed, ...Object.values(regionMap).flat()])]
+  }, [options.branches, regionMap])
+
   // A director's workspace is exactly their region's branches; an admin's is
   // the selected region's, or every branch when no region is selected.
-  const branchList = isDirector
-    ? options.regions?.[user.region] ?? []
-    : isAdmin && region
-      ? regionBranches
-      : options.branches?.length
-        ? options.branches
-        : BRANCHES
+  const branchList = isDirector ? options.regions?.[user.region] ?? [] : region ? regionBranches : allBranches
   // Saved documents, narrowed to the region in force.
   //
   // THE choke point for region isolation. `saved` feeds far more than the list
@@ -564,14 +567,16 @@ function App({ user, onLogout }) {
   useEffect(() => {
     if (isDirector && branch !== ALL_BRANCHES && !branchList.includes(branch)) setBranch(ALL_BRANCHES)
   }, [isDirector, branch, branchList])
-  // The same guard for an admin who has narrowed to a region: the branch they
-  // had selected may not be in it. Falling back to All-Branches means the view
-  // becomes "everything in this region", which is the honest answer — leaving
-  // the old branch selected would show one region's toolbar over another
-  // region's data.
+  // The same guard for an admin, whose branch can be orphaned two ways: by
+  // narrowing to a region the branch is not in, and by a branch disappearing
+  // from the list under them. Either way the selector would fall back to its
+  // "— select —" placeholder while the app kept showing that branch's data —
+  // a toolbar that has stopped describing what is on screen. All-Branches is
+  // the honest landing place: with a region selected it means everything in
+  // that region, and without one, everything.
   useEffect(() => {
-    if (isAdmin && region && branch !== ALL_BRANCHES && !regionBranches.includes(branch)) setBranch(ALL_BRANCHES)
-  }, [isAdmin, region, branch, regionBranches])
+    if (isAdmin && branch !== ALL_BRANCHES && !branchList.includes(branch)) setBranch(ALL_BRANCHES)
+  }, [isAdmin, branch, branchList])
   // A persisted region an admin can no longer see — renamed or deleted since —
   // must not leave them looking at an empty branch list with no way back.
   useEffect(() => {
