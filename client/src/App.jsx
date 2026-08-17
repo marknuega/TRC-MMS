@@ -1600,12 +1600,35 @@ function App({ user, onLogout }) {
   // branch unless "All Branches" is chosen. (Non-admins are already server-scoped.)
   const inBranch = (r) => isAllBranches || String(r.branch ?? '') === String(branch)
   const isRefOnly = (r) => !isTx(r) && Boolean(r.isReferenceOnly)
+
+  // Ordered by the id on the row, highest number first — the document just
+  // issued is the one being looked for, so it opens at the top. The server
+  // returns these newest-SAVED first, which is a different order entirely: a
+  // report written up late carries an earlier date and a later number, so A008
+  // could sit between A006 and A005 and the column of ids read as though it had
+  // been shuffled.
+  //
+  // Sorting on the rendered id rather than on docNumber is what keeps the
+  // All-Branches view legible: the id begins with the branch code, so the rows
+  // group by branch instead of interleaving every branch's A001, then every
+  // branch's A002. The number is zero-padded and block letters ascend
+  // (A999 < B001), so a plain string compare is already numeric order —
+  // nothing to parse, nothing to get wrong. Reversed for descending, which
+  // orders the branch groups Z–A as well; the grouping itself survives either
+  // way, and the number is what is being read down the column.
+  const byDocId = (a, b) => shortLabel(b).localeCompare(shortLabel(a), 'en')
   const dailySaved = useMemo(
-    () => saved.filter((r) => !isTx(r) && !isRefOnly(r) && inBranch(r)),
+    () => saved.filter((r) => !isTx(r) && !isRefOnly(r) && inBranch(r)).sort(byDocId),
     [saved, branch, isAllBranches],
   )
-  const refSaved = useMemo(() => saved.filter((r) => isRefOnly(r) && inBranch(r)), [saved, branch, isAllBranches])
-  const txSaved = useMemo(() => saved.filter((r) => isTx(r) && inBranch(r)), [saved, branch, isAllBranches])
+  const refSaved = useMemo(
+    () => saved.filter((r) => isRefOnly(r) && inBranch(r)).sort(byDocId),
+    [saved, branch, isAllBranches],
+  )
+  const txSaved = useMemo(
+    () => saved.filter((r) => isTx(r) && inBranch(r)).sort(byDocId),
+    [saved, branch, isAllBranches],
+  )
   const reportResults = useMemo(() => searchInside(dailySaved, savedSearch), [dailySaved, savedSearch])
   const refResults = useMemo(() => searchInside(refSaved, savedRefSearch), [refSaved, savedRefSearch])
   const txResults = useMemo(() => searchInside(txSaved, savedTxSearch), [txSaved, savedTxSearch])
