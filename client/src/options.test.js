@@ -8,6 +8,7 @@ import {
   modelPrefixes,
   modelsForTel,
   telModel,
+  isServiceAction,
 } from './options.js'
 
 describe('mergeOptions', () => {
@@ -173,5 +174,41 @@ describe('telModel', () => {
   test('a number nothing claims selects nothing', () => {
     assert.equal(telModel('0501234567', MODELS), '')
     assert.equal(telModel('', MODELS), '')
+  })
+})
+
+describe('isServiceAction', () => {
+  test('work with no part fitted is a service', () => {
+    for (const a of ['REPAIR', 'PROGRAM', 'RE-PROGRAM', 'INSTALL', 'RE-INSTALL', 'DISMANTLE']) {
+      assert.equal(isServiceAction(a), true, a)
+    }
+  })
+
+  test('anything that fits a part is not', () => {
+    for (const a of ['CHANGE', 'NEW', 'PCB']) assert.equal(isServiceAction(a), false, a)
+  })
+
+  // RTO consumes no part either, but it already carries its own meaning (the
+  // report is marked reference-only) and was not among the actions asked for.
+  test('RTO is left out', () => {
+    assert.equal(isServiceAction('RTO'), false)
+  })
+
+  test('matching ignores case and padding, as the actions list is user-editable', () => {
+    assert.equal(isServiceAction(' dismantle '), true)
+    assert.equal(isServiceAction('Re-Program'), true)
+  })
+
+  test('a blank or unknown action is not a service', () => {
+    assert.equal(isServiceAction(''), false)
+    assert.equal(isServiceAction(undefined), false)
+    assert.equal(isServiceAction('SOMETHING CUSTOM'), false)
+  })
+
+  test('every service action is one the app actually offers', () => {
+    const offered = new Set(DEFAULT_OPTIONS.actions.map((a) => a.toUpperCase()))
+    for (const a of ['REPAIR', 'PROGRAM', 'RE-PROGRAM', 'INSTALL', 'RE-INSTALL', 'DISMANTLE']) {
+      assert.ok(offered.has(a), `${a} is not in the actions list`)
+    }
   })
 })

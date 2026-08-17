@@ -400,6 +400,22 @@ export function issueCodeIndex(list) {
 // every dropdown and the auto-detection could never fire.
 const REQUIRED_ACTIONS = ['RTO']
 
+// Actions that are WORK rather than a part. Nothing is consumed, so there is no
+// part for a company to have supplied, and picking one of these auto-selects
+// Company = "— none —" instead of carrying the last one over.
+//
+// Matched by name, uppercased, the same way REQUIRED_ACTIONS is. The RE- pair
+// are the same job done a second time, so they are the same kind of thing.
+//
+// RTO is deliberately NOT here. It consumes no part either, but it already
+// means something specific — the device went back untouched, which marks the
+// whole report reference-only at save time (see savedReports.js) — and it was
+// not among the actions asked for. Add it here if that turns out to be wanted.
+export const SERVICE_ACTIONS = ['REPAIR', 'PROGRAM', 'RE-PROGRAM', 'INSTALL', 'RE-INSTALL', 'DISMANTLE']
+
+/** Whether an action is work rather than a part — see SERVICE_ACTIONS. */
+export const isServiceAction = (action) => SERVICE_ACTIONS.includes(String(action ?? '').trim().toUpperCase())
+
 // Fault codes the shorthand is documented to understand, so a stored
 // issueTypes list saved before they existed cannot make them undecodable.
 // Re-added by CODE, not by name: an installation that already claims 50F for

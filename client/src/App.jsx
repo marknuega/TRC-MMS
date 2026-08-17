@@ -27,7 +27,7 @@ import { onSyncChange } from './offline'
 import { advanceOnEnter } from './focusNav'
 import {
   DEFAULT_OPTIONS, mergeOptions, MODEL_TYPE, BRANCHES, ALL_BRANCHES, ALL_REGIONS,
-  materialName, materialDescMap, issueName, issueCode, technicianName, modelNames, telModel,
+  materialName, materialDescMap, issueName, issueCode, technicianName, modelNames, telModel, isServiceAction,
 } from './options'
 import ManageInputs from './ManageInputs'
 import Inventory from './Inventory'
@@ -119,8 +119,11 @@ function renderDesc(text) {
       ),
     )
 }
+// The Company a part row starts on: the last one picked, or the house default.
+// Also what a row goes back to when its action stops being a service.
+const lastCompany = () => loadLast().company ?? 'PROJECT 2'
 // New fault rows default the Company to the last one the user picked.
-const emptyFault = () => ({ issue: '', quantity: 1, action: 'CHANGE', company: loadLast().company ?? 'PROJECT 2', status: 'New' })
+const emptyFault = () => ({ issue: '', quantity: 1, action: 'CHANGE', company: lastCompany(), status: 'New' })
 
 // Remember the last Model/Type/Agency so the next entry (and next visit) pre-selects them.
 const LAST_KEY = 'trc_last_selection'
@@ -1147,21 +1150,41 @@ function App({ user, onLogout }) {
       ...(model && { model, type: MODEL_TYPE[model.toUpperCase()] ?? f.type }),
     }))
   }
+  // One fault row after an edit to one of its fields. Shared by the entry form
+  // and the edit modal, which had grown two copies of the same rules.
+  const nextFault = (fault, field, raw) => {
+    const next = { ...fault, [field]: field === 'quantity' ? Number(raw) : raw }
+    // Typing/picking an action name in the Issue field auto-selects that Action.
+    if (field === 'issue') {
+      const matched = options.actions.find((a) => a.toUpperCase() === String(raw).trim().toUpperCase())
+      if (matched) next.action = matched
+    }
+    // A service consumes no part, so no company supplied one: PROGRAM, REPAIR,
+    // INSTALL, DISMANTLE and the RE- pair auto-select Company = "— none —"
+    // rather than carrying over the company of the last part fitted.
+    //
+    // Only on a CHANGE OF ACTION, which is the moment the row becomes (or stops
+    // being) a service. Re-applying it on every keystroke would make Company
+    // unselectable on a service row instead of merely defaulted, and this was
+    // asked for as an auto-select, not a lock — the field stays yours to
+    // override afterwards.
+    //
+    // Leaving a service restores the remembered company only when the field is
+    // still blank, so it undoes our own clearing without overwriting a "none"
+    // that was chosen deliberately.
+    if (next.action !== fault.action) {
+      if (isServiceAction(next.action)) next.company = ''
+      else if (isServiceAction(fault.action) && !next.company) next.company = lastCompany()
+    }
+    return next
+  }
+
   const setFault = (i, field) => (e) => {
     // Remember the last Company so new fault rows (and the next entry) pre-select it.
     if (field === 'company') saveLast({ company: e.target.value })
     setForm((f) => ({
       ...f,
-      faults: f.faults.map((fault, idx) => {
-        if (idx !== i) return fault
-        const next = { ...fault, [field]: field === 'quantity' ? Number(e.target.value) : e.target.value }
-        // Typing/picking an action name in the Issue field auto-selects that Action.
-        if (field === 'issue') {
-          const matched = options.actions.find((a) => a.toUpperCase() === String(e.target.value).trim().toUpperCase())
-          if (matched) next.action = matched
-        }
-        return next
-      }),
+      faults: f.faults.map((fault, idx) => (idx === i ? nextFault(fault, field, e.target.value) : fault)),
     }))
   }
   const addFault = () => setForm((f) => ({ ...f, faults: [...f.faults, emptyFault()] }))
@@ -1309,15 +1332,7 @@ function App({ user, onLogout }) {
     if (field === 'company') saveLast({ company: ev.target.value })
     setEditForm((f) => ({
       ...f,
-      faults: f.faults.map((fault, idx) => {
-        if (idx !== i) return fault
-        const next = { ...fault, [field]: field === 'quantity' ? Number(ev.target.value) : ev.target.value }
-        if (field === 'issue') {
-          const matched = options.actions.find((a) => a.toUpperCase() === String(ev.target.value).trim().toUpperCase())
-          if (matched) next.action = matched
-        }
-        return next
-      }),
+      faults: f.faults.map((fault, idx) => (idx === i ? nextFault(fault, field, ev.target.value) : fault)),
     }))
   }
   const eAddFault = () => setEditForm((f) => ({ ...f, faults: [...f.faults, emptyFault()] }))
