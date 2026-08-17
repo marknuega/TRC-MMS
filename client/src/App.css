@@ -493,8 +493,7 @@
 .monthly,
 .inventory,
 .agency,
-.manage,
-.handover {
+.manage {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -508,14 +507,6 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1rem 1.1rem;
-}
-.handover label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--text);
 }
 @media (max-width: 560px) {
   .handover-grid {
@@ -549,9 +540,22 @@ h2 {
   letter-spacing: 0.01em;
 }
 /* Collapsible Device/Faults cards: spacing under the toggle header. */
+/* The card's top group — device fields in a report, the handover pair in a
+   transmittal, or the All-Branches note in place of either. All three sit the
+   same distance below the header so the form does not jump when the mode is
+   switched. */
 .form-card > .grid,
+.form-card > .handover-grid,
+.form-card > .saved-hint,
 .form-card > .faults {
   margin-top: 1rem;
+}
+/* Separates that top group from the lines recorded against it. A hairline
+   rather than a heading: the two groups are one entry, not two sections. */
+.form-card > .entry-split {
+  height: 1px;
+  background: var(--border);
+  margin-top: 1.25rem;
 }
 .entry-form .grid {
   display: grid;

@@ -385,28 +385,16 @@ function App({ user, onLogout }) {
   const [inventory, setInventory] = useState([]) // for the issue/material suggestions + usage
   const [busy, setBusy] = useState(false)
   const [branch, setBranch] = useState(loadBranch)
-  const [deviceOpen, setDeviceOpen] = useState(true)
-  const [faultsOpen, setFaultsOpen] = useState(true)
+  // Device and Faults are one card, so one open state. They were two, kept in
+  // step by a pair of toggles that each reopened the other — an entry needs
+  // both halves, so they were never meaningfully separate.
+  const [entryOpen, setEntryOpen] = useState(true)
   // Quick Code Entry and the manual Device/Faults form are two alternate ways
   // to do the same thing — only one is ever the one actually in use. Rather
   // than just collapsing the other to a header (still a whole row of dead
   // space per card), the inactive side isn't rendered at all; a small
   // persistent switcher is what moves between them.
   const [entryMode, setEntryMode] = useState('manual') // 'manual' | 'quick'
-  // Device and Faults still open/close as a pair within manual mode — manual
-  // entry always needs both.
-  const toggleDeviceOpen = () =>
-    setDeviceOpen((o) => {
-      const next = !o
-      if (next) setFaultsOpen(true)
-      return next
-    })
-  const toggleFaultsOpen = () =>
-    setFaultsOpen((o) => {
-      const next = !o
-      if (next) setDeviceOpen(true)
-      return next
-    })
   const [lastAgency, setLastAgency] = useState(() => loadLast().agency ?? '')
   const isAllBranches = (isAdmin || isDirector) && branch === ALL_BRANCHES
   // Monthly follows the same shared branch selection ('' = all branches).
@@ -1068,10 +1056,9 @@ function App({ user, onLogout }) {
   // options.technicians directly.
   const technicianNames = useMemo(() => (options.technicians ?? []).map(technicianName), [options.technicians])
 
-  // Collapse the Device/Faults cards in All-Branches (read-only merged) mode.
+  // Collapse the entry card in All-Branches (read-only merged) mode.
   useEffect(() => {
-    setDeviceOpen(!isAllBranches)
-    setFaultsOpen(!isAllBranches)
+    setEntryOpen(!isAllBranches)
   }, [isAllBranches])
 
   // Activity matrix (rows × terminal columns) from saved reports. All three
@@ -1525,30 +1512,6 @@ function App({ user, onLogout }) {
           </div>
         </header>
 
-        {isTransmittal && (
-          <section className="handover">
-            <h2>Handover</h2>
-            {isAllBranches ? (
-              <p className="saved-hint">
-                All Branches: each branch's own handover is added automatically —
-                Transmitted by <strong>{reportTransmittedBy || '—'}</strong>; Received by{' '}
-                <strong>{reportReceivedBy || '—'}</strong>. Set each branch's names by selecting that branch.
-              </p>
-            ) : (
-              <div className="handover-grid">
-                <label>
-                  Transmitted by
-                  <SearchSelect value={transmittedBy} onChange={changeTransmittedBy} options={technicianNames} />
-                </label>
-                <label>
-                  Received by
-                  <SearchSelect value={receivedBy} onChange={changeReceivedBy} options={technicianNames} />
-                </label>
-              </div>
-            )}
-          </section>
-        )}
-
         {/* Code entry is a shortcut into the SAME create path as the form below —
             two alternate ways to create the same entry, so only one is ever
             shown. Transmittals move materials and have no CDS code, so the
@@ -1586,68 +1549,75 @@ function App({ user, onLogout }) {
         )}
 
         <form onSubmit={handleSubmit} className="entry-form">
-          {!isTransmittal && entryMode === 'manual' && (
-          <div className="form-card">
-            <button
-              type="button"
-              className="manage-toggle"
-              onClick={toggleDeviceOpen}
-              aria-expanded={deviceOpen}
-            >
-              <span>Device</span>
-              <span className="chev">{deviceOpen ? '▲' : '▼'}</span>
-            </button>
-            {deviceOpen && (
-            /* Enter walks Model -> Type -> Tel -> ISSI -> Technician, in DOM
-               order. No action on the last field — the entry is not complete
-               until the faults below are filled in — so it wraps. */
-            <div className="grid" onKeyDown={advanceOnEnter}>
-              <label>
-                Model {form.type === 'OTHER' && <span className="opt">(optional)</span>}
-                <SearchSelect value={form.model} onChange={setModel} options={options.models} />
-              </label>
-              <label>
-                Type
-                <SearchSelect value={form.type} onChange={set('type')} options={options.types} />
-              </label>
-              {!isTransmittal && (
-                <>
-                  <label>
-                    <span className="cap">Tel number <span className="opt">(optional)</span></span>
-                    <input value={form.telNumber} onChange={set('telNumber')} placeholder="Last 4 digits, e.g. 1234" />
-                  </label>
-                  <label>
-                    <span className="cap">ISSI number <span className="opt">(optional)</span></span>
-                    <input value={form.issiNumber} onChange={set('issiNumber')} placeholder="Last 4 digits, e.g. 1234" />
-                  </label>
-                </>
-              )}
-              <label>
-                <span className="cap">Technician <span className="opt">(optional · multiple)</span></span>
-                <MultiSelect
-                  value={form.technician}
-                  options={technicianNames}
-                  onChange={(v) => setForm((f) => ({ ...f, technician: v }))}
-                />
-              </label>
-            </div>
-            )}
-          </div>
-          )}
-
+          {/* One card per entry. The top half is whatever identifies the entry
+              — the device in a report, the handover pair in a transmittal —
+              then a divider, then the lines being recorded against it. */}
           {(entryMode === 'manual' || isTransmittal) && (
           <div className="form-card">
             <button
               type="button"
               className="manage-toggle"
-              onClick={toggleFaultsOpen}
-              aria-expanded={faultsOpen}
+              onClick={() => setEntryOpen((o) => !o)}
+              aria-expanded={entryOpen}
             >
-              <span>{isTransmittal ? 'Transmittal Report' : 'Faults'}</span>
-              <span className="chev">{faultsOpen ? '▲' : '▼'}</span>
+              <span>{isTransmittal ? 'Transmittal Report' : 'Device & Faults'}</span>
+              <span className="chev">{entryOpen ? '▲' : '▼'}</span>
             </button>
-            {faultsOpen && (
+            {entryOpen && (
             <>
+            {isTransmittal ? (
+              isAllBranches ? (
+                <p className="saved-hint">
+                  All Branches: each branch's own handover is added automatically —
+                  Transmitted by <strong>{reportTransmittedBy || '—'}</strong>; Received by{' '}
+                  <strong>{reportReceivedBy || '—'}</strong>. Set each branch's names by selecting that branch.
+                </p>
+              ) : (
+                <div className="handover-grid" onKeyDown={advanceOnEnter}>
+                  <label>
+                    Transmitted by
+                    <SearchSelect value={transmittedBy} onChange={changeTransmittedBy} options={technicianNames} />
+                  </label>
+                  <label>
+                    Received by
+                    <SearchSelect value={receivedBy} onChange={changeReceivedBy} options={technicianNames} />
+                  </label>
+                </div>
+              )
+            ) : (
+              /* Enter walks Model -> Type -> Tel -> ISSI -> Technician, in DOM
+                 order. No action on the last field — the entry is not complete
+                 until the faults below are filled in — so it wraps. */
+              <div className="grid" onKeyDown={advanceOnEnter}>
+                <label>
+                  Model {form.type === 'OTHER' && <span className="opt">(optional)</span>}
+                  <SearchSelect value={form.model} onChange={setModel} options={options.models} />
+                </label>
+                <label>
+                  Type
+                  <SearchSelect value={form.type} onChange={set('type')} options={options.types} />
+                </label>
+                <label>
+                  <span className="cap">Tel number <span className="opt">(optional)</span></span>
+                  <input value={form.telNumber} onChange={set('telNumber')} placeholder="Last 4 digits, e.g. 1234" />
+                </label>
+                <label>
+                  <span className="cap">ISSI number <span className="opt">(optional)</span></span>
+                  <input value={form.issiNumber} onChange={set('issiNumber')} placeholder="Last 4 digits, e.g. 1234" />
+                </label>
+                <label>
+                  <span className="cap">Technician <span className="opt">(optional · multiple)</span></span>
+                  <MultiSelect
+                    value={form.technician}
+                    options={technicianNames}
+                    onChange={(v) => setForm((f) => ({ ...f, technician: v }))}
+                  />
+                </label>
+              </div>
+            )}
+
+            <div className="entry-split" role="presentation" />
+
             <div className="faults">
               <div className={`fault-row fault-head${isTransmittal ? ' fault-row--tx fault-row--txtype' : ''}`}>
                 {isTransmittal && <span>Type</span>}
