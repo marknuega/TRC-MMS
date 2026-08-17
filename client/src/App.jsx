@@ -2075,20 +2075,20 @@ function App({ user, onLogout }) {
                   <SearchSelect value={form.type} onChange={set('type')} options={options.types} />
                 </label>
                 <label>
-                  <span className="cap">Tel number <span className="opt">(optional)</span></span>
-                  <input value={form.telNumber} onChange={set('telNumber')} placeholder="Full number, e.g. 0501234567" />
-                </label>
-                <label>
-                  <span className="cap">ISSI number <span className="opt">(optional)</span></span>
-                  <input value={form.issiNumber} onChange={set('issiNumber')} placeholder="Full number, e.g. 12346575" />
-                </label>
-                <label>
                   <span className="cap">Technician <span className="opt">(optional · multiple)</span></span>
                   <MultiSelect
                     value={form.technician}
                     options={technicianNames}
                     onChange={(v) => setForm((f) => ({ ...f, technician: v }))}
                   />
+                </label>
+                <label>
+                  <span className="cap">Tel number <span className="opt">(optional)</span></span>
+                  <input value={form.telNumber} onChange={set('telNumber')} placeholder="Full number, e.g. 0501234567" />
+                </label>
+                <label>
+                  <span className="cap">ISSI number <span className="opt">(optional)</span></span>
+                  <input value={form.issiNumber} onChange={set('issiNumber')} placeholder="Full number, e.g. 12346575" />
                 </label>
               </div>
             )}
@@ -2331,20 +2331,20 @@ function App({ user, onLogout }) {
                       <SearchSelect value={editForm.agency} onChange={eSet('agency')} options={agencyOptions} />
                     </label>
                     <label>
-                      <span className="cap">Tel number <span className="opt">(optional)</span></span>
-                      <input value={editForm.telNumber} onChange={eSet('telNumber')} placeholder="Full number, e.g. 0501234567" />
-                    </label>
-                    <label>
-                      <span className="cap">ISSI number <span className="opt">(optional)</span></span>
-                      <input value={editForm.issiNumber} onChange={eSet('issiNumber')} placeholder="Full number, e.g. 12346575" />
-                    </label>
-                    <label>
                       <span className="cap">Technician <span className="opt">(optional · multiple)</span></span>
                       <MultiSelect
                         value={editForm.technician}
                         options={technicianNames}
                         onChange={(v) => setEditForm((f) => ({ ...f, technician: v }))}
                       />
+                    </label>
+                    <label>
+                      <span className="cap">Tel number <span className="opt">(optional)</span></span>
+                      <input value={editForm.telNumber} onChange={eSet('telNumber')} placeholder="Full number, e.g. 0501234567" />
+                    </label>
+                    <label>
+                      <span className="cap">ISSI number <span className="opt">(optional)</span></span>
+                      <input value={editForm.issiNumber} onChange={eSet('issiNumber')} placeholder="Full number, e.g. 12346575" />
                     </label>
                     <label>
                       Report date
