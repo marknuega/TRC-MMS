@@ -5,12 +5,12 @@
 export const DEFAULT_OPTIONS = {
   technicians: ['AMIR', 'M. RASHEED', 'RASHEEDULLAH', 'IMRAN', 'BAGHDAD', 'MAROOF'],
 
-  // `prefixes` work exactly as they do for models below — the same Tel number,
-  // matched against this list instead: 1804133 is the PSD, 1917670 the CD.
-  // `issiPrefixes` are the same idea read off the ISSI instead (see below).
+  // `issiPrefixes` are the leading digits of an ISSI that belong to this agency,
+  // so typing the number picks it (see issiPick). Agencies answer to the ISSI
+  // and to nothing else — a Tel number names the device, never whose it is.
   agencies: [
-    { name: 'PSD', prefixes: ['180'], issiPrefixes: ['180'] },
-    { name: 'CD', prefixes: ['191'], issiPrefixes: ['191'] },
+    { name: 'PSD', issiPrefixes: ['180'] },
+    { name: 'CD', issiPrefixes: ['191'] },
     'DOT', 'BG', 'PASS',
     // 191 is deliberately claimed by CD as well. Two agencies may hold one
     // prefix (see the note under PREFIX_RE); CD is higher in this list, so an
@@ -169,22 +169,28 @@ export const MODEL_TYPE = {
 }
 
 // ---------------------------------------------------------------------------
-// Tel prefixes — shared by Models and Agencies
+// Prefixes — the leading digits of a number that name one option
 //
-// A Tel number already says several things about the entry being written, and
-// two of its fields can be read straight off it. An entry in either of those
-// two lists may be a plain string (legacy, name only) or
+// Each of the two numbers on an entry answers exactly one question, and each
+// answer has its own list:
+//
+//   Tel number  -> Model      `prefixes`      (this section)
+//   ISSI        -> Agency     `issiPrefixes`  (the next one)
+//   Model       -> Type       MODEL_TYPE, above
+//
+// One number, one field, one source. A Tel number says WHAT the device is and
+// says nothing about whose it is; an ISSI says whose and nothing about what.
+// The Type is not read from either — it follows from the Model, as it always
+// has, so the chain is Tel -> Model -> Type rather than two numbers arguing
+// over one field. Anything that reads a second field off a number is a second
+// source for something that already has one, and that is how two dropdowns
+// start disagreeing.
+//
+// A models entry may be a plain string (legacy, name only) or
 //   { name, prefixes: ['355', '06'] }
 // where each prefix is a run of the number's leading digits that belongs to
-// that name: 190 is an STP9000 and 355 or 06 a TH1N; 180 is the PSD and 191 the
-// CD. Typing the number then selects it, so what the number already states is
-// not stated again by hand.
-//
-// Models and Agencies are matched INDEPENDENTLY, against their own list. They
-// are separate questions about the same digits — 190 naming a model says
-// nothing about which agency 190 might name — so one list never has to reserve
-// numbers the other is using, and both can be extended without consulting the
-// other.
+// that name: 190 is an STP9000, 355 or 06 a TH1N. Typing the number then
+// selects it, so what the number already states is not stated again by hand.
 //
 // Prefixes are NOT one fixed length: they are whatever length distinguishes a
 // range, which is why the longest matching one wins below rather than the first.
@@ -206,19 +212,20 @@ const digitPrefixes = (v) =>
 export const optionPrefixes = (v) => (typeof v === 'string' ? [] : digitPrefixes(v?.prefixes))
 
 // ---------------------------------------------------------------------------
-// ISSI prefixes — the same idea, read off the OTHER number
+// ISSI prefixes — the agency's own list, read off the OTHER number
 //
-// A Tel number and an ISSI are two different numbering systems naming the same
-// radio, and an installation is not obliged to have both. So an agency carries
-// its own `issiPrefixes: ['180']` alongside `prefixes`, and the two are matched
-// independently — exactly as Models and Agencies already are against the Tel
-// number. 180 meaning the PSD in one says nothing about what 180 means in the
-// other, and neither list has to reserve digits the other is using.
+// Agencies carry `issiPrefixes: ['180']` and nothing else: the ISSI is the
+// number that says whose radio it is, and it is the only one that does. An
+// agency's Tel prefixes were removed rather than left inert — a field that is
+// still shown and still saved but no longer selects anything is worse than one
+// that is gone, because it looks like it works.
 //
-// Agencies only. What a Tel number says about the MODEL it does not also have
-// to say twice; nobody asked for an ISSI to name a device, and a second source
-// for a field the Model dropdown already fills from the Tel number is exactly
-// the drift the note above telPick warns about.
+// The two lists are read against their own number and never compared: 180
+// meaning the PSD here says nothing about what 180 means among the models, so
+// neither list has to reserve digits the other is using. Everything below is
+// shared with the Tel matcher, because the RULES are the same — longest match
+// wins, a prefix may be shared, list order breaks the tie. Only which number is
+// held against which list differs.
 // ---------------------------------------------------------------------------
 export const optionIssiPrefixes = (v) => (typeof v === 'string' ? [] : digitPrefixes(v?.issiPrefixes))
 
@@ -239,12 +246,13 @@ export const optionFullForm = (v) => (typeof v === 'string' ? '' : String(v?.ful
 /** Just the names, for the dropdowns and for matchOption. */
 export const optionNames = (list) => (list ?? []).map(optionName).filter(Boolean)
 
-/** A Tel number as bare digits — what a prefix is compared against, so the
- *  spacing or punctuation someone types into the field cannot defeat a match. */
+/** A Tel number or ISSI as bare digits — what a prefix is compared against, so
+ *  the spacing or punctuation someone types into the field cannot defeat a
+ *  match. Named for the Tel field it was written for; both numbers use it. */
 export const telDigits = (tel) => String(tel ?? '').replace(/\D/g, '')
 
 /**
- * The entries of one list whose prefix a Tel number's leading digits match, or
+ * The entries of one list whose prefix a number's leading digits match, or
  * null for none.
  *
  * Longest prefix wins, NOT the first: an installation that has both 06 and 0612
@@ -275,23 +283,23 @@ export function prefixOwners(tel, list, getPrefixes = optionPrefixes) {
 }
 
 /**
- * The one entry a Tel number selects from a list, or '' when nothing claims it.
- * The first claimant wins a shared prefix — see the note above.
+ * The Model a Tel number selects, or '' when nothing claims it. The first
+ * claimant wins a shared prefix — see the note above.
  *
- * A Model comes back without a Type, deliberately: the Type is already
- * auto-selected FROM the model by the MODEL_TYPE map the Model dropdown has
- * always used, so a number that names the model has said everything it needs
- * to. Returning a Type here would be a second, competing source for a field
- * that already has one.
+ * The MODEL, and nothing else. A Tel number says what the device is; whose it
+ * is comes off the ISSI (issiPick) and the Type off the model, so this answers
+ * one question and leaves the other two to the one source each already has.
+ * Reading a second field here would be exactly the competing source that makes
+ * two dropdowns disagree.
  */
 export function telPick(tel, list) {
   return prefixOwners(tel, list)?.names[0] ?? ''
 }
 
 /**
- * The one entry an ISSI selects, on the ISSI prefix list. telPick's twin, and
+ * The Agency an ISSI selects, on the ISSI prefix list. telPick's twin, and
  * deliberately a separate function rather than a flag on it: the two read
- * different fields off the same entries, and a caller must say which number it
+ * different fields off different lists, and a caller must say which number it
  * is holding — an ISSI matched against Tel prefixes would be silently wrong
  * rather than empty.
  */
@@ -577,13 +585,11 @@ const REQUIRED_ISSUE_TYPES = [{ name: 'DEFECTIVE PCB', parts: '50', variant: 'F'
 
 // The shipped prefixes of one category, keyed by name — read straight off the
 // defaults above so there is only ever one place they are written down. The
-// accessor says which of the two lists is being read.
+// accessor says which list is being read: Tel prefixes for the models, ISSI
+// ones for the agencies. Neither category has both.
 const seedPrefixesOf = (list, get = optionPrefixes) =>
   Object.fromEntries(list.map((it) => [optionName(it).toUpperCase(), get(it)]).filter(([, p]) => p.length > 0))
-const SEED_PREFIXES = {
-  models: seedPrefixesOf(DEFAULT_OPTIONS.models),
-  agencies: seedPrefixesOf(DEFAULT_OPTIONS.agencies),
-}
+const SEED_MODEL_PREFIXES = seedPrefixesOf(DEFAULT_OPTIONS.models)
 const SEED_ISSI_PREFIXES = seedPrefixesOf(DEFAULT_OPTIONS.agencies, optionIssiPrefixes)
 
 /**
@@ -603,10 +609,9 @@ const SEED_ISSI_PREFIXES = seedPrefixesOf(DEFAULT_OPTIONS.agencies, optionIssiPr
  * goes: the three SRG3900 builds are each seeded 109 by name, and accumulating
  * would let whichever came first block the other two from the prefix they share.
  *
- * `get` and `field` say which of an entry's two prefix lists is being filled,
- * so the ISSI list is seeded by the same pass under the same two rules rather
- * than by a near-copy of it. The passes are independent: an agency that already
- * carries Tel prefixes can still be given the ISSI ones it predates.
+ * `get` and `field` say which list is being filled, so the models' Tel prefixes
+ * and the agencies' ISSI ones are seeded by the same pass under the same two
+ * rules rather than by a near-copy of it.
  */
 function withSeededPrefixes(list, seeds, get = optionPrefixes, field = 'prefixes') {
   const claimed = new Set(list.flatMap(get))
@@ -633,8 +638,10 @@ export function mergeOptions(stored) {
   for (const it of REQUIRED_ISSUE_TYPES) {
     if (!claimedCodes[issueCode(it)]) out.issueTypes.push({ ...it })
   }
-  out.models = withSeededPrefixes(out.models, SEED_PREFIXES.models)
-  out.agencies = withSeededPrefixes(out.agencies, SEED_PREFIXES.agencies)
+  out.models = withSeededPrefixes(out.models, SEED_MODEL_PREFIXES)
+  // Agencies are seeded their ISSI prefixes only. Any `prefixes` a stored
+  // agency still carries is left where it is — inert now that a Tel number
+  // selects nothing but the Model, and not worth rewriting saved data over.
   out.agencies = withSeededPrefixes(out.agencies, SEED_ISSI_PREFIXES, optionIssiPrefixes, 'issiPrefixes')
   // Chart toggles are a plain object, not a category list.
   const storedCharts = stored?.charts && typeof stored.charts === 'object' ? stored.charts : {}

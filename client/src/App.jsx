@@ -1166,30 +1166,26 @@ function App({ user, onLogout }) {
   // beside the field instead.
   const [autoAgency, setAutoAgency] = useState('')
 
-  // A Tel number's leading digits say two things (both set in Manage inputs →
-  // Tel prefixes): which model it is, and whose it is. Typing it selects the
-  // Model — the Type comes off the model from there, through the same
-  // MODEL_TYPE map setModel uses — and selects the Agency from the agencies'
-  // own prefix list. The number picks the Model; the Model still picks the Type.
+  // A Tel number's leading digits say WHAT the device is (set in Manage inputs
+  // → Tel prefixes). Typing it selects the Model, and the Type comes off the
+  // model from there, through the same MODEL_TYPE map setModel uses.
   //
-  // The two lists are read INDEPENDENTLY, so 190 naming a model and 191 naming
-  // an agency never have to be reconciled, and a number may well answer only
-  // one of the two.
+  // The Model and nothing else. Whose radio it is comes off the ISSI (setIssi),
+  // and the Type off the Model — one number, one field, one source. The Tel
+  // number used to select the Agency too, from the agencies' own prefix list;
+  // it no longer does, and agencies no longer carry Tel prefixes at all.
   //
-  // Touch the Model, the Type or the Agency yourself and the number stops
-  // filling that one for the rest of the entry: correct a wrong guess (109
-  // leads with the car kit, the bench has the desktop) and the correction
-  // stands, however much of the number is typed afterwards.
+  // Touch the Model or the Type yourself and the number stops filling it for
+  // the rest of the entry: correct a wrong guess (109 leads with the car kit,
+  // the bench has the desktop) and the correction stands, however much of the
+  // number is typed afterwards.
   const setTel = (e) => {
     const telNumber = e.target.value
     const model = devicePicked.current ? '' : telPick(telNumber, options.models)
-    const agency = agencyPicked.current ? '' : telPick(telNumber, options.agencies)
-    if (agency) setAutoAgency(agency)
     setForm((f) => ({
       ...f,
       telNumber,
       ...(model && { model, type: MODEL_TYPE[model.toUpperCase()] ?? f.type }),
-      ...(agency && { agency }),
     }))
   }
 
@@ -1427,19 +1423,17 @@ function App({ user, onLogout }) {
     if (ev.target.value !== editForm.agency) eAgencyPicked.current = true
     eSet('agency')(ev)
   }
-  // Same auto-select as setTel, on the edit modal's own copy of the fields. The
-  // flag starts down per open (openEdit above): re-typing a saved entry's Tel
-  // number is usually the correction, so the Model follows it, and picking the
-  // Model by hand still ends the argument.
+  // Same auto-select as setTel — the Model, and only the Model — on the edit
+  // modal's own copy of the fields. The flag starts down per open (openEdit
+  // above): re-typing a saved entry's Tel number is usually the correction, so
+  // the Model follows it, and picking the Model by hand still ends the argument.
   const eSetTel = (ev) => {
     const telNumber = ev.target.value
     const model = eDevicePicked.current ? '' : telPick(telNumber, options.models)
-    const agency = eAgencyPicked.current ? '' : telPick(telNumber, options.agencies)
     setEditForm((f) => ({
       ...f,
       telNumber,
       ...(model && { model, type: MODEL_TYPE[model.toUpperCase()] ?? f.type }),
-      ...(agency && { agency }),
     }))
   }
   // The ISSI's half of the same job, on the same flag — see setIssi. No

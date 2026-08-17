@@ -73,13 +73,16 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
   const isTechnicians = cat === 'technicians'
   const isModels = cat === 'models'
   const isAgencies = cat === 'agencies'
-  // The two categories a Tel number can select from. They behave identically
-  // here — same field, same rules, separate lists — so everything below asks
-  // this rather than naming either one.
-  const hasPrefixes = isModels || isAgencies
-  // ISSI prefixes are an agency question only — the device is what the Tel
-  // number names, and the ISSI is not asked to name it a second time.
+  // Each number selects from one list and one only: the Tel number names the
+  // Model, the ISSI names the Agency. Agencies used to carry Tel prefixes as
+  // well; the field is gone rather than left inert, because one that is still
+  // shown and still saved but no longer selects anything looks like it works.
+  const hasTelPrefixes = isModels
   const hasIssiPrefixes = isAgencies
+  // Carries prefixes of SOME kind — the two behave identically here (same
+  // rules, same validation, same stored shape), so everything that does not
+  // care which number it is asks this rather than naming either one.
+  const hasPrefixes = hasTelPrefixes || hasIssiPrefixes
   const list = options[cat] ?? []
   // Issue types with a claimed CDS code display in ascending code order
   // (parts number, then variant letter) — reading order left to right,
@@ -142,8 +145,10 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
     if (isIssues) return { name, parts: f.parts.trim(), variant: f.variant.trim().toUpperCase() }
     if (isMaterials) return { name, description: f.desc.trim() }
     if (hasPrefixes) {
-      const prefixes = parsePrefixes(f.prefixes)
-      const issiPrefixes = isAgencies ? parsePrefixes(f.issiPrefixes) : []
+      // Built fresh from the fields on show, so an agency saved here also
+      // sheds the inert `prefixes` a Tel number no longer reads.
+      const prefixes = hasTelPrefixes ? parsePrefixes(f.prefixes) : []
+      const issiPrefixes = hasIssiPrefixes ? parsePrefixes(f.issiPrefixes) : []
       const fullForm = isAgencies ? f.fullForm.trim() : ''
       // A model with no prefixes stays a plain string, exactly as it was
       // before this field existed — nothing to store, so nothing stored. An
@@ -261,7 +266,7 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
   const problemFor = (f, exceptIndex = -1) => {
     const code = codeProblem(f.parts, f.variant, exceptIndex)
     if (code) return [code, 'code']
-    const prefix = prefixProblem(f.prefixes)
+    const prefix = hasTelPrefixes ? prefixProblem(f.prefixes) : ''
     if (prefix) return [prefix, 'prefixes']
     const issi = hasIssiPrefixes ? prefixProblem(f.issiPrefixes, 'ISSI') : ''
     if (issi) return [issi, 'issiPrefixes']
@@ -334,14 +339,12 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
       const givingCode =
         (isIssues && newParts.trim() && newVariant.trim()) ||
         (hasPrefixes &&
-          (parsePrefixes(newPrefixes).length > 0 || parsePrefixes(newIssiPrefixes).length > 0 || newFullForm.trim() !== ''))
-      // Both prefix lists, de-duplicated: an agency usually answers to the same
-      // digits on either number, and "holding prefix 191, 191" says nothing
-      // twice.
+          (parsePrefixes(hasTelPrefixes ? newPrefixes : newIssiPrefixes).length > 0 || newFullForm.trim() !== ''))
+      // Whichever list this category actually answers to.
       const held = isIssues
         ? issueCode(list[clash])
         : hasPrefixes
-          ? [...new Set([...optionPrefixes(list[clash]), ...optionIssiPrefixes(list[clash])])].join(', ')
+          ? (hasTelPrefixes ? optionPrefixes(list[clash]) : optionIssiPrefixes(list[clash])).join(', ')
           : ''
       if (!givingCode || held) {
         flash(`"${value}" is already in the list${held ? `, holding ${hasPrefixes ? 'prefix' : 'code'} ${held}` : ''}.`, 'name')
@@ -362,7 +365,7 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
     setEditDesc(descOf(list[i]))
     setEditParts(isIssues ? issueParts(list[i]) : '')
     setEditVariant(isIssues ? issueVariant(list[i]) : '')
-    setEditPrefixes(hasPrefixes ? optionPrefixes(list[i]).join(', ') : '')
+    setEditPrefixes(hasTelPrefixes ? optionPrefixes(list[i]).join(', ') : '')
     setEditIssiPrefixes(hasIssiPrefixes ? optionIssiPrefixes(list[i]).join(', ') : '')
     // Seeded from the code map when the option carries none of its own, so
     // opening an agency to edit it offers the full form rather than a blank box
@@ -491,7 +494,7 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                 </label>
               </>
             )}
-            {hasPrefixes && (
+            {hasTelPrefixes && (
               <label className="field-code field-prefix">
                 Tel prefixes
                 <input
@@ -634,41 +637,31 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
               blank for an issue with no code.
             </p>
           )}
-          {hasPrefixes && (
+          {hasTelPrefixes && (
             <p className="manage-hint">
-              <strong>Tel prefixes</strong> are the leading digits of a Tel number that select this{' '}
-              {isModels ? 'model' : 'agency'} on an entry.{' '}
-              {isModels ? (
-                <>
-                  A number starting <code>190</code> makes the Model an STP9000; <code>355</code> or <code>06</code>{' '}
-                  makes it a TH1N. The Type then follows from the Model as it always has.
-                </>
-              ) : (
-                <>
-                  A number starting <code>180</code> makes the Agency the PSD — <code>1804133</code> — and{' '}
-                  <code>191</code> makes it the CD, as in <code>1917670</code>.
-                </>
-              )}{' '}
-              Give one as many prefixes as it needs, separated by commas; 2 to 6 digits each, and the longest one that
-              matches wins, so a narrower range can sit inside a wider one. Two entries may share a prefix — the one
-              higher up this list is the one selected, and the other is a dropdown away. Leave it blank for{' '}
-              {isModels ? 'a model' : 'an agency'} no number identifies.
-              {' '}Models and Agencies are matched against their own list only, so the same digits can mean one thing
-              here and something else in the other — neither has to avoid the other&apos;s numbers. This is where a new{' '}
-              {isModels ? 'device' : 'agency'} is taught to the auto-select — nothing else needs changing.
+              <strong>Tel prefixes</strong> are the leading digits of a Tel number that select this model on an
+              entry. A number starting <code>190</code> makes the Model an STP9000; <code>355</code> or{' '}
+              <code>06</code> makes it a TH1N. The Type then follows from the Model as it always has. Give one as
+              many prefixes as it needs, separated by commas; 2 to 6 digits each, and the longest one that matches
+              wins, so a narrower range can sit inside a wider one. Two models may share a prefix — the one higher
+              up this list is the one selected, and the other is a dropdown away. Leave it blank for a model no
+              number identifies. A Tel number names the <strong>device and nothing else</strong>: whose radio it is
+              comes off the ISSI, on the Agencies list. This is where a new device is taught to the auto-select —
+              nothing else needs changing.
               {newPrefixes.trim() && <span className="manage-code-hint"> {prefixShareHint(newPrefixes)}</span>}
             </p>
           )}
           {hasIssiPrefixes && (
             <p className="manage-hint">
-              <strong>ISSI prefixes</strong> are the same thing read off the <strong>ISSI</strong> instead: an entry
-              whose ISSI starts <code>180</code> is the PSD, <code>191</code> the CD and <code>214</code> the SRCA.
-              A Tel number and an ISSI are two different numbering systems and are matched against their own list
-              here, so an agency may hold one, the other or both, and the same digits need not mean the same agency
-              on each. Everything else works as it does above — longest match wins, a shared prefix goes to whichever
-              agency is higher in this list.{' '}
+              <strong>ISSI prefixes</strong> are the leading digits of an <strong>ISSI</strong> that select this
+              agency on an entry: an ISSI starting <code>180</code> is the PSD, <code>191</code> the CD and{' '}
+              <code>214</code> the SRCA. Give one as many as it needs, separated by commas; 2 to 6 digits each,
+              longest match wins, and a shared prefix goes to whichever agency is higher in this list. Leave it
+              blank for an agency no number identifies. The ISSI names <strong>whose radio it is and nothing
+              else</strong> — the device comes off the Tel number, on the Models list — so the two lists are read
+              against their own number and the same digits may mean different things on each.{' '}
               <code>00</code> is the one ISSI that is not an agency at all: it fills the whole entry in as{' '}
-              <strong>no activity today</strong> and offers to save the report there and then.
+              <strong>no activity today</strong>.
               {newIssiPrefixes.trim() && (
                 <span className="manage-code-hint"> {prefixShareHint(newIssiPrefixes, optionIssiPrefixes)}</span>
               )}
@@ -737,17 +730,19 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                       )}
                       {hasPrefixes && (
                         <div className="edit-code-row">
-                          <label className="field-code field-prefix">
-                            Tel prefixes
-                            <input
-                              className="edit-input"
-                              value={editPrefixes}
-                              onChange={(e) => setEditPrefixes(e.target.value.replace(/[^\d,\s]/g, ''))}
-                              onKeyDown={cancelOnEscape}
-                              placeholder="355, 06"
-                              inputMode="numeric"
-                            />
-                          </label>
+                          {hasTelPrefixes && (
+                            <label className="field-code field-prefix">
+                              Tel prefixes
+                              <input
+                                className="edit-input"
+                                value={editPrefixes}
+                                onChange={(e) => setEditPrefixes(e.target.value.replace(/[^\d,\s]/g, ''))}
+                                onKeyDown={cancelOnEscape}
+                                placeholder="355, 06"
+                                inputMode="numeric"
+                              />
+                            </label>
+                          )}
                           {hasIssiPrefixes && (
                             <label className="field-code field-prefix">
                               ISSI prefixes
@@ -841,14 +836,15 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                       {isIssues && issueCode(value) && (
                         <span className="manage-item-code">{issueCode(value)}</span>
                       )}
-                      {hasPrefixes && optionPrefixes(value).length > 0 && (
+                      {hasTelPrefixes && optionPrefixes(value).length > 0 && (
                         <span className="manage-item-code" title="Tel prefixes">
                           {optionPrefixes(value).join(' / ')}
                         </span>
                       )}
-                      {/* Labelled, because the two badges are otherwise the
-                          same digits twice with nothing to say which number
-                          each answers to. */}
+                      {/* Labelled, so the digits say which number they answer
+                          to rather than leaving it to be inferred from which
+                          list is open. An agency's stale Tel prefixes are not
+                          shown at all — they select nothing now. */}
                       {hasIssiPrefixes && optionIssiPrefixes(value).length > 0 && (
                         <span className="manage-item-code" title="ISSI prefixes">
                           ISSI {optionIssiPrefixes(value).join(' / ')}

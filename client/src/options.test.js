@@ -100,18 +100,21 @@ describe('mergeOptions', () => {
     assert.deepEqual(optionNames(mergeOptions({ models: stored }).models), stored)
   })
 
-  // Agencies get the same treatment from the same pass — the 48-entry stored
-  // list every install has would otherwise carry no prefixes at all.
-  test('the shipped Tel prefixes are attached to a stored agencies list too', () => {
+  // A Tel number selects the Model and nothing else, so an agency is never
+  // given Tel prefixes — not by the defaults, and not by the seeding pass.
+  test('agencies are seeded no Tel prefixes at all', () => {
     const out = mergeOptions({ agencies: ['PSD', 'CD', 'DOT'] })
-    assert.deepEqual(optionPrefixes(out.agencies[0]), ['180'])
-    assert.deepEqual(optionPrefixes(out.agencies[1]), ['191'])
-    assert.deepEqual(optionPrefixes(out.agencies[2]), [])
+    assert.deepEqual(out.agencies.map(optionPrefixes), [[], [], []])
+    assert.deepEqual(mergeOptions(undefined).agencies.map(optionPrefixes).flat(), [])
   })
 
-  test('an agency the admin already gave prefixes is left alone', () => {
-    const out = mergeOptions({ agencies: [{ name: 'PSD', prefixes: ['77'] }, 'CD'] })
-    assert.deepEqual(optionPrefixes(out.agencies[0]), ['77'])
+  // The ones every install saved while the Tel number still selected an agency.
+  // Inert, not harmful, and not worth rewriting saved data over — but they must
+  // not select anything, which is what telPick on the agencies list would do.
+  test('a stale Tel prefix left on a stored agency is carried through untouched', () => {
+    const out = mergeOptions({ agencies: [{ name: 'PSD', prefixes: ['180'] }] })
+    assert.deepEqual(optionPrefixes(out.agencies[0]), ['180'], 'stored data is left as it was')
+    assert.deepEqual(optionIssiPrefixes(out.agencies[0]), ['180'], 'and it still gets its ISSI ones')
   })
 
   test('seeding never changes which agencies exist, or their order', () => {
@@ -246,43 +249,37 @@ describe('telPick', () => {
     assert.equal(telPick('', MODELS), '')
   })
 
-  // The Agency reads the SAME number against its OWN list. The two are separate
-  // questions about the same digits, which is what lets 190 name a model while
-  // 191 names an agency without either list reserving the other's numbers.
-  describe('agencies, from the same number', () => {
-    const { models, agencies } = mergeOptions(undefined)
+  // 190/355/06 differ from their neighbours in the third digit, so a shorter
+  // read would collapse ranges together. The full prefix has to be what matches.
+  test('neighbouring prefixes do not bleed into each other', () => {
+    assert.equal(telPick('1903324096', MODELS), 'STP9000')
+    assert.equal(telPick('1913324096', MODELS), '', '191 is no model')
+  })
 
-    test('the reported numbers select their agency', () => {
-      assert.equal(telPick('1804133', agencies), 'PSD')
-      assert.equal(telPick('1917670', agencies), 'CD')
+  // A Tel number names the DEVICE. Whose radio it is comes off the ISSI, and
+  // the Type off the Model — one number, one field, one source.
+  describe('and nothing but the model', () => {
+    const { agencies } = mergeOptions(undefined)
+
+    test('the agencies list has nothing for a Tel number to match', () => {
+      assert.equal(telPick('1804133', agencies), '', '180 no longer selects the PSD')
+      assert.equal(telPick('1917670', agencies), '', '191 no longer selects the CD')
+      assert.equal(telPick('2145566', agencies), '')
     })
 
-    test('a number that names an agency need not name a model', () => {
-      assert.equal(telPick('1804133', models), '', '180 is no model')
-      assert.equal(telPick('1917670', models), '', '191 is no model')
-    })
-
-    test('a number that names a model need not name an agency', () => {
-      assert.equal(telPick('1903324096', models), 'STP9000')
-      assert.equal(telPick('1903324096', agencies), '', '190 is no agency')
-    })
-
-    // 180/190/191 differ only in their third digit, so a two-digit read would
-    // collapse all three together. The full prefix has to be what matches.
-    test('neighbouring prefixes do not bleed into each other', () => {
-      assert.equal(telPick('1804133', agencies), 'PSD')
-      assert.equal(telPick('1814133', agencies), '', '181 belongs to nobody')
-    })
-
-    test('an agency with no prefix is never selected', () => {
-      assert.equal(telPick('9999999', agencies), '')
+    // The guard that matters: an install still carrying the Tel prefixes it
+    // saved while this worked must not go on selecting from them.
+    test('a stale Tel prefix on a stored agency is not read by the ISSI matcher', () => {
+      const stale = mergeOptions({ agencies: [{ name: 'PSD', prefixes: ['180'] }] }).agencies
+      assert.equal(issiPick('1804133', stale), 'PSD', 'its ISSI prefixes were seeded, and they work')
+      assert.deepEqual(optionPrefixes(stale[0]), ['180'], 'the stale list is still on the record')
     })
   })
 })
 
-// The ISSI answers the same "whose is it" question the Tel number does, off its
-// own list. Two numbering systems, matched independently — which is what lets
-// an agency hold different digits on each, or only one of the two.
+// The ISSI answers "whose radio is it", and it is the only number that does.
+// Read against the agencies' own list, so the same digits may mean one thing
+// here and something else among the models.
 describe('issiPick', () => {
   const { agencies, models } = mergeOptions(undefined)
 
@@ -468,9 +465,7 @@ describe('optionFullForm', () => {
   test('it survives the merge and does not disturb the prefix seeding', () => {
     const out = mergeOptions({ agencies: [{ name: 'PSD', fullForm: 'PUBLIC SECURITY DEPARTMENT' }] })
     assert.equal(optionFullForm(out.agencies[0]), 'PUBLIC SECURITY DEPARTMENT')
-    assert.deepEqual(optionPrefixes(out.agencies[0]), ['180'])
     assert.deepEqual(optionIssiPrefixes(out.agencies[0]), ['180'])
-    assert.equal(telPick('1804133', out.agencies), 'PSD')
     assert.equal(issiPick('1804133', out.agencies), 'PSD')
   })
 })
