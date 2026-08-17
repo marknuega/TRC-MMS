@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
-import { hasRtoAction, isRtoAction, seriesFor } from '../src/routes/savedReports.js'
+import { hasRtoAction, isRtoAction, seriesFor, requestedDate, requestedDocNumber } from '../src/routes/savedReports.js'
 
 // RTO (Return to Owner) = the device went back untouched, so no part was used.
 // A snapshot containing one is saved as reference-only.
@@ -94,5 +94,64 @@ describe('seriesFor', () => {
       seriesFor('transmittal', false), seriesFor('transmittal', true),
     ]
     assert.deepEqual([...new Set(all)].sort(), ['REF', 'REP', 'TRANS'])
+  })
+})
+
+// A save can name its own date and number — the report written up a day late,
+// or the number that has to match a document already issued on paper. Both are
+// validated at the route, which is the only thing a request has to get past.
+describe('requestedDate', () => {
+  test('absent means "use the dates the entries already carry"', () => {
+    assert.deepEqual(requestedDate(undefined), { value: null })
+    assert.deepEqual(requestedDate(null), { value: null })
+    assert.deepEqual(requestedDate(''), { value: null })
+  })
+
+  test('a plain YYYY-MM-DD passes through', () => {
+    assert.deepEqual(requestedDate('2026-08-15'), { value: '2026-08-15' })
+  })
+
+  test('an ISO timestamp is cut down to its day', () => {
+    assert.deepEqual(requestedDate('2026-08-15T09:30:00.000Z'), { value: '2026-08-15' })
+  })
+
+  // Date() rolls 31 February forward into March. A report filed silently on a
+  // day nobody chose is worse than a refused save.
+  test('a date that does not exist is refused, not rolled forward', () => {
+    assert.match(requestedDate('2026-02-31').error, /not a real date/)
+    assert.match(requestedDate('2026-13-01').error, /not a real date/)
+  })
+
+  test('anything not shaped like a date is refused', () => {
+    for (const v of ['15/08/2026', 'yesterday', '2026-8-5', 42]) {
+      assert.ok(requestedDate(v).error, `${v} should be refused`)
+    }
+  })
+})
+
+describe('requestedDocNumber', () => {
+  test('absent means "draw the next one in the series"', () => {
+    assert.deepEqual(requestedDocNumber(undefined), { value: null })
+    assert.deepEqual(requestedDocNumber(''), { value: null })
+  })
+
+  test('a whole number is taken as the document number', () => {
+    assert.deepEqual(requestedDocNumber(19), { value: 19 })
+    assert.deepEqual(requestedDocNumber('19'), { value: 19 }) // JSON from a text input
+  })
+
+  // 0 would render as A001 (blockNumber clamps), i.e. silently the FIRST
+  // document of the series rather than the one asked for.
+  test('zero, negatives and fractions are refused', () => {
+    for (const v of [0, -1, 1.5, '2.5']) assert.ok(requestedDocNumber(v).error, `${v} should be refused`)
+  })
+
+  test('the ceiling is where the short id runs out of letters', () => {
+    assert.deepEqual(requestedDocNumber(26 * 999), { value: 25974 }) // Z999
+    assert.ok(requestedDocNumber(26 * 999 + 1).error)
+  })
+
+  test('anything not a number is refused', () => {
+    for (const v of ['A019', 'nineteen', {}]) assert.ok(requestedDocNumber(v).error, `${v} should be refused`)
   })
 })

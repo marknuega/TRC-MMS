@@ -72,17 +72,20 @@ if (typeof window !== 'undefined') {
   window.addEventListener('offline', () => notify())
 }
 
-// Build ?mode=&branch= — branch lets admins target one branch (non-admins are
-// scoped to their own branch server-side regardless).
-const scopeQs = (mode, branch) => {
+// Build ?mode=&branch=&region= — branch lets admins target one branch and
+// region lets them narrow to one region's branches (non-admins are scoped
+// server-side regardless, and a director's own region always wins). Absent
+// means unnarrowed, so nothing has to agree on a sentinel value.
+const scopeQs = (mode, branch, region) => {
   const p = new URLSearchParams()
   if (mode) p.set('mode', mode)
   if (branch) p.set('branch', branch)
+  if (region) p.set('region', region)
   const s = p.toString()
   return s ? `?${s}` : ''
 }
 
-export const listEntries = (mode, branch) => request(`/api/reports${scopeQs(mode, branch)}`)
+export const listEntries = (mode, branch, region) => request(`/api/reports${scopeQs(mode, branch, region)}`)
 
 export const createEntry = (entry) =>
   request('/api/reports', { method: 'POST', body: JSON.stringify(entry) })
@@ -134,9 +137,15 @@ export const saveMonthly = (month, branch, data) =>
 export const clearMonthly = (month, branch) =>
   request(`/api/monthly${monthlyQs(month, branch)}`, { method: 'DELETE' })
 
-const branchQs = (branch) => (branch ? `?branch=${encodeURIComponent(branch)}` : '')
+const branchQs = (branch, region) => {
+  const p = new URLSearchParams()
+  if (branch) p.set('branch', branch)
+  if (region) p.set('region', region)
+  const s = p.toString()
+  return s ? `?${s}` : ''
+}
 
-export const getInventory = (branch) => request(`/api/inventory${branchQs(branch)}`)
+export const getInventory = (branch, region) => request(`/api/inventory${branchQs(branch, region)}`)
 
 export const createInventory = (item) =>
   request('/api/inventory', { method: 'POST', body: JSON.stringify(item) })

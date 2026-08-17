@@ -99,7 +99,7 @@ function downloadCsv(filename, items) {
 
 const isLow = (i) => i.lowStock > 0 && i.avail <= i.lowStock
 
-export default function Inventory({ embedded = false, branch = '' }) {
+export default function Inventory({ embedded = false, branch = '', region = '' }) {
   const [items, setItems] = useState([])
   const [openState, setOpen] = useState(false)
   const open = embedded || openState
@@ -171,7 +171,7 @@ export default function Inventory({ embedded = false, branch = '' }) {
 
   async function refresh() {
     try {
-      setItems(await getInventory(branch))
+      setItems(await getInventory(branch, region))
       setLoaded(true)
     } catch (e) {
       setError(e.message)
@@ -180,11 +180,14 @@ export default function Inventory({ embedded = false, branch = '' }) {
   useEffect(() => {
     if (open && !loaded) refresh()
   }, [open, loaded])
-  // Admin switching the branch selector re-scopes the inventory list.
+  // Admin switching the branch OR region selector re-scopes the list. Region
+  // matters even when the branch has not changed: "all branches" under a region
+  // is that region's stock only, and stale rows from outside it would be listed
+  // and totalled as if they were the region's own.
   useEffect(() => {
     if (open) refresh()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [branch])
+  }, [branch, region])
 
   const stores = useMemo(() => [...new Set(items.map((i) => i.store).filter(Boolean))].sort(), [items])
   const filtered = useMemo(() => {

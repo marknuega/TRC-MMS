@@ -26,7 +26,7 @@ import {
 import { onSyncChange } from './offline'
 import { advanceOnEnter } from './focusNav'
 import {
-  DEFAULT_OPTIONS, mergeOptions, MODEL_TYPE, BRANCHES, ALL_BRANCHES,
+  DEFAULT_OPTIONS, mergeOptions, MODEL_TYPE, BRANCHES, ALL_BRANCHES, ALL_REGIONS,
   materialName, materialDescMap, issueName, issueCode, technicianName,
 } from './options'
 import ManageInputs from './ManageInputs'
@@ -59,6 +59,8 @@ import {
   classify,
   shortDocId,
   shortIdOf,
+  blockNumber,
+  parseBlockNumber,
   seriesOf,
   docIdMatches,
   displayNumber,
@@ -229,6 +231,18 @@ function searchInside(list, query) {
     }
   }
   return out.slice(0, 300)
+}
+
+// The region an ADMIN is looking at. Only an admin has a choice to remember: a
+// director runs one region and a plain user belongs to one branch, so for them
+// the region is derived from who they are, every render, and never stored.
+const REGION_KEY = 'trc_region'
+const loadRegion = () => {
+  try {
+    return localStorage.getItem(REGION_KEY) || ''
+  } catch {
+    return ''
+  }
 }
 
 const BRANCH_KEY = 'trc_branch'
@@ -426,7 +440,7 @@ function App({ user, onLogout }) {
   const [copied, setCopied] = useState(false)
   const [loading, setLoading] = useState(true)
   const [options, setOptions] = useState(DEFAULT_OPTIONS)
-  const [saved, setSaved] = useState([])
+  const [savedAll, setSavedAll] = useState([]) // as fetched; read through `saved` below
   const [savedOpen, setSavedOpen] = useState(false)
   const [savedSearch, setSavedSearch] = useState('')
   const [savedRefOpen, setSavedRefOpen] = useState(false)
@@ -463,12 +477,71 @@ function App({ user, onLogout }) {
   const isAllBranches = (isAdmin || isDirector) && branch === ALL_BRANCHES
   // Monthly follows the same shared branch selection ('' = all branches).
   const monthBranch = isAllBranches ? '' : branch
+
+  // ---- Region ------------------------------------------------------------
+  // Only an admin CHOOSES a region; everyone else is simply told theirs, so the
+  // toolbar states it rather than offering it. A director carries their region
+  // on their account; a plain user does not (User.region is populated only for
+  // directors), so theirs is the region whose membership contains their branch.
+  const [adminRegion, setAdminRegion] = useState(loadRegion)
+  // Memoised for its IDENTITY, not its cost: the `?? {}` fallback would be a
+  // fresh object every render, and the saved-report filter below is keyed on it.
+  const regionMap = useMemo(() => options.regions ?? {}, [options.regions])
+  const regionNames = useMemo(() => Object.keys(regionMap), [regionMap])
+  const regionOfBranch = (b) => regionNames.find((r) => (regionMap[r] ?? []).includes(b)) ?? ''
+  // The region actually in force. '' means unnarrowed, which only an admin can
+  // be in — and is what a branch belonging to no region resolves to, so such a
+  // branch stays reachable instead of falling out of the app.
+  const region = isAdmin ? adminRegion : isDirector ? user.region ?? '' : regionOfBranch(user?.branch ?? '')
+  const regionBranches = regionMap[region] ?? []
+  // "Western Region" reads as "Western" where it sits beside other words —
+  // the word Region is what the toolbar label already says.
+  const regionShort = region.replace(/\s*Region$/i, '')
+  // e.g. "Admin · Western · all branches", or "Admin · all branches" unnarrowed.
+  const adminScopeLabel = `Admin${region ? ` · ${regionShort}` : ''} · all branches`
+
   // Live, admin-managed branch list (falls back to the built-in defaults).
-  // A director's workspace is exactly their region's branches, not the full list.
-  const branchList = isDirector ? options.regions?.[user.region] ?? [] : options.branches?.length ? options.branches : BRANCHES
+  // A director's workspace is exactly their region's branches; an admin's is
+  // the selected region's, or every branch when no region is selected.
+  const branchList = isDirector
+    ? options.regions?.[user.region] ?? []
+    : isAdmin && region
+      ? regionBranches
+      : options.branches?.length
+        ? options.branches
+        : BRANCHES
+  // Saved documents, narrowed to the region in force.
+  //
+  // THE choke point for region isolation. `saved` feeds far more than the list
+  // it is drawn in — nextSeriesNumber, the monthly matrices, the spare-parts
+  // report and the dashboard summaries all derive from it — so one out-of-region
+  // row here would be counted by every one of them at once, silently: nothing
+  // would look wrong, the totals would just be larger than the truth. Filtering
+  // in one place is what makes "this region's branches only" a property of the
+  // data every view reads, rather than a rule each view has to remember.
+  //
+  // The server scopes the other reads by region directly (see branchWhere in
+  // server/src/scope.js). This one is filtered here instead because the saved
+  // list is fetched on a fixed path that offline.js reads back by name when it
+  // queues a save — adding a query string to it would leave that cache lookup
+  // pointing at a key nothing writes.
+  const saved = useMemo(() => {
+    if (!region) return savedAll
+    const allowed = new Set(regionMap[region] ?? [])
+    return savedAll.filter((r) => allowed.has(r.branch ?? ''))
+  }, [savedAll, region, regionMap])
+
   const [theme, setTheme] = useState(loadTheme)
   const [mode, setMode] = useState(loadMode)
   const [numberMode, setNumberMode] = useState(loadNumberMode)
+  // The date and document number the pending save will take, when they have
+  // been chosen by hand. null on both means "follow the automatic ones" — the
+  // date the entries carry, and the next number in the series — which is the
+  // normal case and the state a fresh save always returns to.
+  const [docOverride, setDocOverride] = useState(null) // document number, e.g. 19
+  const [dateOverride, setDateOverride] = useState(null) // 'YYYY-MM-DD'
+  const [headerEdit, setHeaderEdit] = useState(null) // { date, id } while the editor is open
+  const [headerError, setHeaderError] = useState('')
   // Each branch has its OWN document series — derive the next id for the branch
   // in view (All Branches previews the unassigned '' series; saving is off there).
   const seriesBranch = isAllBranches ? '' : branch
@@ -491,6 +564,24 @@ function App({ user, onLogout }) {
   useEffect(() => {
     if (isDirector && branch !== ALL_BRANCHES && !branchList.includes(branch)) setBranch(ALL_BRANCHES)
   }, [isDirector, branch, branchList])
+  // The same guard for an admin who has narrowed to a region: the branch they
+  // had selected may not be in it. Falling back to All-Branches means the view
+  // becomes "everything in this region", which is the honest answer — leaving
+  // the old branch selected would show one region's toolbar over another
+  // region's data.
+  useEffect(() => {
+    if (isAdmin && region && branch !== ALL_BRANCHES && !regionBranches.includes(branch)) setBranch(ALL_BRANCHES)
+  }, [isAdmin, region, branch, regionBranches])
+  // A persisted region an admin can no longer see — renamed or deleted since —
+  // must not leave them looking at an empty branch list with no way back.
+  useEffect(() => {
+    if (isAdmin && adminRegion && regionNames.length && !regionNames.includes(adminRegion)) setAdminRegion('')
+  }, [isAdmin, adminRegion, regionNames])
+  // Remembered like the branch beside it, and only for the admin who has a
+  // choice to remember.
+  useEffect(() => {
+    if (isAdmin) lsSet(REGION_KEY, adminRegion)
+  }, [isAdmin, adminRegion])
   // Keep users off pages their role can't reach.
   useEffect(() => {
     const item = NAV.find((n) => n.id === page)
@@ -539,8 +630,16 @@ function App({ user, onLogout }) {
   // The next id a Save would mint, for the current document type — in both
   // forms, so the preview shows what the saved report will actually carry.
   const nextSeries = isTransmittal ? 'TRANS' : willBeReferenceOnly ? 'REF' : 'REP'
-  const nextDocId = isTransmittal ? nextTransId : willBeReferenceOnly ? nextRefId : nextReportId
-  const nextShortId = shortDocId(seriesBranch, nextSeries, nextSeriesNumber(saved, nextSeries, seriesBranch))
+  const autoDocId = isTransmittal ? nextTransId : willBeReferenceOnly ? nextRefId : nextReportId
+  // A number chosen by hand replaces the one the series offered — in BOTH
+  // renderings, so the preview, the print sheet, the TXT and the PDF filename
+  // are all showing the number the save is actually about to take.
+  const nextDocId = docOverride == null ? autoDocId : `${nextSeries}-${pad4(docOverride)}`
+  const nextShortId = shortDocId(
+    seriesBranch,
+    nextSeries,
+    docOverride ?? nextSeriesNumber(saved, nextSeries, seriesBranch),
+  )
 
   // The browser's "Save as PDF" dialog seeds its filename from document.title,
   // so every saved PDF carries the id of the document inside it — e.g. "TRC
@@ -593,6 +692,18 @@ function App({ user, onLogout }) {
   useEffect(() => {
     lsSet(NUMBERS_KEY, numberMode)
   }, [numberMode])
+
+  // A hand-picked date and number belong to ONE pending document. The moment
+  // that document changes underneath them — a different branch, a different
+  // mode, or an RTO arriving and turning a REP into a REF — they are answers to
+  // a question nobody asked any more, and a number chosen in the REP series is
+  // not even valid in the REF one. Dropped rather than carried across.
+  useEffect(() => {
+    setDocOverride(null)
+    setDateOverride(null)
+    setHeaderEdit(null)
+    setHeaderError('')
+  }, [branch, mode, nextSeries])
 
   // Auto-collapse the sidebar when the window gets narrow (never auto-expands,
   // so a manual choice on a wide screen is respected).
@@ -652,7 +763,7 @@ function App({ user, onLogout }) {
     // Re-fetch the working entries for the newly selected branch right away
     // (All Branches = '' = every branch — admin sees all, director their region).
     refresh(mode, (isAdmin || isDirector) && b === ALL_BRANCHES ? '' : b)
-    getInventory((isAdmin || isDirector) && b === ALL_BRANCHES ? '' : b).then(setInventory).catch(() => {})
+    getInventory((isAdmin || isDirector) && b === ALL_BRANCHES ? '' : b, region).then(setInventory).catch(() => {})
   }
   const changeBranch = (e) => selectBranch(e.target.value)
 
@@ -660,7 +771,7 @@ function App({ user, onLogout }) {
   // (defaults to the current one).
   async function refresh(m = mode, b = isAllBranches ? '' : branch) {
     try {
-      const list = await listEntries(m, b)
+      const list = await listEntries(m, b, region)
       setEntries(list)
       lastEntriesSig.current = entriesSig(list) // keep the live-poll baseline current
       setError(null)
@@ -682,14 +793,14 @@ function App({ user, onLogout }) {
         .join('|')
       if (sig !== lastSavedSig.current) {
         lastSavedSig.current = sig
-        setSaved(reports)
+        setSavedAll(reports)
       }
     } catch {
       /* leave the saved list as-is if the endpoint is unavailable */
     }
   }
 
-  const refreshInventory = () => getInventory(isAllBranches ? '' : branch).then(setInventory).catch(() => {})
+  const refreshInventory = () => getInventory(isAllBranches ? '' : branch, region).then(setInventory).catch(() => {})
 
   function reloadAll() {
     refresh()
@@ -723,7 +834,7 @@ function App({ user, onLogout }) {
     const poll = async () => {
       if (document.hidden || busy) return // don't fight an in-flight save/edit
       try {
-        const list = await listEntries(mode, isAllBranches ? '' : branch)
+        const list = await listEntries(mode, isAllBranches ? '' : branch, region)
         if (cancelled) return
         const sig = entriesSig(list)
         if (lastEntriesSig.current && sig !== lastEntriesSig.current) {
@@ -750,7 +861,22 @@ function App({ user, onLogout }) {
       document.removeEventListener('visibilitychange', onVisible)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, busy, branch, isAllBranches])
+  }, [mode, busy, branch, isAllBranches, region])
+
+  // Narrowing to another region changes what the server may return, so the
+  // entries and the stock have to be re-fetched under it — the saved list does
+  // not, being filtered from what is already held. Skipped on the first render,
+  // where reloadAll() has just run.
+  const didLoad = useRef(false)
+  useEffect(() => {
+    if (!didLoad.current) {
+      didLoad.current = true
+      return
+    }
+    refresh()
+    refreshInventory()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [region])
 
   // Offline status pill + refetch fresh data once queued writes have synced.
   useEffect(() => {
@@ -768,8 +894,23 @@ function App({ user, onLogout }) {
   async function handleSaveReport() {
     setBusy(true)
     try {
-      const rep = await saveReport({ branch, mode, transmittedBy: reportTransmittedBy, receivedBy: reportReceivedBy })
+      // The overrides ride along only when they were actually set; left off,
+      // the server draws the date from the entries and the number from the
+      // series exactly as it always has. It re-checks both — the number can be
+      // taken between the preview and the save.
+      const rep = await saveReport({
+        branch,
+        mode,
+        transmittedBy: reportTransmittedBy,
+        receivedBy: reportReceivedBy,
+        ...(dateOverride ? { reportDate: dateOverride } : {}),
+        ...(docOverride == null ? {} : { docNumber: docOverride }),
+      })
       setError(null)
+      // Spent: this document now exists under them, and the next save starts
+      // from the automatic date and the next free number again.
+      setDocOverride(null)
+      setDateOverride(null)
       await refresh() // saving auto-clears the working set server-side — reflect it
       await refreshSaved()
       refreshInventory() // stock was deducted server-side for matched items
@@ -815,12 +956,12 @@ function App({ user, onLogout }) {
   async function handleToggleReference(rep) {
     const next = !rep.isReferenceOnly
     // Paint it straight away; refreshSaved() below reconciles with the server.
-    setSaved((list) => list.map((r) => (r.id === rep.id ? { ...r, isReferenceOnly: next } : r)))
+    setSavedAll((list) => list.map((r) => (r.id === rep.id ? { ...r, isReferenceOnly: next } : r)))
     try {
       await setSavedReportReference(rep.id, next)
       await refreshSaved()
     } catch (err) {
-      setSaved((list) => list.map((r) => (r.id === rep.id ? { ...r, isReferenceOnly: !next } : r)))
+      setSavedAll((list) => list.map((r) => (r.id === rep.id ? { ...r, isReferenceOnly: !next } : r)))
       setError(err.message)
     }
   }
@@ -1103,20 +1244,88 @@ function App({ user, onLogout }) {
       const label = dates.length <= 1 ? dates[0] ?? '' : `${dates[0]} … ${dates[dates.length - 1]}`
       return [buildDateReport(label, id, entries, handover)]
     }
+    const opts = {
+      branch,
+      mode,
+      numberMode,
+      transmittedBy: reportTransmittedBy,
+      receivedBy: reportReceivedBy,
+      shortId: nextShortId,
+    }
+    // A date chosen by hand re-dates every entry, so the day they were split
+    // across stops being a division: one date means one document, which is also
+    // exactly what the save will write. Preview and record agree by shape, not
+    // by luck.
+    if (dateOverride) {
+      return [buildDateReport(dmyOf(dateOverride), repLabel(nextDocId, branch, mode), entries, opts)]
+    }
     return groupReports(entries).map((g) =>
-      buildDateReport(g.dateLabel, repLabel(nextDocId, branch, mode), g.entries, {
-        branch,
-        mode,
-        numberMode,
-        transmittedBy: reportTransmittedBy,
-        receivedBy: reportReceivedBy,
-        shortId: nextShortId,
-      }),
+      buildDateReport(g.dateLabel, repLabel(nextDocId, branch, mode), g.entries, opts),
     )
-  }, [isAllBranches, form.reportDate, saved, entries, nextDocId, nextShortId, branch, mode, numberMode, reportTransmittedBy, reportReceivedBy])
+  }, [isAllBranches, form.reportDate, saved, entries, dateOverride, nextDocId, nextShortId, branch, mode, numberMode, reportTransmittedBy, reportReceivedBy])
   // buildTxt folds the Agency Summary in (daily reports only), so this single
   // string is what the box shows, what ⭳ Text writes, and what a copy yields.
   const combinedTxt = useMemo(() => reports.map(buildTxt).join('\n\n\n'), [reports])
+
+  // ---- The date and number a save would take on its own -------------------
+  // What the editor opens on, and what an edit is measured against: a field
+  // left at its automatic value sets no override at all, so it keeps tracking
+  // (another entry on an earlier day still moves the date; another branch's
+  // save still moves the number) instead of freezing at whatever it read when
+  // the editor happened to be opened.
+  const autoNumber = nextSeriesNumber(saved, nextSeries, seriesBranch)
+  const autoDate = useMemo(() => {
+    const days = (entries ?? []).map((e) => String(e.reportDate ?? '').slice(0, 10)).filter(Boolean).sort()
+    return days[0] ?? '' // earliest, matching the label the save writes
+  }, [entries])
+  // Everything in the short id except the number: "MAK-REP-". Shown beside the
+  // input, unedited, because branch and series are not the saver's to choose —
+  // they follow the branch selector and the RTO rule.
+  const shortIdPrefix = nextShortId.slice(0, nextShortId.lastIndexOf('-') + 1)
+
+  function openHeaderEdit() {
+    setHeaderError('')
+    setHeaderEdit({
+      date: dateOverride ?? autoDate,
+      id: nextShortId.slice(nextShortId.lastIndexOf('-') + 1),
+    })
+  }
+
+  // Take the typed date and number for the pending save. Both are checked here
+  // so a mistake is answered at the point it was made, in the field it was made
+  // in — the server checks them again at save time, where it is the authority
+  // on a number that was still free a moment ago.
+  function applyHeaderEdit(e) {
+    e.preventDefault()
+    const date = String(headerEdit?.date ?? '').trim()
+    const typed = String(headerEdit?.id ?? '').trim()
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return setHeaderError('Pick a date for this report')
+    const n = parseBlockNumber(typed)
+    if (n == null) return setHeaderError(`"${typed}" is not a document number — try ${blockNumber(autoNumber)}, or ${autoNumber}`)
+
+    // The one the database would refuse, named the way its holder reads it.
+    const clash = (saved ?? []).find(
+      (r) => seriesOf(r) === nextSeries && String(r.branch ?? '') === String(seriesBranch) && (r.docNumber ?? 0) === n,
+    )
+    if (clash) {
+      return setHeaderError(`${shortLabel(clash)} already exists (${clash.dateLabel}) — choose another number`)
+    }
+
+    // Only a value that actually differs becomes an override. Applying the
+    // editor unchanged must leave the document exactly as it was found.
+    setDateOverride(date === autoDate ? null : date)
+    setDocOverride(n === autoNumber ? null : n)
+    setHeaderEdit(null)
+    setHeaderError('')
+  }
+
+  function clearHeaderEdit() {
+    setDateOverride(null)
+    setDocOverride(null)
+    setHeaderEdit(null)
+    setHeaderError('')
+  }
 
   // Agency dropdown order: the one picked last sits on top, then the rest by how
   // often they have actually been used (saved reports + the working set), with
@@ -1594,7 +1803,11 @@ function App({ user, onLogout }) {
               <span className="side-ico">{isAdmin ? '👑' : isDirector ? '🧭' : '👤'}</span>
               <span className="side-label">
                 {user?.username}
-                <small>{isAdmin ? 'Admin · all branches' : isDirector ? `${user?.region} · Director` : user?.branch || 'User'}</small>
+                {/* An admin's line states the region they are narrowed to, so
+                    what they are looking at is readable without going back to
+                    the toolbar — "Admin · all branches" is true of the account,
+                    but it is not true of the view once a region is chosen. */}
+                <small>{isAdmin ? adminScopeLabel : isDirector ? `${user?.region} · Director` : user?.branch || 'User'}</small>
               </span>
             </span>
             <button type="button" className="side-logout" onClick={onLogout} title="Sign out">
@@ -1622,6 +1835,26 @@ function App({ user, onLogout }) {
                   { value: 'transmittal', label: 'Transmittal Report' },
                 ]}
               />
+            </label>
+            {/* Region sits between Mode and Branch because that is the order the
+                choice narrows in: what kind of document, then whose branches,
+                then which one. Only an admin picks — a director runs one region
+                and a plain user belongs to one branch, so for them it states a
+                fact rather than offering a choice, the same way Branch is a
+                read-only field for a plain user below. */}
+            <label className="date-field">
+              Region
+              {isAdmin ? (
+                <SearchSelect
+                  value={adminRegion || ALL_REGIONS}
+                  onChange={(e) => setAdminRegion(e.target.value === ALL_REGIONS ? '' : e.target.value)}
+                  options={[...regionNames, ALL_REGIONS]}
+                />
+              ) : (
+                // A branch in no region has none to state. A dash, not a blank:
+                // an empty box reads as "still loading" or "you forgot to pick".
+                <input value={region || '—'} readOnly aria-label="Region" />
+              )}
             </label>
             <label className="date-field">
               Branch
@@ -2113,8 +2346,27 @@ function App({ user, onLogout }) {
               Report text{' '}
               {/* The id the pending save will draw, in the form the saved
                   document will be shown by — the same one printed in the
-                  report text below it. */}
-              {reports.length > 0 && <span className="hint">(next: {nextShortId} · unsaved)</span>}
+                  report text below it. Editable, because a report written up a
+                  day late belongs to the day it describes, and a number
+                  sometimes has to match a document already issued on paper.
+                  Not offered for All Branches, which is a merged read-only view
+                  that cannot be saved at all. */}
+              {reports.length > 0 && (
+                <span className="hint">
+                  (next: {nextShortId} · unsaved
+                  {(dateOverride || docOverride != null) && <b className="hint-edited"> · edited</b>})
+                  {!isAllBranches && !headerEdit && (
+                    <button
+                      type="button"
+                      className="hint-edit"
+                      onClick={openHeaderEdit}
+                      title="Change the date and number this save will take"
+                    >
+                      ✎ Edit
+                    </button>
+                  )}
+                </span>
+              )}
             </h2>
             <div className="breakdown-actions">
               <button type="button" className="btn-txt" onClick={handleCopyTxt} disabled={!reports.length}>
@@ -2180,6 +2432,50 @@ function App({ user, onLogout }) {
               <Toast message={saveToast} onDone={() => setSaveToast('')} />
             </div>
           </div>
+          {/* Date and number for the pending save. Applying only stages them —
+              the document is written by Save, as it always was, so this cannot
+              become a second way to save something. */}
+          {headerEdit && (
+            <form className="header-edit" onSubmit={applyHeaderEdit}>
+              <label>
+                <span>Date</span>
+                <input
+                  type="date"
+                  value={headerEdit.date}
+                  onChange={(e) => setHeaderEdit((h) => ({ ...h, date: e.target.value }))}
+                />
+              </label>
+              <label>
+                <span>Report ID</span>
+                <span className="id-field">
+                  <i>{shortIdPrefix}</i>
+                  <input
+                    value={headerEdit.id}
+                    onChange={(e) => setHeaderEdit((h) => ({ ...h, id: e.target.value }))}
+                    // A019 and 19 are the same document, so both are read (see
+                    // parseBlockNumber) and neither is corrected under anyone.
+                    placeholder={blockNumber(autoNumber)}
+                    size={6}
+                    autoFocus
+                  />
+                </span>
+              </label>
+              <span className="header-edit-actions">
+                <button type="submit">Apply</button>
+                <button type="button" className="ghost" onClick={clearHeaderEdit}>
+                  Use automatic
+                </button>
+                <button type="button" className="ghost" onClick={() => { setHeaderEdit(null); setHeaderError('') }}>
+                  Cancel
+                </button>
+              </span>
+              {headerError && <p className="header-edit-error">{headerError}</p>}
+              <p className="header-edit-note">
+                Applies when you Save. The date moves the entries themselves, so the monthly and spare-parts
+                totals follow it.
+              </p>
+            </form>
+          )}
           {/* One box: the Agency Summary is now part of the report text itself,
               so what you read here is exactly what Text/PDF export and what a
               select-all copy puts on the clipboard. */}
@@ -2422,7 +2718,7 @@ function App({ user, onLogout }) {
 
           {page === 'agency' && <AgencyTotals saved={saved} branches={branchList} branchSel={branch} onBranch={selectBranch} embedded lockBranch={lockBranch} />}
 
-          {page === 'inventory' && <Inventory embedded branch={isAllBranches ? '' : branch} />}
+          {page === 'inventory' && <Inventory embedded branch={isAllBranches ? '' : branch} region={region} />}
 
           {page === 'reference' && <ReferenceCard isAdmin={isAdmin} issueTypes={options.issueTypes} />}
 

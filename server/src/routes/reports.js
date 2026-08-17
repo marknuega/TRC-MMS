@@ -30,7 +30,7 @@ router.get('/', async (req, res, next) => {
   try {
     const [entries, ids] = await Promise.all([
       prisma.reportEntry.findMany({
-        where: { ...modeWhere(req), ...branchWhere(req, req.query.branch) },
+        where: { ...modeWhere(req), ...branchWhere(req, req.query.branch, req.query.region) },
         orderBy: [{ reportDate: 'desc' }, { id: 'asc' }],
         take: 500,
         include: withFaults,
@@ -62,7 +62,7 @@ router.post('/', async (req, res, next) => {
 router.delete('/', async (req, res, next) => {
   try {
     const { count } = await prisma.reportEntry.deleteMany({
-      where: { ...modeWhere(req), ...branchWhere(req, req.query.branch) },
+      where: { ...modeWhere(req), ...branchWhere(req, req.query.branch, req.query.region) },
     })
     res.json({ cleared: count })
   } catch (err) {

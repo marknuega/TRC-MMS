@@ -5,6 +5,9 @@ import { branchWhere, writeBranch, canAccessBranch } from '../scope.js'
 // built in one place rather than once per caller. See src/dailyText.js, which
 // also owns dmy() and repLabel().
 import { dailyReportText, dmy } from '../dailyText.js'
+// The id a document is shown by, so a clash names the OTHER document the way
+// its holder would read it — same rendering the page and the print sheet use.
+import { shortIdOf } from '../../../client/src/report.js'
 
 const router = Router()
 
@@ -100,6 +103,53 @@ async function nextDocNumber(series, branch) {
   return (max._max.docNumber ?? 0) + 1
 }
 
+// ---------------------------------------------------------------------------
+// Saving under a date or a number chosen by hand.
+//
+// Both are normally drawn automatically — the date from the entries, the number
+// from the series counter — and both can be overridden at the moment of saving,
+// for the report written up a day late or the number that has to match a
+// document already issued on paper.
+//
+// Each is validated here rather than trusted: the client offers the pair it
+// rendered, but a save is a write and the request is the only thing that
+// reaches this route.
+//
+// Both answer { value } or { error } instead of throwing. A thrown error would
+// reach the error middleware, which replaces every message with "Internal
+// server error" in production — and "that number is already taken" is precisely
+// the sentence the person saving needs to read.
+// ---------------------------------------------------------------------------
+
+// 'YYYY-MM-DD' -> itself; absent -> null (use the entries' own dates). A value
+// that is present but not a date is refused rather than ignored: falling back
+// would file the report on a day nobody chose.
+export function requestedDate(value) {
+  if (value == null || value === '') return { value: null }
+  const s = String(value).trim().slice(0, 10)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return { error: 'Report date must be YYYY-MM-DD' }
+  const d = new Date(`${s}T00:00:00.000Z`)
+  // Rejects 2026-02-31 and friends, which Date happily rolls forward into March.
+  if (Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== s) {
+    return { error: `${s} is not a real date` }
+  }
+  return { value: s }
+}
+
+// The point past which blockNumber runs out of letters (Z999) and the short id
+// degrades to a plain number. Past here it is a typo, not a filing decision.
+const MAX_DOC_NUMBER = 26 * 999
+
+// A whole number ≥ 1; absent -> null (draw the next one in the series).
+export function requestedDocNumber(value) {
+  if (value == null || value === '') return { value: null }
+  const n = Number(value)
+  if (!Number.isInteger(n) || n < 1 || n > MAX_DOC_NUMBER) {
+    return { error: `Document number must be a whole number between 1 and ${MAX_DOC_NUMBER}` }
+  }
+  return { value: n }
+}
+
 // GET /api/saved-reports - list newest first, plus the next id a Save would mint.
 router.get('/', async (req, res, next) => {
   try {
@@ -108,7 +158,7 @@ router.get('/', async (req, res, next) => {
     if (previewBranch === null) return res.status(400).json({ error: 'That branch is outside your region' })
     const [reports, repNo, refNo, transNo] = await Promise.all([
       prisma.savedReport.findMany({
-        where: branchWhere(req, req.query.branch),
+        where: branchWhere(req, req.query.branch, req.query.region),
         orderBy: { seq: 'desc' },
         select: {
           id: true, seq: true, docNumber: true, reportId: true, branch: true, mode: true, series: true,
@@ -142,7 +192,7 @@ router.get('/daily-text', async (req, res, next) => {
   try {
     res.json(
       await dailyReportText({
-        where: branchWhere(req, req.query.branch),
+        where: branchWhere(req, req.query.branch, req.query.region),
         mode: normMode(req.query?.mode),
         date: req.query?.date,
       }),
@@ -180,8 +230,16 @@ router.post('/', async (req, res, next) => {
       return res.status(400).json({ error: 'Nothing to save — add entries first' })
     }
 
+    // A date chosen by hand re-dates the whole snapshot, so the sheet and the
+    // roll-ups built from it (monthly, spare parts, agency) agree on when this
+    // work happened. Applied to the snapshot rather than to the working rows
+    // because those rows are deleted at the end of this same transaction — the
+    // snapshot IS the record from here on.
+    const chosenDate = requestedDate(req.body?.reportDate)
+    if (chosenDate.error) return res.status(400).json({ error: chosenDate.error })
+
     const snapshot = entries.map((e) => ({
-      reportDate: new Date(e.reportDate).toISOString().slice(0, 10),
+      reportDate: chosenDate.value ?? new Date(e.reportDate).toISOString().slice(0, 10),
       technician: e.technician,
       agency: e.agency,
       telNumber: e.telNumber,
@@ -213,7 +271,28 @@ router.post('/', async (req, res, next) => {
     // save is a REF from the start rather than a REP that is corrected later.
     const series = seriesFor(mode, isReferenceOnly)
     const seq = await nextSeq()
-    const docNumber = await nextDocNumber(series, branch)
+
+    // A number chosen by hand takes the place of the next one in the series.
+    // The series itself is NOT chosen: it follows the mode and the RTO rule
+    // above, so a document can never be filed under a series its own contents
+    // contradict.
+    const chosenNumber = requestedDocNumber(req.body?.docNumber)
+    if (chosenNumber.error) return res.status(400).json({ error: chosenNumber.error })
+    const docNumber = chosenNumber.value ?? (await nextDocNumber(series, branch))
+
+    // Named before the write, so the answer is the id the holder of the other
+    // document would recognise rather than a constraint name. The unique index
+    // is still the authority — see the P2002 catch below, which covers the gap
+    // between this check and the insert.
+    if (chosenNumber.value != null) {
+      const taken = await prisma.savedReport.findFirst({ where: { series, branch, docNumber } })
+      if (taken) {
+        return res.status(409).json({
+          error: `${shortIdOf(taken)} already exists (saved ${taken.dateLabel || 'earlier'}) — choose another number`,
+        })
+      }
+    }
+
     const saved = await prisma.$transaction(async (tx) => {
       const created = await tx.savedReport.create({
         data: {
@@ -230,6 +309,12 @@ router.post('/', async (req, res, next) => {
     })
     res.status(201).json(saved)
   } catch (err) {
+    // Two saves racing for the same hand-picked number: the check above passed
+    // for both, and the unique index caught the loser. It is the same answer as
+    // the check, so it reads the same way.
+    if (err?.code === 'P2002') {
+      return res.status(409).json({ error: 'That document number was just taken — choose another number' })
+    }
     next(err)
   }
 })

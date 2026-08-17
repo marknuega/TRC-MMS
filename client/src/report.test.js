@@ -4,7 +4,7 @@ import {
   classify, entryCounts, technicianTotals, agencyBlocks, activityTotals, buildSparePartsReport,
   agencyComment, buildDateReport, buildTxt, deviceBlocksByType, setIssueClaims,
   isCountable, periodEntries, buildMonthlyMatrix, buildDayMatrix, buildYearMatrix,
-  dashboardSummary, monthlyTrend, shortDocId, shortIdOf, blockNumber, branchCode, seriesOf,
+  dashboardSummary, monthlyTrend, shortDocId, shortIdOf, blockNumber, parseBlockNumber, branchCode, seriesOf,
   docIdMatches, displayNumber,
 } from './report.js'
 import { DEFAULT_OPTIONS } from './options.js'
@@ -391,6 +391,60 @@ describe('short-form document ids', () => {
   test('no two shipped branches collide on their code', () => {
     const codes = DEFAULT_OPTIONS.branches.map(branchCode)
     assert.equal(new Set(codes).size, codes.length, `collision in ${codes.join(', ')}`)
+  })
+
+  // Reading back a number someone typed over the one that was offered.
+  describe('parseBlockNumber', () => {
+    test('is the exact inverse of blockNumber, at every block edge', () => {
+      for (const n of [1, 2, 998, 999, 1000, 1001, 1998, 25974]) {
+        assert.equal(parseBlockNumber(blockNumber(n)), n, `round trip ${n}`)
+      }
+    })
+
+    test('every way someone writes A019 names 19', () => {
+      for (const q of ['A019', 'a019', ' A019 ', 'MAK-REP-A019', 'REP-0019', '0019', '19']) {
+        assert.equal(parseBlockNumber(q), 19, `"${q}"`)
+      }
+    })
+
+    test('null for anything that names no number', () => {
+      // Never 0: blockNumber would render that A001 — silently the FIRST
+      // document — so the caller must be able to tell "unreadable" from a value.
+      for (const q of ['', '   ', 'A', 'ABC', 'A0', 'A000', '0', 'A1000', null, undefined]) {
+        assert.equal(parseBlockNumber(q), null, `"${q}"`)
+      }
+    })
+
+    // A dash is a separator, always — that is what lets a whole pasted id be
+    // read. So "-4" is the segment "4", not minus four; there is no spelling of
+    // a negative document number for it to be confused with.
+    test('a dash separates rather than negates', () => {
+      assert.equal(parseBlockNumber('-4'), 4)
+    })
+  })
+
+  // A branch belongs to ONE region. Two would make "this region's branches
+  // only" ambiguous — the same branch would be inside two different scopes at
+  // once, and the region a plain user is told they are in would depend on which
+  // key happened to be found first.
+  test('no branch belongs to two regions', () => {
+    const seen = new Map() // branch -> the region that claimed it
+    for (const [region, branches] of Object.entries(DEFAULT_OPTIONS.regions)) {
+      for (const b of branches) {
+        assert.equal(seen.get(b), undefined, `${b} is in both ${seen.get(b)} and ${region}`)
+        seen.set(b, region)
+      }
+    }
+  })
+
+  // Every branch the app ships with must be reachable when a region is selected,
+  // or it would be visible only in the All-regions view — present in the branch
+  // list, absent from every region that could plausibly contain it.
+  test('every shipped branch belongs to a region', () => {
+    const claimed = new Set(Object.values(DEFAULT_OPTIONS.regions).flat())
+    for (const b of DEFAULT_OPTIONS.branches) {
+      assert.ok(claimed.has(b), `${b} is in no region`)
+    }
   })
 
   test('seriesOf reads rows saved before the series column existed', () => {

@@ -8,6 +8,9 @@ import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { randomBytes } from 'node:crypto'
 import { prisma } from './db.js'
+// The built-in region map, imported rather than mirrored so this side and the
+// toolbar can never disagree about which regions exist or what is in them.
+import { DEFAULT_OPTIONS } from '../../client/src/options.js'
 
 // No fallback on purpose. A default secret here is a silent way to hand out
 // forgeable admin sessions: anyone who has read this file could sign their own
@@ -45,9 +48,17 @@ export function clearSession(res) {
   res.clearCookie(COOKIE, { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' })
 }
 
-// Populate req.user from the cookie when present (never rejects). A director
-// also gets req.regionBranches resolved here — the single place every
-// director-scoped request picks up which branches their region covers.
+// Populate req.user from the cookie when present (never rejects).
+//
+// The region map is resolved here too — the single place every region-scoped
+// request picks up which branches a region covers, so no route has to read
+// AppOptions for itself and none of them can disagree about the membership:
+//
+//   director -> req.regionBranches, the one region they run
+//   admin    -> req.regions, the whole map, because an admin may VIEW any one
+//               region and the branch list for it has to come from the server.
+//               A client-supplied list would let the caller name its own
+//               membership, which is the whole thing region scoping prevents.
 export async function loadUser(req, _res, next) {
   try {
     const token = req.cookies?.[COOKIE]
@@ -56,9 +67,19 @@ export async function loadUser(req, _res, next) {
       const user = await prisma.user.findUnique({ where: { id: claims.id } })
       if (user && user.active) {
         req.user = user
-        if (user.role === 'director' && user.region) {
+        const wantsRegions = user.role === 'admin' || (user.role === 'director' && user.region)
+        if (wantsRegions) {
           const opts = await prisma.appOptions.findUnique({ where: { id: 1 } })
-          req.regionBranches = opts?.data?.regions?.[user.region] ?? []
+          // The same fallback the client applies (mergeOptions spreads the
+          // stored map over DEFAULT_OPTIONS.regions), from the same module. An
+          // install that has never saved a region map still HAS the four built-in
+          // regions, and both sides agree on their membership — a region the
+          // toolbar offers but this side had never heard of would resolve to no
+          // branches and blank the whole app.
+          const stored = opts?.data?.regions
+          const regions = { ...DEFAULT_OPTIONS.regions, ...(stored && typeof stored === 'object' ? stored : {}) }
+          if (user.role === 'admin') req.regions = regions
+          else req.regionBranches = regions[user.region] ?? []
         }
       }
     }

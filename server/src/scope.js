@@ -39,19 +39,46 @@ export function writeBranch(req, requested) {
   return req.user?.branch || ''
 }
 
-// A Prisma where-fragment limiting reads to what this user may see.
-// Plain user: only their branch. Director: their region, or one in-region
-// branch if asked. Admin: all, or one branch if asked.
-export function branchWhere(req, requested) {
+// Nothing at all. A region with no branches must read as "no rows", never as
+// "no filter" — the empty `where` an admin gets means EVERY branch in the
+// company, which is the one answer a region scope must never collapse to.
+const NOTHING = { branch: '__none__' }
+
+/**
+ * A Prisma where-fragment limiting reads to what this user may see.
+ *
+ * Plain user: only their branch. Director: their region, or one in-region
+ * branch if asked. Admin: all, or one region, or one branch.
+ *
+ * `region` is an admin's VIEW scope — the region selected in the toolbar. It
+ * only ever narrows: an admin already sees everything, so naming a region can
+ * remove branches from the answer and can never add one. Its membership is read
+ * from req.regions (resolved in auth.js from AppOptions), never from the
+ * request, so the caller names the region but the server decides what is in it.
+ */
+export function branchWhere(req, requested, region) {
   if (isAdmin(req)) {
     const b = String(requested ?? '').trim()
-    return b && b !== ALL ? { branch: b } : {}
+    const r = String(region ?? '').trim()
+    // No region named: every branch, or the one asked for — unchanged.
+    if (!r) return b && b !== ALL ? { branch: b } : {}
+
+    const inRegion = req.regions?.[r] ?? []
+    // A branch outside the named region matches nothing rather than being
+    // served anyway. The toolbar cannot offer such a pairing, so a request
+    // carrying one is stale or hand-made; either way the region wins, because
+    // a region view showing another region's branch is the exact failure this
+    // scope exists to prevent.
+    if (b && b !== ALL) return inRegion.includes(b) ? { branch: b } : NOTHING
+    return inRegion.length ? { branch: { in: inRegion } } : NOTHING
   }
   if (isDirector(req)) {
-    const region = req.regionBranches || []
+    // A director's region is fixed, so the requested one is ignored rather than
+    // intersected: there is nothing for it to narrow that is not already theirs.
+    const own = req.regionBranches || []
     const b = String(requested ?? '').trim()
-    if (b && b !== ALL) return region.includes(b) ? { branch: b } : { branch: '__none__' }
-    return { branch: { in: region } }
+    if (b && b !== ALL) return own.includes(b) ? { branch: b } : NOTHING
+    return { branch: { in: own } }
   }
   return { branch: req.user?.branch || '' }
 }

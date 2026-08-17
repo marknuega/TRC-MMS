@@ -82,6 +82,69 @@ describe('branchWhere', () => {
   })
 })
 
+/*
+ * An admin may narrow their VIEW to one region. The rule it has to keep is
+ * absolute: with a region named, only that region's branches are ever returned
+ * — no total, no list and no export may contain a branch from outside it.
+ *
+ * Membership comes from req.regions, resolved in auth.js from AppOptions, so
+ * the request names the region but never says what is in it.
+ */
+describe('branchWhere with an admin region', () => {
+  const regions = {
+    'Western Region': ['Makkah', 'Jeddah', 'Taif'],
+    'Eastern Region': ['Dammam', 'Al Khobar'],
+    'Empty Region': [],
+  }
+  const adminInRegion = { user: { role: 'admin' }, regions }
+
+  test("narrows to exactly that region's branches", () => {
+    assert.deepEqual(branchWhere(adminInRegion, '', 'Western Region'), { branch: { in: ['Makkah', 'Jeddah', 'Taif'] } })
+    assert.deepEqual(branchWhere(adminInRegion, ALL, 'Eastern Region'), { branch: { in: ['Dammam', 'Al Khobar'] } })
+  })
+
+  test('one branch inside the region still narrows to that branch', () => {
+    assert.deepEqual(branchWhere(adminInRegion, 'Taif', 'Western Region'), { branch: 'Taif' })
+  })
+
+  // The failure this scope exists to prevent: a region view showing another
+  // region's data. Serving the branch anyway, or widening to the whole region,
+  // would both be wrong — the request is answered with nothing.
+  test('a branch OUTSIDE the region matches nothing — never the branch, never the region', () => {
+    const where = branchWhere(adminInRegion, 'Dammam', 'Western Region')
+    assert.notEqual(where.branch, 'Dammam')
+    assert.notDeepEqual(where, { branch: { in: regions['Western Region'] } })
+    assert.notDeepEqual(where, {})
+  })
+
+  // {} means EVERY branch in the company. An empty or unknown region must never
+  // collapse to it — that is the one answer that turns a scope into its opposite.
+  test('an empty or unknown region matches nothing, never everything', () => {
+    for (const r of ['Empty Region', 'Region That Was Deleted']) {
+      const where = branchWhere(adminInRegion, '', r)
+      assert.notDeepEqual(where, {}, `${r} must not be unscoped`)
+      assert.notDeepEqual(where, { branch: { in: [] } }, `${r} must not be an in-nothing that reads as a list`)
+    }
+  })
+
+  test('no region named leaves the admin unscoped, exactly as before', () => {
+    assert.deepEqual(branchWhere(adminInRegion, '', ''), {})
+    assert.deepEqual(branchWhere(adminInRegion, ALL, undefined), {})
+    assert.deepEqual(branchWhere(adminInRegion, 'Jeddah', ''), { branch: 'Jeddah' })
+  })
+
+  // A director's region is theirs by account, not by request — the parameter is
+  // not an opportunity to name someone else's.
+  test('a director cannot reach another region by naming one', () => {
+    assert.deepEqual(branchWhere(directorReq, '', 'Eastern Region'), { branch: { in: ['Makkah', 'Jeddah', 'Taif'] } })
+    assert.notEqual(branchWhere(directorReq, 'Dammam', 'Eastern Region').branch, 'Dammam')
+  })
+
+  test('a plain user is untouched by it', () => {
+    assert.deepEqual(branchWhere(userReq, '', 'Eastern Region'), { branch: 'Makkah' })
+  })
+})
+
 describe('canAccessBranch', () => {
   test('admin: can access any branch', () => {
     assert.equal(canAccessBranch(adminReq, 'Jeddah'), true)

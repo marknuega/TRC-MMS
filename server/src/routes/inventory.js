@@ -31,7 +31,7 @@ function parseItem(body) {
 router.get('/', async (req, res, next) => {
   try {
     const items = await prisma.inventoryItem.findMany({
-      where: branchWhere(req, req.query.branch),
+      where: branchWhere(req, req.query.branch, req.query.region),
       orderBy: [{ store: 'asc' }, { sku: 'asc' }],
     })
     res.json(items.map(shape))

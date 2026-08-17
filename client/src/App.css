@@ -818,6 +818,96 @@ h2 {
   height: 2.4rem;
   padding: 0 1rem;
 }
+/* "✎ Edit" on the id line: a link inside running text, not a control competing
+   with Copy / Save / PDF beside it. */
+.breakdown-head .hint-edit {
+  height: auto;
+  margin-left: 0.4rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--primary);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+/* The pending document is no longer the one the series offered. Said in words
+   as well as by the id above it, because the id alone looks perfectly normal —
+   nothing about "MAK-REP-A019" says it was chosen rather than drawn. */
+.hint-edited {
+  color: var(--warn);
+  font-weight: 700;
+}
+
+/* Date + number for the pending save. Sits between the id it changes and the
+   report text it will retitle, so the thing being edited is visible above and
+   its result visible below. */
+.header-edit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+  margin: 0 0 0.6rem;
+  padding: 0.75rem 0.9rem;
+  border: 1.5px solid var(--primary);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.header-edit label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.header-edit input {
+  height: 2.4rem;
+  padding: 0 0.6rem;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+}
+/* The fixed half of the id sits in the same box as the editable half, so the
+   whole id reads as one value even though only its tail can be typed. */
+.header-edit .id-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding-left: 0.6rem;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+.header-edit .id-field i {
+  font-style: normal;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--muted);
+}
+.header-edit .id-field input {
+  border: 0;
+  padding-left: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-transform: uppercase;
+}
+.header-edit-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+.header-edit-error,
+.header-edit-note {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 0.8rem;
+}
+.header-edit-error {
+  color: var(--danger);
+  font-weight: 600;
+}
+.header-edit-note {
+  color: var(--muted);
+}
 .breakdown-head button:disabled {
   opacity: 0.5;
   cursor: not-allowed;

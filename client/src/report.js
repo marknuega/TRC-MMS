@@ -246,6 +246,33 @@ export function blockNumber(n) {
 }
 
 /**
+ * 'A021' -> 21. The exact inverse of blockNumber, for reading back a document
+ * number someone has typed over the one that was offered.
+ *
+ * Takes the last dash-separated segment, so the whole id pastes in as readily
+ * as the number alone: MAK-REP-A019, REP-0019, A019 and 19 all name 19. Plain
+ * digits are the long form's number and are read as such — the two spellings
+ * cannot disagree, because A019 and 0019 are the same document.
+ *
+ * Returns null for anything that names no number, which the caller must treat
+ * as "leave it alone" rather than as 0: a document numbered 0 does not exist,
+ * and blockNumber would render it A001 — silently the FIRST document.
+ */
+export function parseBlockNumber(token) {
+  const seg = up(String(token ?? '').trim().split('-').pop()).replace(/[^A-Z0-9]/g, '')
+  if (!seg) return null
+  const lettered = /^([A-Z])(\d{1,3})$/.exec(seg)
+  if (lettered) {
+    const n = Number(lettered[2])
+    if (n < 1 || n > BLOCK) return null // 000 is never emitted, and A1000 is B001
+    return (lettered[1].charCodeAt(0) - 65) * BLOCK + n
+  }
+  if (!/^\d+$/.test(seg)) return null
+  const n = Number(seg)
+  return n >= 1 ? n : null
+}
+
+/**
  * Which id series a saved row belongs to.
  *
  * Rows saved before the `series` column existed carry only their mode, and every

@@ -66,10 +66,26 @@ export const DEFAULT_OPTIONS = {
     spPartsBrand: true,
   },
 
-  // Region -> member branches, e.g. { "Western Region": ["Makkah", "Jeddah", "Taif"] }.
-  // Seeded via server/scripts/seed-regions.js, edited only by a global admin.
-  // A director's workspace is exactly the branches listed under their region.
-  regions: {},
+  // Region -> member branches. A director's workspace is exactly the branches
+  // listed under their region, and an admin can narrow the whole app to one.
+  //
+  // These four are built in rather than left to server/scripts/seed-regions.js,
+  // which writes the same map into AppOptions. A default that only existed in
+  // the database meant the Region selector was empty until someone remembered
+  // to run a script — and worse, an admin could pick a region the SERVER had
+  // never heard of, which resolves to no branches and empties the whole app.
+  // Shipping them makes the two agree out of the box; an admin-saved map still
+  // wins, because mergeOptions() spreads the stored one over this.
+  //
+  // Membership names branches that may not exist yet in a given install (the
+  // seed script adds them). That is not a problem: a region is a set of NAMES,
+  // and one naming no branch that exists simply has nothing in it.
+  regions: {
+    'Western Region': ['Makkah', 'Jeddah', 'Taif'],
+    'Northern Region': ['Tabuk', 'Al-Jawf', 'Hail'],
+    'Southern Region': ['Asir', 'Jazan', 'Baha', 'Najran'],
+    'Eastern Region': ['Dammam', 'Al Khobar', 'Dhahran'],
+  },
 }
 
 // Default visibility for the pie charts; true = shown. Missing key = shown.
@@ -101,6 +117,14 @@ export const ALL_BRANCHES = 'All Branches'
 // Default regions. The live map is admin-managed and stored in AppOptions;
 // this is the seed / fallback when none are saved.
 export const REGIONS = DEFAULT_OPTIONS.regions
+
+// Admin-only "don't narrow to a region" selection, the counterpart of
+// ALL_BRANCHES above. Maps to '' on the wire, where absent means unnarrowed —
+// so a region is either named or not, and there is no sentinel string for the
+// server to have an opinion about. It is also the only view that spans regions:
+// with a region selected, everything the app shows and totals comes from that
+// region's branches alone.
+export const ALL_REGIONS = 'All regions'
 
 // Selecting a model auto-fills the Type. Keyed by UPPERCASE model name.
 export const MODEL_TYPE = {

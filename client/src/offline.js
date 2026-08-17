@@ -192,16 +192,24 @@ async function applyOptimistic(op) {
         ? entries.some((e) => (e.faults ?? []).some((f) => String(f.action ?? '').trim().toUpperCase() === 'RTO'))
         : Boolean(body.isReferenceOnly)
     const series = mode === 'transmittal' ? 'TRANS' : isReferenceOnly ? 'REF' : 'REP'
-    const reportId =
+    const autoId =
       series === 'TRANS' ? cache.nextTransmittalId : series === 'REF' ? cache.nextReferenceId ?? 'REF-0001' : cache.nextReportId
-    const dates = [...new Set(entries.map((e) => String(e.reportDate).slice(0, 10)))].sort()
+    // A date and number chosen by hand travel with the queued request, so the
+    // row shown while offline is the row the server will write when it drains.
+    // The number is honoured optimistically and re-checked on sync: another
+    // branch's save may have taken it while this one sat in the queue.
+    const docNumber = Number(body?.docNumber) || Number(String(autoId).match(/(\d+)$/)?.[1] ?? 0)
+    const reportId = `${series}-${String(docNumber).padStart(4, '0')}`
+    const dates = body?.reportDate
+      ? [String(body.reportDate).slice(0, 10)]
+      : [...new Set(entries.map((e) => String(e.reportDate).slice(0, 10)))].sort()
     const optimistic = {
       id: tmpId(),
       seq: Date.now(),
       // The number this save drew, not a placeholder: the short id the row is
       // shown by is rendered from docNumber, so a 0 here would print every
       // queued offline save as A001. The server assigns the real one on sync.
-      docNumber: Number(String(reportId).match(/(\d+)$/)?.[1] ?? 0),
+      docNumber,
       reportId,
       branch: String(body.branch ?? ''),
       mode,
@@ -212,18 +220,28 @@ async function applyOptimistic(op) {
       savedAt: new Date().toISOString(),
       dateLabel: dates[0] ?? '',
       entryCount: entries.length,
-      entries,
+      // Re-dated with the document, exactly as the server re-dates its
+      // snapshot: the roll-ups are built from these entries, so leaving them on
+      // the old day would put the sheet and the totals on different dates.
+      entries: body?.reportDate
+        ? entries.map((e) => ({ ...e, reportDate: String(body.reportDate).slice(0, 10) }))
+        : entries,
       _pending: true,
     }
     const bump = (id) => id.replace(/(\d+)$/, (n) => String(Number(n) + 1).padStart(n.length, '0'))
+    // The counter only advances when this save actually TOOK the number it was
+    // offering. A save filed under an earlier free number leaves the next one
+    // still waiting to be used.
+    const tookNextId = reportId === autoId
+    const advance = (s, id) => (series === s && tookNextId ? bump(id) : id)
     await putCache('/api/saved-reports', {
       ...cache,
       reports: [optimistic, ...(cache.reports ?? [])],
       // Only the series just used advances — the other two are untouched, the
       // same way the server numbers them independently.
-      nextReportId: series === 'REP' ? bump(cache.nextReportId) : cache.nextReportId,
-      nextReferenceId: series === 'REF' ? bump(cache.nextReferenceId ?? 'REF-0001') : cache.nextReferenceId ?? 'REF-0001',
-      nextTransmittalId: series === 'TRANS' ? bump(cache.nextTransmittalId) : cache.nextTransmittalId,
+      nextReportId: advance('REP', cache.nextReportId),
+      nextReferenceId: advance('REF', cache.nextReferenceId ?? 'REF-0001'),
+      nextTransmittalId: advance('TRANS', cache.nextTransmittalId),
     })
     return optimistic
   }
