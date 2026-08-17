@@ -7,14 +7,23 @@ export const DEFAULT_OPTIONS = {
 
   // `prefixes` work exactly as they do for models below — the same Tel number,
   // matched against this list instead: 1804133 is the PSD, 1917670 the CD.
+  // `issiPrefixes` are the same idea read off the ISSI instead (see below).
   agencies: [
-    { name: 'PSD', prefixes: ['180'] },
-    { name: 'CD', prefixes: ['191'] },
-    'DOT', 'BG', 'PASS', 'PRI', 'FSF', 'SSF', 'TA', 'KFSC',
+    { name: 'PSD', prefixes: ['180'], issiPrefixes: ['180'] },
+    { name: 'CD', prefixes: ['191'], issiPrefixes: ['191'] },
+    'DOT', 'BG', 'PASS',
+    // 191 is deliberately claimed by CD as well. Two agencies may hold one
+    // prefix (see the note under PREFIX_RE); CD is higher in this list, so an
+    // ISSI starting 191 selects CD and PRI stays one dropdown away. Move PRI
+    // above CD in Manage inputs to reverse that.
+    { name: 'PRI', issiPrefixes: ['191'] },
+    'FSF', 'SSF', 'TA', 'KFSC',
     'VIP', 'MJ', 'NA', 'GIP', 'GDCSS', 'NIC', 'AVS', 'RA', 'SFH', 'SA',
-    'AFW', 'MOH', 'IS', 'EMH', 'SRCA', 'GPH', 'MOD', 'NG', 'GSA', 'PSS',
+    'AFW', 'MOH', 'IS', 'EMH', { name: 'SRCA', issiPrefixes: ['214'] }, 'GPH', 'MOD', 'NG', 'GSA', 'PSS',
     'MEWA', 'TM', 'Kingdom', 'MOF', 'MOMRA', 'MCIT', 'NCA', 'MEIM', 'MEDIA', 'CAI',
     'MCI', 'SFES', 'SFSP', 'GACA', 'CC', 'MOFA', 'SFOC', 'SPL',
+    // The agency a "no activity today" entry is filed under — see NO_ACTIVITY_ISSI.
+    'No Activity',
   ],
 
   types: ['SEPURA', 'AIRBUS', 'HYTERA', 'OTHER'],
@@ -31,6 +40,9 @@ export const DEFAULT_OPTIONS = {
     { name: 'SRG3900 DESKTOP', prefixes: ['109'] },
     { name: 'SRG3900 BIKE', prefixes: ['109'] },
     'PT580H', 'PT590', 'MT680',
+    // Not a device: the Model a "no activity today" entry carries, so the day
+    // is on the record without claiming a radio was worked on.
+    'For Record Purpose Only.',
   ],
 
   issueTypes: [
@@ -38,6 +50,9 @@ export const DEFAULT_OPTIONS = {
     // handed back to its owner. A claim needs no code-map entry: parts 50 and
     // variant F mean nothing on their own, only together and only here.
     { name: 'DEFECTIVE PCB', parts: '50', variant: 'F' },
+    // The one "fault" that says no work was done — 00 being the parts number
+    // that claims nothing. It is what an ISSI of 00 puts on the row.
+    { name: 'No Activity', parts: '00', variant: 'A' },
     'A COVER', 'ANTENNA', 'ANTENNA BASE', 'ANTENNA CABLE', 'ANTENNA STICK',
     'B COVER', 'BATTERY 1590', 'BATTERY 1880', 'BATTERY 3180', 'BATTERY CONNECTOR',
     'BELT CLIP', 'CAPACITOR', 'CHARGER', 'DESK MIC', 'DIODE', 'DV15 CONNECTOR', 'FIST MIC',
@@ -186,10 +201,40 @@ export const MODEL_TYPE = {
 // 2-6 digits. One digit would claim a tenth of every number in existence.
 export const PREFIX_RE = /^\d{2,6}$/
 export const optionName = (v) => (typeof v === 'string' ? v : String(v?.name ?? ''))
-export const optionPrefixes = (v) =>
-  typeof v === 'string'
-    ? []
-    : (Array.isArray(v?.prefixes) ? v.prefixes : []).map((p) => String(p).replace(/\D/g, '')).filter(Boolean)
+const digitPrefixes = (v) =>
+  (Array.isArray(v) ? v : []).map((p) => String(p).replace(/\D/g, '')).filter(Boolean)
+export const optionPrefixes = (v) => (typeof v === 'string' ? [] : digitPrefixes(v?.prefixes))
+
+// ---------------------------------------------------------------------------
+// ISSI prefixes — the same idea, read off the OTHER number
+//
+// A Tel number and an ISSI are two different numbering systems naming the same
+// radio, and an installation is not obliged to have both. So an agency carries
+// its own `issiPrefixes: ['180']` alongside `prefixes`, and the two are matched
+// independently — exactly as Models and Agencies already are against the Tel
+// number. 180 meaning the PSD in one says nothing about what 180 means in the
+// other, and neither list has to reserve digits the other is using.
+//
+// Agencies only. What a Tel number says about the MODEL it does not also have
+// to say twice; nobody asked for an ISSI to name a device, and a second source
+// for a field the Model dropdown already fills from the Tel number is exactly
+// the drift the note above telPick warns about.
+// ---------------------------------------------------------------------------
+export const optionIssiPrefixes = (v) => (typeof v === 'string' ? [] : digitPrefixes(v?.issiPrefixes))
+
+/**
+ * What an agency's acronym stands for: "PUBLIC SECURITY DEPARTMENT" for PSD.
+ *
+ * The NAME stays the acronym — it is the identity, it is what every saved
+ * report stores, and it is what the dropdowns and the printed summaries show.
+ * This is only what that acronym expands to, set in Manage inputs.
+ *
+ * Optional, and empty for most: the shared code map already carries these for
+ * the agencies it knows, and Manage inputs falls back to it. What is set here
+ * outranks it — same rule as an Issue type's code outranking Code Map's lookup
+ * — so an installation can name its own agencies without waiting on the map.
+ */
+export const optionFullForm = (v) => (typeof v === 'string' ? '' : String(v?.fullForm ?? '').trim())
 
 /** Just the names, for the dropdowns and for matchOption. */
 export const optionNames = (list) => (list ?? []).map(optionName).filter(Boolean)
@@ -209,7 +254,7 @@ export const telDigits = (tel) => String(tel ?? '').replace(/\D/g, '')
  *
  * @returns {{ prefix: string, names: string[] } | null}
  */
-export function prefixOwners(tel, list) {
+export function prefixOwners(tel, list, getPrefixes = optionPrefixes) {
   const digits = telDigits(tel)
   if (!digits) return null
   let best = ''
@@ -217,7 +262,7 @@ export function prefixOwners(tel, list) {
   for (const it of list ?? []) {
     const name = optionName(it).trim()
     if (!name) continue
-    for (const prefix of optionPrefixes(it)) {
+    for (const prefix of getPrefixes(it)) {
       if (!PREFIX_RE.test(prefix) || !digits.startsWith(prefix)) continue
       if (prefix.length > best.length) {
         best = prefix
@@ -243,19 +288,115 @@ export function telPick(tel, list) {
   return prefixOwners(tel, list)?.names[0] ?? ''
 }
 
+/**
+ * The one entry an ISSI selects, on the ISSI prefix list. telPick's twin, and
+ * deliberately a separate function rather than a flag on it: the two read
+ * different fields off the same entries, and a caller must say which number it
+ * is holding — an ISSI matched against Tel prefixes would be silently wrong
+ * rather than empty.
+ */
+export function issiPick(issi, list) {
+  return prefixOwners(issi, list, optionIssiPrefixes)?.names[0] ?? ''
+}
+
 /** Index of prefix -> the names holding it, for Manage inputs' "who else uses
  *  this" hint. Built off the same accessors the matcher uses. */
-export function prefixIndex(list) {
+export function prefixIndex(list, getPrefixes = optionPrefixes) {
   const index = {}
   for (const it of list ?? []) {
     const name = optionName(it).trim()
     if (!name) continue
-    for (const prefix of optionPrefixes(it)) {
+    for (const prefix of getPrefixes(it)) {
       if (!index[prefix]) index[prefix] = []
       if (!index[prefix].includes(name)) index[prefix].push(name)
     }
   }
   return index
+}
+
+// ---------------------------------------------------------------------------
+// "No activity today" — the ISSI 00
+//
+// A day on which nothing happened is still a day that has to be reported, and
+// filing it means saying the same six things every time: a Model that is not a
+// device, the OTHER type, a fault that is not a fault, no action, no company,
+// and an Agency that is not an agency. Typing 00 into the ISSI says all of it
+// at once.
+//
+// 00 rather than a button because it is where the technician's hands already
+// are, and because it cannot collide with anything: an ISSI of exactly 00 is
+// not a radio. It is matched EXACTLY, not as a prefix — 00 is nobody's leading
+// digits, and PREFIX_RE would happily let a real number starting 00 through.
+//
+// What it selects is resolved against the LIVE lists rather than written out
+// here, because these four are ordinary admin-managed options that any install
+// may spell its own way ("Other/s:", "For Record Purpose Only."). A list that
+// has no such option fills nothing for that field — better an empty dropdown
+// the technician can see than a value stored behind a box that reads blank.
+// ---------------------------------------------------------------------------
+
+export const NO_ACTIVITY_ISSI = '00'
+
+/** Whether an ISSI is the "nothing happened today" marker rather than a radio. */
+export const isNoActivityIssi = (issi) => telDigits(issi) === NO_ACTIVITY_ISSI
+
+// The issue text, which is written onto the fault row rather than picked from a
+// dropdown — the Issue field is free text, so this one always has a value to
+// give even where the option list has never heard of it.
+export const NO_ACTIVITY_ISSUE = 'No Activity'
+
+// Matched on the name with case and punctuation stripped, so "Other/s:",
+// "OTHER" and "Others" are all the one type, and the trailing full stop on
+// "For Record Purpose Only." is not something anyone has to type exactly.
+const nameKey = (v) => String(v ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '')
+const NO_ACTIVITY_MATCH = {
+  model: /^FORRECORDPURPOSE/,
+  type: /^OTHER/,
+  agency: /^NOACTIVITY/,
+  issue: /^NOACTIVITY/,
+}
+const firstMatching = (list, re) => (list ?? []).map(optionName).find((n) => n && re.test(nameKey(n))) ?? ''
+
+/**
+ * Whether a Model is the record-purpose placeholder rather than a device.
+ *
+ * Read off the stored entry rather than off its ISSI: the number is what SETS
+ * an entry up, but what it leaves behind is the model, and a report is rendered
+ * from entries long after anyone typed into a field. It is also why this
+ * matches the same way noActivityFill selects — one spelling rule, both ends.
+ */
+export const isNoActivityModel = (model) => NO_ACTIVITY_MATCH.model.test(nameKey(model))
+
+/**
+ * Whether a fault row's issue is the "no activity" one.
+ *
+ * The ISSI is one way to reach that row and typing the issue straight into the
+ * field is another, so what makes a row mean "nothing was done" has to be the
+ * row itself. Everything that follows from it — no action, quantity 0 — hangs
+ * off this rather than off how the row came to be filled in.
+ */
+export const isNoActivityIssue = (issue) => NO_ACTIVITY_MATCH.issue.test(nameKey(issue))
+
+/**
+ * The entry an ISSI of 00 fills in: what each field becomes, resolved against
+ * the live option lists. Empty string means "this list offers nothing for it" —
+ * for Action and Company that is the answer itself, "— none —".
+ *
+ * The quantity is 0, alone among every row the app writes: nothing was done, so
+ * there is no unit of anything to count. It is what keeps the record off the
+ * totals — a 1 here would report a device maintained on a day nobody touched
+ * one. Every other row is floored at 1 on submit; this is the exception.
+ */
+export function noActivityFill(options) {
+  return {
+    model: firstMatching(options?.models, NO_ACTIVITY_MATCH.model),
+    type: firstMatching(options?.types, NO_ACTIVITY_MATCH.type),
+    agency: firstMatching(options?.agencies, NO_ACTIVITY_MATCH.agency),
+    issue: firstMatching(options?.issueTypes, NO_ACTIVITY_MATCH.issue) || NO_ACTIVITY_ISSUE,
+    action: '',
+    company: '',
+    quantity: 0,
+  }
 }
 
 // Category order + labels for the Manage Inputs panel.
@@ -434,14 +575,16 @@ export const isServiceAction = (action) => SERVICE_ACTIONS.includes(String(actio
 // its own wording keeps that wording — the claim is what matters, not ours.
 const REQUIRED_ISSUE_TYPES = [{ name: 'DEFECTIVE PCB', parts: '50', variant: 'F' }]
 
-// The shipped Tel prefixes of one category, keyed by name — read straight off
-// the defaults above so there is only ever one place they are written down.
-const seedPrefixesOf = (list) =>
-  Object.fromEntries(list.map((it) => [optionName(it).toUpperCase(), optionPrefixes(it)]).filter(([, p]) => p.length > 0))
+// The shipped prefixes of one category, keyed by name — read straight off the
+// defaults above so there is only ever one place they are written down. The
+// accessor says which of the two lists is being read.
+const seedPrefixesOf = (list, get = optionPrefixes) =>
+  Object.fromEntries(list.map((it) => [optionName(it).toUpperCase(), get(it)]).filter(([, p]) => p.length > 0))
 const SEED_PREFIXES = {
   models: seedPrefixesOf(DEFAULT_OPTIONS.models),
   agencies: seedPrefixesOf(DEFAULT_OPTIONS.agencies),
 }
+const SEED_ISSI_PREFIXES = seedPrefixesOf(DEFAULT_OPTIONS.agencies, optionIssiPrefixes)
 
 /**
  * Give a stored list the shipped prefixes it predates.
@@ -459,14 +602,19 @@ const SEED_PREFIXES = {
  * Claims are read from the stored list once, up front, rather than as the pass
  * goes: the three SRG3900 builds are each seeded 109 by name, and accumulating
  * would let whichever came first block the other two from the prefix they share.
+ *
+ * `get` and `field` say which of an entry's two prefix lists is being filled,
+ * so the ISSI list is seeded by the same pass under the same two rules rather
+ * than by a near-copy of it. The passes are independent: an agency that already
+ * carries Tel prefixes can still be given the ISSI ones it predates.
  */
-function withSeededPrefixes(list, seeds) {
-  const claimed = new Set(list.flatMap(optionPrefixes))
+function withSeededPrefixes(list, seeds, get = optionPrefixes, field = 'prefixes') {
+  const claimed = new Set(list.flatMap(get))
   return list.map((it) => {
-    if (optionPrefixes(it).length > 0) return it
+    if (get(it).length > 0) return it
     const seed = (seeds[optionName(it).trim().toUpperCase()] ?? []).filter((p) => !claimed.has(p))
     if (!seed.length) return it
-    return { ...(typeof it === 'string' ? {} : it), name: optionName(it), prefixes: seed }
+    return { ...(typeof it === 'string' ? {} : it), name: optionName(it), [field]: seed }
   })
 }
 
@@ -487,6 +635,7 @@ export function mergeOptions(stored) {
   }
   out.models = withSeededPrefixes(out.models, SEED_PREFIXES.models)
   out.agencies = withSeededPrefixes(out.agencies, SEED_PREFIXES.agencies)
+  out.agencies = withSeededPrefixes(out.agencies, SEED_ISSI_PREFIXES, optionIssiPrefixes, 'issiPrefixes')
   // Chart toggles are a plain object, not a category list.
   const storedCharts = stored?.charts && typeof stored.charts === 'object' ? stored.charts : {}
   out.charts = { ...DEFAULT_CHARTS, ...storedCharts }

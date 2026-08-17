@@ -28,6 +28,7 @@ import { advanceOnEnter } from './focusNav'
 import {
   DEFAULT_OPTIONS, mergeOptions, MODEL_TYPE, BRANCHES, ALL_BRANCHES, ALL_REGIONS,
   materialName, materialDescMap, issueName, issueCode, technicianName, optionNames, telPick, isServiceAction,
+  issiPick, isNoActivityIssi, isNoActivityIssue, noActivityFill,
 } from './options'
 import ManageInputs from './ManageInputs'
 import Inventory from './Inventory'
@@ -73,6 +74,24 @@ import './App.css'
 // Actions whose "fault" is the whole device — no component issue needed.
 const DEVICE_LEVEL = new Set(['PROGRAM', 'RE-PROGRAM', 'INSTALL', 'RE-INSTALL', 'DISMANTLE'])
 const faultIsMeaningful = (f) => f.issue.trim() !== '' || DEVICE_LEVEL.has(String(f.action).toUpperCase())
+
+// The blank choice, so an empty Action or Company reads "— none —" rather than
+// falling back to the "— select —" placeholder of a field nobody has answered.
+// The two are different statements: one says no company supplied a part, the
+// other says the question is still open.
+const NONE_OPTION = { value: '', label: '— none —' }
+
+// A row is floored at 1 on save — a row worth writing down is a row of at least
+// one thing — except the no-activity row, where 0 is the whole point and a
+// floor of 1 would report a device maintained on a day nobody touched one.
+//
+// Keyed on the ROW's own issue, not on how it came to be filled in: the ISSI 00
+// shortcut and typing "No Activity" into the field are two ways to the same row
+// and must save identically. Shared by the entry form and the edit modal.
+const withSavedQuantity = (f) => ({
+  ...f,
+  quantity: isNoActivityIssue(f.issue) ? Math.max(0, Number(f.quantity) || 0) : Math.max(1, Number(f.quantity) || 1),
+})
 const today = () => new Date().toISOString().slice(0, 10)
 const NAV = [
   { id: 'report', icon: '📋', label: 'Report' },
@@ -1137,6 +1156,16 @@ function App({ user, onLogout }) {
   // number and answering one is no statement about the other.
   const agencyPicked = useRef(false)
 
+  // The agency a number selected on its own, or '' when none has.
+  //
+  // State rather than a second ref, because unlike agencyPicked this one is
+  // RENDERED: picking an agency by hand is how an entry is added (see the
+  // footer picker), so an entry whose agency arrived by itself has no such
+  // moment and would otherwise have to be committed by re-choosing a value
+  // that is already selected. This is what puts a button carrying its name
+  // beside the field instead.
+  const [autoAgency, setAutoAgency] = useState('')
+
   // A Tel number's leading digits say two things (both set in Manage inputs →
   // Tel prefixes): which model it is, and whose it is. Typing it selects the
   // Model — the Type comes off the model from there, through the same
@@ -1155,6 +1184,7 @@ function App({ user, onLogout }) {
     const telNumber = e.target.value
     const model = devicePicked.current ? '' : telPick(telNumber, options.models)
     const agency = agencyPicked.current ? '' : telPick(telNumber, options.agencies)
+    if (agency) setAutoAgency(agency)
     setForm((f) => ({
       ...f,
       telNumber,
@@ -1162,6 +1192,54 @@ function App({ user, onLogout }) {
       ...(agency && { agency }),
     }))
   }
+
+  // The ISSI answers one of the same two questions the Tel number does — whose
+  // radio it is — off its OWN prefix list (see issiPick). The Model is not read
+  // from it: the Tel number already names the device, and a second source for
+  // one field is how two dropdowns start disagreeing.
+  //
+  // Except for 00, which is not a radio at all but the whole of "nothing
+  // happened today", and fills the entry in one keystroke pair.
+  const setIssi = (e) => {
+    const issiNumber = e.target.value
+    if (isNoActivityIssi(issiNumber)) {
+      const fill = noActivityFill(options)
+      // Typing 00 IS the decision about Model, Type and Agency, so the two
+      // flags are armed rather than cleared: a Tel number typed afterwards
+      // must not quietly turn a no-activity record back into a device.
+      devicePicked.current = true
+      agencyPicked.current = true
+      setAutoAgency(fill.agency)
+      setForm((f) => ({
+        ...f,
+        issiNumber,
+        // Only what the live lists actually offer — an empty dropdown beats a
+        // value hidden behind a box that renders blank (see noActivityFill).
+        ...(fill.model && { model: fill.model }),
+        ...(fill.type && { type: fill.type }),
+        ...(fill.agency && { agency: fill.agency }),
+        // Faults are replaced only when nothing has been typed into them. 00
+        // reached by accident half way through a real entry is a slip to undo,
+        // not a reason to lose the rows already filled in.
+        //
+        // Quantity 0 and no action: nothing was done, so there is nothing to
+        // name and no unit to count. The same row typing "No Activity" into the
+        // Issue field produces (see nextFault) — one rule, two ways in.
+        ...(f.faults.some(faultIsMeaningful)
+          ? {}
+          : {
+              faults: [
+                { ...emptyFault(), issue: fill.issue, quantity: fill.quantity, action: fill.action, company: fill.company },
+              ],
+            }),
+      }))
+      return
+    }
+    const agency = agencyPicked.current ? '' : issiPick(issiNumber, options.agencies)
+    if (agency) setAutoAgency(agency)
+    setForm((f) => ({ ...f, issiNumber, ...(agency && { agency }) }))
+  }
+
   // One fault row after an edit to one of its fields. Shared by the entry form
   // and the edit modal, which had grown two copies of the same rules.
   const nextFault = (fault, field, raw) => {
@@ -1171,6 +1249,11 @@ function App({ user, onLogout }) {
       const matched = options.actions.find((a) => a.toUpperCase() === String(raw).trim().toUpperCase())
       if (matched) next.action = matched
     }
+    // Whether this edit turns the row INTO the no-activity one. Only the
+    // change counts, the same rule the Company auto-select below follows: an
+    // auto-select, not a lock, so all three fields stay yours afterwards.
+    const becameNoActivity =
+      field === 'issue' && isNoActivityIssue(raw) && !isNoActivityIssue(fault.issue)
     // A service consumes no part, so no company supplied one: PROGRAM, REPAIR,
     // INSTALL, DISMANTLE and the RE- pair auto-select Company = "— none —"
     // rather than carrying over the company of the last part fitted.
@@ -1187,6 +1270,17 @@ function App({ user, onLogout }) {
     if (next.action !== fault.action) {
       if (isServiceAction(next.action)) next.company = ''
       else if (isServiceAction(fault.action) && !next.company) next.company = lastCompany()
+    }
+    // "No Activity" is not a fault: nothing was done, so there is no action to
+    // name, nobody supplied a part, and there is no unit of anything to count.
+    //
+    // Last, so it has the final word. Leaving a service restores the remembered
+    // company above — which, on a PROGRAM row becoming this one, would hand
+    // back the very company this is clearing.
+    if (becameNoActivity) {
+      next.action = ''
+      next.company = ''
+      next.quantity = 0
     }
     return next
   }
@@ -1233,9 +1327,7 @@ function App({ user, onLogout }) {
         // The DESCRIPTION column is derived per material from the Materials list.
         ...(isTransmittal ? { type: form.type || 'OTHER', model: '', agency: '' } : {}),
         // Transmittal lines are Material + Qty + Company + Status (Action hidden, defaults harmlessly).
-        faults: form.faults
-          .filter(faultIsMeaningful)
-          .map((f) => ({ ...f, quantity: Math.max(1, Number(f.quantity) || 1) })),
+        faults: form.faults.filter(faultIsMeaningful).map(withSavedQuantity),
       }
       if (payload.faults.length === 0) {
         setError('Add at least one fault — pick an issue, or an action like PROGRAM/INSTALL/DISMANTLE.')
@@ -1251,6 +1343,7 @@ function App({ user, onLogout }) {
       // yet and the next Tel number is free to say what the device is and whose.
       devicePicked.current = false
       agencyPicked.current = false
+      setAutoAgency('') // nothing has been auto-selected onto the fresh form yet
       setForm((f) => ({ ...emptyForm(), reportDate: f.reportDate, technician: f.technician }))
       setError(null)
       refresh()
@@ -1349,6 +1442,14 @@ function App({ user, onLogout }) {
       ...(agency && { agency }),
     }))
   }
+  // The ISSI's half of the same job, on the same flag — see setIssi. No
+  // no-activity fill here: 00 is how an entry is CREATED, and a saved one that
+  // needs to become a no-activity record is a delete, not an edit.
+  const eSetIssi = (ev) => {
+    const issiNumber = ev.target.value
+    const agency = eAgencyPicked.current ? '' : issiPick(issiNumber, options.agencies)
+    setEditForm((f) => ({ ...f, issiNumber, ...(agency && { agency }) }))
+  }
   const eSetFault = (i, field) => (ev) => {
     if (field === 'company') saveLast({ company: ev.target.value })
     setEditForm((f) => ({
@@ -1385,9 +1486,7 @@ function App({ user, onLogout }) {
         ...editForm,
         mode,
         ...(isTransmittal ? { type: editForm.type || 'OTHER', model: '', agency: '' } : {}),
-        faults: editForm.faults
-          .filter(faultIsMeaningful)
-          .map((f) => ({ ...f, quantity: Math.max(1, Number(f.quantity) || 1) })),
+        faults: editForm.faults.filter(faultIsMeaningful).map(withSavedQuantity),
       }
       if (payload.faults.length === 0) {
         setError('Add at least one fault — pick an issue, or an action like PROGRAM/INSTALL/DISMANTLE.')
@@ -1547,6 +1646,21 @@ function App({ user, onLogout }) {
       .slice(0, 3)
     return { agencyOptions, topAgencies }
   }, [options.agencies, saved, entries, lastAgency])
+
+  // The footer chips: the agency a number selected first, then the busiest few.
+  //
+  // One list rather than a separate control for the auto-selected one, because
+  // they do the same thing — file this entry under that agency — and two
+  // shapes for one action would say they differ. It leads because it is the
+  // one the entry already names.
+  //
+  // De-duplicated on the trimmed, uppercased name: topAgencies is built from
+  // stored entries and autoAgency comes off the options list, so the same
+  // agency reaching here spelled two ways must still be one chip.
+  const sameAgency = (a, b) => String(a ?? '').trim().toUpperCase() === String(b ?? '').trim().toUpperCase()
+  const footerAgencies = autoAgency
+    ? [autoAgency, ...topAgencies.filter((a) => !sameAgency(a, autoAgency))]
+    : topAgencies
 
   // Plain names for every place that just needs to list or match a
   // technician — Manage Inputs is the only place that needs the ID
@@ -2192,7 +2306,12 @@ function App({ user, onLogout }) {
                 </label>
                 <label>
                   <span className="cap">ISSI number <span className="opt">(optional)</span></span>
-                  <input value={form.issiNumber} onChange={set('issiNumber')} placeholder="Full number, e.g. 12346575" />
+                  <input
+                    value={form.issiNumber}
+                    onChange={setIssi}
+                    placeholder="Full number, e.g. 12346575"
+                    title="The agency follows from its leading digits. 00 means no activity today."
+                  />
                 </label>
               </div>
             )}
@@ -2209,7 +2328,14 @@ function App({ user, onLogout }) {
                 {isTransmittal && <span>Status</span>}
                 <span />
               </div>
-              {form.faults.map((fault, i) => (
+              {form.faults.map((fault, i) => {
+                // The no-activity row has no action and no company by
+                // definition — nothing was done, so nobody did it and nobody
+                // supplied a part. Both pickers are locked to "— none —"
+                // rather than merely defaulted to it: leaving them openable
+                // would offer choices that cannot be true of this row.
+                const locked = !isTransmittal && isNoActivityIssue(fault.issue)
+                return (
                 <div className={`fault-row${isTransmittal ? ' fault-row--tx fault-row--txtype' : ''}`} key={i}>
                   {isTransmittal &&
                     (i === 0 ? (
@@ -2237,21 +2363,37 @@ function App({ user, onLogout }) {
                   )}
                   <input
                     type="number"
-                    min="1"
+                    // 0 only on the no-activity row, where it is the point.
+                    // Everywhere else a row is worth at least one of something.
+                    // Reads the row's own issue, so it matches the floor
+                    // withSavedQuantity will apply to it.
+                    min={isNoActivityIssue(fault.issue) ? '0' : '1'}
                     step="1"
                     value={fault.quantity}
                     onChange={setFault(i, 'quantity')}
                     aria-label="Quantity"
                   />
                   {!isTransmittal && (
-                    <SearchSelect value={fault.action} onChange={setFault(i, 'action')} options={options.actions} ariaLabel="Action" />
+                    <SearchSelect
+                      value={fault.action}
+                      onChange={setFault(i, 'action')}
+                      // The blank option only where blank is an answer. Actions
+                      // are otherwise a required choice, and a "— none —" row
+                      // in every dropdown would invite one.
+                      options={locked ? [NONE_OPTION] : options.actions}
+                      ariaLabel="Action"
+                      disabled={locked}
+                      className={locked ? 'is-locked' : ''}
+                    />
                   )}
                   <SearchSelect
                     value={fault.company}
                     onChange={setFault(i, 'company')}
-                    options={[{ value: '', label: '— none —' }, ...options.companies]}
+                    options={[NONE_OPTION, ...options.companies]}
                     ariaLabel="Company"
                     icon="🏢"
+                    disabled={locked}
+                    className={locked ? 'is-locked' : ''}
                   />
                   {isTransmittal && (
                     <SearchSelect value={fault.status} onChange={setFault(i, 'status')} options={options.statuses} ariaLabel="Item status" />
@@ -2266,7 +2408,8 @@ function App({ user, onLogout }) {
                     ✕
                   </button>
                 </div>
-              ))}
+                )
+              })}
             </div>
             {/* The issue-types datalist that used to live here is gone: its rows
                 are built by issueSuggestions and drawn by IssueInput, which can
@@ -2318,22 +2461,37 @@ function App({ user, onLogout }) {
                       onChange={(e) => {
                         const a = e.target.value
                         agencyPicked.current = true
+                        setAutoAgency('') // chosen by hand now, whatever the number said
                         setForm((f) => ({ ...f, agency: a }))
                         handleSubmit(undefined, a)
                       }}
                     />
                   </label>
-                  {topAgencies.length > 0 && (
+                  {/* Quick picks, with the agency a number selected leading
+                      them — the same chip as the rest, sat immediately beside
+                      the field it was selected into.
+
+                      Picking an agency is how an entry is added, and an agency
+                      that selected ITSELF never gives anyone that moment: the
+                      field already reads the right answer, so committing it
+                      would otherwise mean re-choosing a value that is visibly
+                      already chosen. This is that press. It files the entry —
+                      it does not save the report; the day is closed from the
+                      breakdown below as it always has been. */}
+                  {footerAgencies.length > 0 && (
                     <div className="agency-quickpicks">
-                      {topAgencies.map((a) => (
+                      {footerAgencies.map((a) => (
                         <button
                           key={a}
                           type="button"
                           onClick={() => {
                             agencyPicked.current = true
+                            setAutoAgency('')
                             setForm((f) => ({ ...f, agency: a }))
                             handleSubmit(undefined, a)
                           }}
+                          disabled={busy}
+                          title={`Add this entry under ${a}`}
                         >
                           {a}
                         </button>
@@ -2450,7 +2608,7 @@ function App({ user, onLogout }) {
                     </label>
                     <label>
                       <span className="cap">ISSI number <span className="opt">(optional)</span></span>
-                      <input value={editForm.issiNumber} onChange={eSet('issiNumber')} placeholder="Full number, e.g. 12346575" />
+                      <input value={editForm.issiNumber} onChange={eSetIssi} placeholder="Full number, e.g. 12346575" />
                     </label>
                     <label>
                       Report date
@@ -2481,7 +2639,9 @@ function App({ user, onLogout }) {
                     {isTransmittal && <span>Status</span>}
                     <span />
                   </div>
-                  {editForm.faults.map((fault, i) => (
+                  {editForm.faults.map((fault, i) => {
+                    const locked = !isTransmittal && isNoActivityIssue(fault.issue) // see the entry form's row
+                    return (
                     <div className={`fault-row${isTransmittal ? ' fault-row--tx' : ''}`} key={i}>
                       {isTransmittal ? (
                         <input
@@ -2501,16 +2661,32 @@ function App({ user, onLogout }) {
                           placeholder="e.g. A COVER"
                         />
                       )}
-                      <input type="number" min="1" step="1" value={fault.quantity} onChange={eSetFault(i, 'quantity')} aria-label="Quantity" />
+                      <input
+                        type="number"
+                        min={isNoActivityIssue(fault.issue) ? '0' : '1'}
+                        step="1"
+                        value={fault.quantity}
+                        onChange={eSetFault(i, 'quantity')}
+                        aria-label="Quantity"
+                      />
                       {!isTransmittal && (
-                        <SearchSelect value={fault.action} onChange={eSetFault(i, 'action')} options={options.actions} ariaLabel="Action" />
+                        <SearchSelect
+                          value={fault.action}
+                          onChange={eSetFault(i, 'action')}
+                          options={locked ? [NONE_OPTION] : options.actions}
+                          ariaLabel="Action"
+                          disabled={locked}
+                          className={locked ? 'is-locked' : ''}
+                        />
                       )}
                       <SearchSelect
                         value={fault.company}
                         onChange={eSetFault(i, 'company')}
-                        options={[{ value: '', label: '— none —' }, ...options.companies]}
+                        options={[NONE_OPTION, ...options.companies]}
                         ariaLabel="Company"
                         icon="🏢"
+                        disabled={locked}
+                        className={locked ? 'is-locked' : ''}
                       />
                       {isTransmittal && (
                         <SearchSelect value={fault.status} onChange={eSetFault(i, 'status')} options={options.statuses} ariaLabel="Item status" />
@@ -2525,7 +2701,8 @@ function App({ user, onLogout }) {
                         ✕
                       </button>
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
 
                 <label className="comment-field">

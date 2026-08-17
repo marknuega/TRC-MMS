@@ -1,6 +1,6 @@
 // Extension-ful so `node --test` resolves it too, not just Vite. options.js is
 // pure (no React), so a pure module may read it.
-import { issueCode, issueName } from './options.js'
+import { issueCode, issueName, isNoActivityModel } from './options.js'
 
 // ---------------------------------------------------------------------------
 // Report engine — turns entries into the MOTECO-style TXT and PDF report data.
@@ -129,14 +129,37 @@ let claims = null
 export function setIssueClaims(issueTypes) {
   const standalone = new Set()
   const coded = new Set()
+  const codeOf = new Map()
   for (const it of issueTypes ?? []) {
     const code = issueCode(it) // '' unless BOTH parts and variant are present
     const key = claimKey(issueName(it))
     if (!code || !key) continue
     coded.add(key)
+    codeOf.set(key, code)
     if (STANDALONE_PARTS.has(code.slice(0, 2))) standalone.add(key)
   }
-  claims = coded.size ? { standalone, coded } : null
+  claims = coded.size ? { standalone, coded, codeOf } : null
+}
+
+/**
+ * The identity of a MATERIAL, for aggregating the Materials Summary.
+ *
+ * Two faults naming the same part are the same part — the code says so. A
+ * technician who logs SPEAKER MID twice on one entry (two rows, because the
+ * form takes one row per action) has consumed two speakers, not one speaker
+ * from each of two lines, and the summary must add them up. Nothing else about
+ * the fault enters the key: the company is a note on which pool the part came
+ * out of, and RTO'd stock and MOI stock are still the same 45B.
+ *
+ * The code when the item is a claimed Issue type, its normalised name when it
+ * is not (hand-typed items, and reports saved before codes existed) — the two
+ * spaces are kept apart by the prefix, so an item someone literally names
+ * "45B" cannot land on the 45B bucket.
+ */
+function materialKey(issue) {
+  const key = claimKey(issue)
+  const code = claims?.codeOf.get(key)
+  return code ? `C:${code}` : `N:${key}`
 }
 
 // Fallback for a name no claim covers: hand-typed issues, and every report
@@ -427,7 +450,10 @@ export function materialBlocksByType(entries) {
         const isProgram = classify(f.action) === 'programming'
         const label = isProgram ? 'PROGRAMMING' : up(f.issue)
         const company = isProgram ? '' : summaryCompanyText(f.company)
-        const key = `${label}|${company}`
+        // Keyed on the part alone (materialKey), NOT on part-and-company: one
+        // line per material, whichever pool each unit was drawn from. The
+        // company printed on that line is the first one seen for the part.
+        const key = isProgram ? 'PROGRAMMING' : materialKey(f.issue)
         if (!bucket.has(key)) bucket.set(key, { label, company, qty: 0 })
         bucket.get(key).qty += Math.max(0, Number(f.quantity) || 0)
       }
@@ -1007,10 +1033,20 @@ export function buildDateReport(dateLabel, reportId, entries, opts = {}) {
 }
 
 // Per-entry notes: "MODEL — comment".
+//
+// The model is dropped when there is none to name, and on the no-activity
+// record, where "For Record Purpose Only. — closed for the holiday" reads as a
+// note about a device rather than the note about the day that it is. The whole
+// point of that entry is that no device was involved, so nothing is lost by
+// leaving the placeholder out and the note stands on its own.
 function buildNotes(entries) {
   return entries
     .filter((e) => String(e.comment ?? '').trim())
-    .map((e) => `${modelDisplay(e.model)} — ${String(e.comment).trim()}`)
+    .map((e) => {
+      const text = String(e.comment).trim()
+      const model = modelDisplay(e.model)
+      return !model || isNoActivityModel(e.model) ? text : `${model} — ${text}`
+    })
 }
 
 // ---- TXT export (Report or Transmittal) ----

@@ -6,8 +6,16 @@ import {
   issueCodeIndex,
   optionNames,
   optionPrefixes,
+  optionIssiPrefixes,
   prefixOwners,
   telPick,
+  issiPick,
+  isNoActivityIssi,
+  isNoActivityModel,
+  isNoActivityIssue,
+  noActivityFill,
+  optionFullForm,
+  NO_ACTIVITY_ISSUE,
   isServiceAction,
 } from './options.js'
 
@@ -108,6 +116,49 @@ describe('mergeOptions', () => {
 
   test('seeding never changes which agencies exist, or their order', () => {
     const stored = ['DOT', 'PSD', 'CD']
+    assert.deepEqual(optionNames(mergeOptions({ agencies: stored }).agencies), stored)
+  })
+
+  // The ISSI list is seeded by the same pass, under the same two rules, and
+  // independently of the Tel one — every stored agencies list predates it.
+  test('the shipped ISSI prefixes are attached to a stored agencies list', () => {
+    const out = mergeOptions({ agencies: ['PSD', 'CD', 'PRI', 'SRCA', 'DOT'] })
+    assert.deepEqual(out.agencies.map(optionIssiPrefixes), [['180'], ['191'], ['191'], ['214'], []])
+  })
+
+  // 191 is shipped to CD and to PRI both, and the seeding pass hands it to each
+  // — the same way all three SRG3900 builds are seeded the 109 they share.
+  // Which of the two an ISSI actually lands on is list order (see issiPick), so
+  // it stays the admin's to change by moving one above the other.
+  test('an ISSI prefix two agencies share is seeded to both of them', () => {
+    const out = mergeOptions({ agencies: ['CD', 'PRI'] })
+    assert.deepEqual(out.agencies.map(optionIssiPrefixes), [['191'], ['191']])
+    assert.equal(issiPick('1917670', out.agencies), 'CD', 'CD is first, so CD is what a number selects')
+    assert.equal(issiPick('1917670', [...out.agencies].reverse()), 'PRI')
+  })
+
+  // The guard is against undoing a MOVE: a prefix the stored list already
+  // carries elsewhere is never handed back by an upgrade.
+  test('an ISSI prefix another stored agency already claims is not handed back', () => {
+    const out = mergeOptions({ agencies: [{ name: 'DOT', issiPrefixes: ['214'] }, 'SRCA'] })
+    assert.deepEqual(optionIssiPrefixes(out.agencies[1]), [], '214 was moved to DOT deliberately')
+  })
+
+  test('an agency the admin already gave ISSI prefixes is left alone', () => {
+    const out = mergeOptions({ agencies: [{ name: 'PSD', issiPrefixes: ['77'] }] })
+    assert.deepEqual(optionIssiPrefixes(out.agencies[0]), ['77'])
+  })
+
+  // The two lists are filled by separate passes, so carrying one is no reason
+  // to be denied the other.
+  test('an agency carrying Tel prefixes still gets its shipped ISSI ones', () => {
+    const out = mergeOptions({ agencies: [{ name: 'PSD', prefixes: ['77'] }] })
+    assert.deepEqual(optionPrefixes(out.agencies[0]), ['77'], 'the admin mapping stands')
+    assert.deepEqual(optionIssiPrefixes(out.agencies[0]), ['180'])
+  })
+
+  test('seeding ISSI prefixes never changes which agencies exist, or their order', () => {
+    const stored = ['SRCA', 'PSD', 'DOT']
     assert.deepEqual(optionNames(mergeOptions({ agencies: stored }).agencies), stored)
   })
 })
@@ -226,6 +277,201 @@ describe('telPick', () => {
     test('an agency with no prefix is never selected', () => {
       assert.equal(telPick('9999999', agencies), '')
     })
+  })
+})
+
+// The ISSI answers the same "whose is it" question the Tel number does, off its
+// own list. Two numbering systems, matched independently — which is what lets
+// an agency hold different digits on each, or only one of the two.
+describe('issiPick', () => {
+  const { agencies, models } = mergeOptions(undefined)
+
+  test('the shipped ISSI prefixes select their agency', () => {
+    assert.equal(issiPick('1804133', agencies), 'PSD')
+    assert.equal(issiPick('1917670', agencies), 'CD')
+    assert.equal(issiPick('2145566', agencies), 'SRCA')
+  })
+
+  test('an ISSI nothing claims selects nothing', () => {
+    assert.equal(issiPick('9999999', agencies), '')
+    assert.equal(issiPick('', agencies), '')
+  })
+
+  // 191 is CD's and PRI's both. CD is higher in the list, so CD is what a
+  // number lands on — and moving PRI above it is how that is changed.
+  test('a shared ISSI prefix goes to whichever agency is higher in the list', () => {
+    const list = [{ name: 'PRI', issiPrefixes: ['191'] }, { name: 'CD', issiPrefixes: ['191'] }]
+    assert.equal(issiPick('1917670', list), 'PRI')
+    assert.equal(issiPick('1917670', [...list].reverse()), 'CD')
+  })
+
+  // The two lists never have to be reconciled: reading an ISSI against the Tel
+  // prefixes (or the reverse) would be silently wrong rather than empty, which
+  // is why they are separate functions rather than a flag on one.
+  test('the ISSI list and the Tel list are read separately', () => {
+    const list = [{ name: 'Alpha', prefixes: ['77'], issiPrefixes: ['88'] }]
+    assert.equal(issiPick('8812345', list), 'Alpha')
+    assert.equal(issiPick('7712345', list), '', '77 is a Tel prefix, not an ISSI one')
+    assert.equal(telPick('7712345', list), 'Alpha')
+    assert.equal(telPick('8812345', list), '', '88 is an ISSI prefix, not a Tel one')
+  })
+
+  test('an ISSI says nothing about the model', () => {
+    assert.equal(issiPick('1903324096', models), '', 'models carry no ISSI prefixes')
+  })
+
+  // Same rules as the Tel matcher, because it is the same matcher.
+  test('longest match wins, and spacing cannot defeat one', () => {
+    const list = [{ name: 'Wide', issiPrefixes: ['18'] }, { name: 'Narrow', issiPrefixes: ['1804'] }]
+    assert.equal(issiPick('1804133', list), 'Narrow')
+    assert.equal(issiPick('180 41-33', list), 'Narrow')
+    assert.equal(issiPick('1899999', list), 'Wide')
+  })
+})
+
+// An ISSI of exactly 00 is not a radio: it is the whole of "nothing happened
+// today", and fills the entry in rather than selecting an agency.
+describe('the no-activity ISSI', () => {
+  const OPTS = mergeOptions(undefined)
+
+  test('00 is the marker, and only 00', () => {
+    assert.equal(isNoActivityIssi('00'), true)
+    assert.equal(isNoActivityIssi(' 00 '), true, 'typed padding is not a different number')
+    assert.equal(isNoActivityIssi('0'), false)
+    assert.equal(isNoActivityIssi('000'), false)
+    assert.equal(isNoActivityIssi(''), false)
+  })
+
+  // Matched exactly rather than as a prefix — a real ISSI that happens to start
+  // 00 is a radio, and must not empty the form.
+  test('a real number starting 00 is not the marker', () => {
+    assert.equal(isNoActivityIssi('0012345'), false)
+  })
+
+  test('it fills the entry from the shipped lists', () => {
+    assert.deepEqual(noActivityFill(OPTS), {
+      model: 'For Record Purpose Only.',
+      type: 'OTHER',
+      agency: 'No Activity',
+      issue: 'No Activity',
+      action: '',
+      company: '',
+      quantity: 0,
+    })
+  })
+
+  // Alone among every row the app writes. Nothing was done, so there is no unit
+  // of anything to count, and a 1 would report a device maintained on a day
+  // nobody touched one.
+  test('the quantity is 0', () => {
+    assert.equal(noActivityFill(OPTS).quantity, 0)
+    assert.equal(noActivityFill({}).quantity, 0, 'whatever the lists do or do not offer')
+  })
+
+  // The four are ordinary admin-managed options, and an install may spell any
+  // of them its own way. Matching ignores case and punctuation so it does.
+  test("an install's own spelling of each is what gets selected", () => {
+    const fill = noActivityFill({
+      models: ['TH1N', 'for record purpose only.'],
+      types: ['SEPURA', 'Other/s:'],
+      agencies: ['PSD', 'no activity'],
+      issueTypes: ['ANTENNA', { name: 'No-Activity', parts: '00', variant: 'A' }],
+    })
+    assert.deepEqual(fill, {
+      model: 'for record purpose only.',
+      type: 'Other/s:',
+      agency: 'no activity',
+      issue: 'No-Activity',
+      action: '',
+      company: '',
+      quantity: 0,
+    })
+  })
+
+  // The screenshot's own spelling — the agency reads "No Activity Today", which
+  // must still be the one the marker selects.
+  test('a longer agency name starting the same way still matches', () => {
+    assert.equal(noActivityFill({ agencies: ['PSD', 'No Activity Today'] }).agency, 'No Activity Today')
+  })
+
+  // Better an empty dropdown the technician can see than a value stored behind
+  // a box that renders blank — SearchSelect shows nothing for an off-list value.
+  test('a list offering nothing for a field fills nothing', () => {
+    const fill = noActivityFill({ models: ['TH1N'], types: ['SEPURA'], agencies: ['PSD'], issueTypes: [] })
+    assert.equal(fill.model, '')
+    assert.equal(fill.type, '')
+    assert.equal(fill.agency, '')
+  })
+
+  // The Issue is free text on the entry form, so it always has a value to give.
+  test('the issue text is written even when no issue type claims it', () => {
+    assert.equal(noActivityFill({}).issue, NO_ACTIVITY_ISSUE)
+  })
+
+  test('Action and Company are always "— none —"', () => {
+    assert.equal(noActivityFill(OPTS).action, '')
+    assert.equal(noActivityFill(OPTS).company, '')
+  })
+
+  test('00 is not also an agency prefix, so it can only ever mean this', () => {
+    assert.equal(issiPick('00', OPTS.agencies), '')
+  })
+
+  // The ISSI is one way to reach that row and typing the issue is another, so
+  // what makes a row mean "nothing was done" is the row itself — everything
+  // that follows (no action, quantity 0) hangs off this.
+  test('the no-activity issue is recognised however it was typed', () => {
+    assert.equal(isNoActivityIssue('No Activity'), true)
+    assert.equal(isNoActivityIssue('no activity'), true)
+    assert.equal(isNoActivityIssue('No-Activity'), true)
+    assert.equal(isNoActivityIssue(' NO ACTIVITY '), true)
+    assert.equal(isNoActivityIssue('No Activity Today'), true)
+  })
+
+  test('an ordinary part is not it', () => {
+    assert.equal(isNoActivityIssue('ANTENNA'), false)
+    assert.equal(isNoActivityIssue('NO TRANSMIT MODE'), false)
+    assert.equal(isNoActivityIssue('NOT AVAILABLE'), false)
+    assert.equal(isNoActivityIssue(''), false)
+  })
+
+  // The report reads the stored MODEL, not the ISSI that set the entry up — a
+  // report is rendered long after anyone typed into a field.
+  test('the record-purpose model is recognised on the entry', () => {
+    assert.equal(isNoActivityModel('For Record Purpose Only.'), true)
+    assert.equal(isNoActivityModel('for record purpose only'), true)
+    assert.equal(isNoActivityModel('FOR RECORD PURPOSE'), true)
+    assert.equal(isNoActivityModel('TH1N'), false)
+    assert.equal(isNoActivityModel(''), false)
+  })
+})
+
+// The acronym stays the agency's name — it is the identity, and what every
+// saved report stores. The full form is only what that acronym expands to.
+describe('optionFullForm', () => {
+  test('it reads the stored expansion', () => {
+    assert.equal(optionFullForm({ name: 'PSD', fullForm: 'PUBLIC SECURITY DEPARTMENT' }), 'PUBLIC SECURITY DEPARTMENT')
+  })
+
+  test('an agency without one, or a plain-string one, has none', () => {
+    assert.equal(optionFullForm({ name: 'PSD', prefixes: ['180'] }), '')
+    assert.equal(optionFullForm('PSD'), '')
+  })
+
+  test('it is trimmed, so a stray space is not a full form', () => {
+    assert.equal(optionFullForm({ name: 'PSD', fullForm: '  PUBLIC SECURITY  ' }), 'PUBLIC SECURITY')
+    assert.equal(optionFullForm({ name: 'PSD', fullForm: '   ' }), '')
+  })
+
+  // It is prose about the name, never part of the identity: mergeOptions must
+  // carry it through untouched and the agency must still match its prefixes.
+  test('it survives the merge and does not disturb the prefix seeding', () => {
+    const out = mergeOptions({ agencies: [{ name: 'PSD', fullForm: 'PUBLIC SECURITY DEPARTMENT' }] })
+    assert.equal(optionFullForm(out.agencies[0]), 'PUBLIC SECURITY DEPARTMENT')
+    assert.deepEqual(optionPrefixes(out.agencies[0]), ['180'])
+    assert.deepEqual(optionIssiPrefixes(out.agencies[0]), ['180'])
+    assert.equal(telPick('1804133', out.agencies), 'PSD')
+    assert.equal(issiPick('1804133', out.agencies), 'PSD')
   })
 })
 

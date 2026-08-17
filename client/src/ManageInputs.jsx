@@ -17,6 +17,8 @@ import {
   optionName,
   prefixIndex,
   optionPrefixes,
+  optionIssiPrefixes,
+  optionFullForm,
   technicianName,
   technicianId,
   technicianInitials2,
@@ -38,6 +40,8 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
   const [newParts, setNewParts] = useState('')
   const [newVariant, setNewVariant] = useState('')
   const [newPrefixes, setNewPrefixes] = useState('')
+  const [newIssiPrefixes, setNewIssiPrefixes] = useState('')
+  const [newFullForm, setNewFullForm] = useState('')
   const [newId, setNewId] = useState('')
   const [newInitials2, setNewInitials2] = useState('')
   const [newInitials3, setNewInitials3] = useState('')
@@ -47,6 +51,8 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
   const [editParts, setEditParts] = useState('')
   const [editVariant, setEditVariant] = useState('')
   const [editPrefixes, setEditPrefixes] = useState('')
+  const [editIssiPrefixes, setEditIssiPrefixes] = useState('')
+  const [editFullForm, setEditFullForm] = useState('')
   const [editId, setEditId] = useState('')
   const [editInitials2, setEditInitials2] = useState('')
   const [editInitials3, setEditInitials3] = useState('')
@@ -71,6 +77,9 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
   // here — same field, same rules, separate lists — so everything below asks
   // this rather than naming either one.
   const hasPrefixes = isModels || isAgencies
+  // ISSI prefixes are an agency question only — the device is what the Tel
+  // number names, and the ISSI is not asked to name it a second time.
+  const hasIssiPrefixes = isAgencies
   const list = options[cat] ?? []
   // Issue types with a claimed CDS code display in ascending code order
   // (parts number, then variant letter) — reading order left to right,
@@ -105,6 +114,26 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
             ? optionName(v)
             : String(v)
   const descOf = (v) => (isMaterials ? materialDesc(v) : '')
+
+  // What an agency's acronym stands for. Two sources, in this order:
+  //
+  //   1. the option's own `fullForm`, typed in the field below
+  //   2. the shared code map — the same list Code Reference prints under
+  //      "Agencies (verification)"
+  //
+  // The map is a fallback rather than the source so the agencies it already
+  // knows read properly without anyone re-typing them, while an installation
+  // can still name an agency the map has never heard of. What is set here wins,
+  // the same way an Issue type's own code outranks Code Map's lookup.
+  //
+  // Matched past case and punctuation, for the reason norm() does it in codes.js.
+  const codeKey = (v) => String(v ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '')
+  const mappedFullForms = {}
+  for (const [code, full] of Object.entries(map?.agencies ?? FALLBACK.agencies ?? {})) {
+    mappedFullForms[codeKey(code)] = full
+  }
+  const mappedFullForm = (v) => (isAgencies ? mappedFullForms[codeKey(nameOf(v))] ?? '' : '')
+  const fullFormOf = (v) => (isAgencies ? optionFullForm(v) || mappedFullForm(v) : '')
   // Prefixes are typed as one free-text field ("355, 06") because a model may
   // hold several and nobody knows in advance how many. Any run of non-digits
   // separates them, so a comma, a space or both all work.
@@ -114,9 +143,19 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
     if (isMaterials) return { name, description: f.desc.trim() }
     if (hasPrefixes) {
       const prefixes = parsePrefixes(f.prefixes)
+      const issiPrefixes = isAgencies ? parsePrefixes(f.issiPrefixes) : []
+      const fullForm = isAgencies ? f.fullForm.trim() : ''
       // A model with no prefixes stays a plain string, exactly as it was
-      // before this field existed — nothing to store, so nothing stored.
-      return prefixes.length ? { name, prefixes } : name
+      // before this field existed — nothing to store, so nothing stored. An
+      // agency given only some of its three optional fields stores only those,
+      // for the same reason.
+      if (!prefixes.length && !issiPrefixes.length && !fullForm) return name
+      return {
+        name,
+        ...(prefixes.length && { prefixes }),
+        ...(issiPrefixes.length && { issiPrefixes }),
+        ...(fullForm && { fullForm }),
+      }
     }
     if (isTechnicians) {
       const idT = f.id.trim()
@@ -157,21 +196,22 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
   const initials3Problem = (v, exceptIndex = -1) =>
     initialsProblem(TECH_INITIALS3_RE, technicianInitials3, '3-letter initial', 'MRA', v, exceptIndex)
 
-  // What is wrong with a Tel prefix list, or '' when it is usable (or blank —
-  // blank is allowed, for a model no number identifies).
-  function prefixProblem(value) {
+  // What is wrong with a prefix list, or '' when it is usable (or blank — blank
+  // is allowed, for a model no number identifies). Both lists have the same
+  // shape and the same rule, so `kind` only names the number in the message.
+  function prefixProblem(value, kind = 'Tel') {
     if (!hasPrefixes) return ''
     const bad = parsePrefixes(value).find((p) => !PREFIX_RE.test(p))
     if (!bad) return ''
-    return `"${bad}" is not a Tel prefix — 2 to 6 digits, e.g. 190. A single digit would claim a tenth of every number there is.`
+    return `"${bad}" is not ${kind === 'Tel' ? 'a Tel' : 'an ISSI'} prefix — 2 to 6 digits, e.g. 190. A single digit would claim a tenth of every number there is.`
   }
 
   // Which other models already answer to the prefixes being typed. Not an
   // error: 109 is genuinely all three SRG3900 builds. It is said out loud so
   // sharing is a decision rather than a surprise, and so it is clear which of
   // the sharers a number will actually land on.
-  function prefixShareHint(value) {
-    const others = prefixIndex(list)
+  function prefixShareHint(value, get = optionPrefixes) {
+    const others = prefixIndex(list, get)
     const shared = parsePrefixes(value).filter((p) => PREFIX_RE.test(p) && others[p]?.length)
     if (!shared.length) return ''
     const who = shared.map((p) => `${p} is also ${others[p].join(', ')}`).join('; ')
@@ -223,6 +263,8 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
     if (code) return [code, 'code']
     const prefix = prefixProblem(f.prefixes)
     if (prefix) return [prefix, 'prefixes']
+    const issi = hasIssiPrefixes ? prefixProblem(f.issiPrefixes, 'ISSI') : ''
+    if (issi) return [issi, 'issiPrefixes']
     const tech = techIdProblem(f.id, exceptIndex)
     if (tech) return [tech, 'id']
     const a = initials2Problem(f.initials2, exceptIndex)
@@ -239,6 +281,8 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
     parts: newParts,
     variant: newVariant,
     prefixes: newPrefixes,
+    issiPrefixes: newIssiPrefixes,
+    fullForm: newFullForm,
     id: newId,
     initials2: newInitials2,
     initials3: newInitials3,
@@ -248,6 +292,8 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
     parts: editParts,
     variant: editVariant,
     prefixes: editPrefixes,
+    issiPrefixes: editIssiPrefixes,
+    fullForm: editFullForm,
     id: editId,
     initials2: editInitials2,
     initials3: editInitials3,
@@ -259,6 +305,8 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
     setNewParts('')
     setNewVariant('')
     setNewPrefixes('')
+    setNewIssiPrefixes('')
+    setNewFullForm('')
     setNewId('')
     setNewInitials2('')
     setNewInitials3('')
@@ -284,8 +332,17 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
     const clash = list.findIndex((v) => nameOf(v).toLowerCase() === value.toLowerCase())
     if (clash >= 0) {
       const givingCode =
-        (isIssues && newParts.trim() && newVariant.trim()) || (hasPrefixes && parsePrefixes(newPrefixes).length > 0)
-      const held = isIssues ? issueCode(list[clash]) : hasPrefixes ? optionPrefixes(list[clash]).join(', ') : ''
+        (isIssues && newParts.trim() && newVariant.trim()) ||
+        (hasPrefixes &&
+          (parsePrefixes(newPrefixes).length > 0 || parsePrefixes(newIssiPrefixes).length > 0 || newFullForm.trim() !== ''))
+      // Both prefix lists, de-duplicated: an agency usually answers to the same
+      // digits on either number, and "holding prefix 191, 191" says nothing
+      // twice.
+      const held = isIssues
+        ? issueCode(list[clash])
+        : hasPrefixes
+          ? [...new Set([...optionPrefixes(list[clash]), ...optionIssiPrefixes(list[clash])])].join(', ')
+          : ''
       if (!givingCode || held) {
         flash(`"${value}" is already in the list${held ? `, holding ${hasPrefixes ? 'prefix' : 'code'} ${held}` : ''}.`, 'name')
         return
@@ -306,6 +363,11 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
     setEditParts(isIssues ? issueParts(list[i]) : '')
     setEditVariant(isIssues ? issueVariant(list[i]) : '')
     setEditPrefixes(hasPrefixes ? optionPrefixes(list[i]).join(', ') : '')
+    setEditIssiPrefixes(hasIssiPrefixes ? optionIssiPrefixes(list[i]).join(', ') : '')
+    // Seeded from the code map when the option carries none of its own, so
+    // opening an agency to edit it offers the full form rather than a blank box
+    // that would silently drop what the card was showing a moment ago.
+    setEditFullForm(isAgencies ? optionFullForm(list[i]) || mappedFullForm(list[i]) : '')
     setEditId(isTechnicians ? technicianId(list[i]) : '')
     setEditInitials2(isTechnicians ? technicianInitials2(list[i]) : '')
     setEditInitials3(isTechnicians ? technicianInitials3(list[i]) : '')
@@ -330,6 +392,8 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
     setEditParts('')
     setEditVariant('')
     setEditPrefixes('')
+    setEditIssiPrefixes('')
+    setEditFullForm('')
     setEditId('')
     setEditInitials2('')
     setEditInitials3('')
@@ -441,6 +505,20 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                 />
               </label>
             )}
+            {hasIssiPrefixes && (
+              <label className="field-code field-prefix">
+                ISSI prefixes
+                <input
+                  value={newIssiPrefixes}
+                  onChange={(e) => setNewIssiPrefixes(e.target.value.replace(/[^\d,\s]/g, ''))}
+                  placeholder="180, 214"
+                  aria-invalid={noticeField === 'issiPrefixes' || undefined}
+                  className={noticeField === 'issiPrefixes' ? 'invalid' : undefined}
+                  inputMode="numeric"
+                  title="The leading digits of an ISSI that mean this agency — 2 to 6 digits, several separated by commas, e.g. 180, 214. Its own list, separate from the Tel prefixes. Optional."
+                />
+              </label>
+            )}
             {isTechnicians && (
               <>
                 <label className="field-code">
@@ -525,6 +603,19 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                 />
               </label>
             )}
+            {/* Beside the name rather than among the prefix boxes: it is prose
+                about the name, not a third thing a number is matched against. */}
+            {isAgencies && (
+              <label className="field-desc">
+                Full form (optional)
+                <input
+                  value={newFullForm}
+                  onChange={(e) => setNewFullForm(e.target.value)}
+                  placeholder="PUBLIC SECURITY DEPARTMENT"
+                  title="What the acronym stands for. Shown on the card below; the acronym stays the name reports are filed under. Leave blank to use the shared code map's wording."
+                />
+              </label>
+            )}
             <div className="add-action">
               <button type="button" onClick={add} disabled={!newValue.trim()}>
                 Add
@@ -566,6 +657,21 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
               here and something else in the other — neither has to avoid the other&apos;s numbers. This is where a new{' '}
               {isModels ? 'device' : 'agency'} is taught to the auto-select — nothing else needs changing.
               {newPrefixes.trim() && <span className="manage-code-hint"> {prefixShareHint(newPrefixes)}</span>}
+            </p>
+          )}
+          {hasIssiPrefixes && (
+            <p className="manage-hint">
+              <strong>ISSI prefixes</strong> are the same thing read off the <strong>ISSI</strong> instead: an entry
+              whose ISSI starts <code>180</code> is the PSD, <code>191</code> the CD and <code>214</code> the SRCA.
+              A Tel number and an ISSI are two different numbering systems and are matched against their own list
+              here, so an agency may hold one, the other or both, and the same digits need not mean the same agency
+              on each. Everything else works as it does above — longest match wins, a shared prefix goes to whichever
+              agency is higher in this list.{' '}
+              <code>00</code> is the one ISSI that is not an agency at all: it fills the whole entry in as{' '}
+              <strong>no activity today</strong> and offers to save the report there and then.
+              {newIssiPrefixes.trim() && (
+                <span className="manage-code-hint"> {prefixShareHint(newIssiPrefixes, optionIssiPrefixes)}</span>
+              )}
             </p>
           )}
           {isTechnicians && (
@@ -642,6 +748,19 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                               inputMode="numeric"
                             />
                           </label>
+                          {hasIssiPrefixes && (
+                            <label className="field-code field-prefix">
+                              ISSI prefixes
+                              <input
+                                className="edit-input"
+                                value={editIssiPrefixes}
+                                onChange={(e) => setEditIssiPrefixes(e.target.value.replace(/[^\d,\s]/g, ''))}
+                                onKeyDown={cancelOnEscape}
+                                placeholder="180, 214"
+                                inputMode="numeric"
+                              />
+                            </label>
+                          )}
                         </div>
                       )}
                       {isTechnicians && (
@@ -698,6 +817,16 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                           placeholder="Description (optional)"
                         />
                       )}
+                      {isAgencies && (
+                        <input
+                          className="edit-input"
+                          value={editFullForm}
+                          onChange={(e) => setEditFullForm(e.target.value)}
+                          onKeyDown={cancelOnEscape}
+                          placeholder="Full form (optional)"
+                          aria-label="Full form"
+                        />
+                      )}
                     </div>
                     <div className="manage-item-actions">
                       <button type="button" onClick={saveEdit}>Save</button>
@@ -713,7 +842,17 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                         <span className="manage-item-code">{issueCode(value)}</span>
                       )}
                       {hasPrefixes && optionPrefixes(value).length > 0 && (
-                        <span className="manage-item-code">{optionPrefixes(value).join(' / ')}</span>
+                        <span className="manage-item-code" title="Tel prefixes">
+                          {optionPrefixes(value).join(' / ')}
+                        </span>
+                      )}
+                      {/* Labelled, because the two badges are otherwise the
+                          same digits twice with nothing to say which number
+                          each answers to. */}
+                      {hasIssiPrefixes && optionIssiPrefixes(value).length > 0 && (
+                        <span className="manage-item-code" title="ISSI prefixes">
+                          ISSI {optionIssiPrefixes(value).join(' / ')}
+                        </span>
                       )}
                       {isTechnicians &&
                         [technicianId(value), technicianInitials2(value), technicianInitials3(value)].filter(Boolean).length > 0 && (
@@ -723,6 +862,7 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                         )}
                       {nameOf(value)}
                       {isMaterials && descOf(value) && <span className="manage-item-desc">{descOf(value)}</span>}
+                      {fullFormOf(value) && <span className="manage-item-desc">{fullFormOf(value)}</span>}
                     </span>
                     <div className="manage-item-actions">
                       {/* One edit at a time: a second open row would quietly

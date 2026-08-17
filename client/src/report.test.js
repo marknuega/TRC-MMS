@@ -2,7 +2,7 @@ import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   classify, entryCounts, technicianTotals, agencyBlocks, activityTotals, buildSparePartsReport,
-  agencyComment, buildDateReport, buildTxt, deviceBlocksByType, setIssueClaims,
+  agencyComment, buildDateReport, buildTxt, deviceBlocksByType, materialBlocksByType, setIssueClaims,
   isCountable, periodEntries, buildMonthlyMatrix, buildDayMatrix, buildYearMatrix,
   dashboardSummary, monthlyTrend, shortDocId, shortIdOf, blockNumber, parseBlockNumber, branchCode, seriesOf,
   docIdMatches, displayNumber,
@@ -245,6 +245,119 @@ describe('the standalone rule reads claimed codes, not names', () => {
     setIssueClaims([])
     assert.equal(entryCounts(withPart('CHARGER CABLE')).maintenance, 2) // the name wins again
     assert.equal(entryCounts(withPart('DEY-450')).maintenance, 1)
+  })
+})
+
+// Two rows naming the same part are two of that part. What makes them the same
+// part is the item and its code — not the company, which only records which
+// pool the units came out of.
+describe('the Materials Summary adds up one line per part', () => {
+  const change = (issue, company, quantity = 1) => ({ issue, quantity, action: 'CHANGE', company })
+  const lines = (entries) => materialBlocksByType(entries).AIRBUS.flatMap((b) => b.lines)
+
+  const CLAIMS = [
+    { name: 'Speaker Mid', parts: '45', variant: 'B' },
+    { name: 'ANTENNA', parts: '10', variant: 'A' },
+    { name: 'Charger12', parts: '99', variant: 'A' },
+  ]
+  const claiming = (list, fn) => {
+    try {
+      setIssueClaims(list)
+      fn()
+    } finally {
+      setIssueClaims([])
+    }
+  }
+
+  test('the same part twice on one entry is summed, not listed twice', () => {
+    claiming(CLAIMS, () => {
+      const e = entry([change('Speaker Mid', 'MOTECO'), change('Speaker Mid', 'MOTECO')])
+      assert.deepEqual(lines([e]), ['SPEAKER MID (MOT) = 2'])
+    })
+  })
+
+  // The reported case: 45B twice, drawn from two different pools.
+  test('different companies do not split the part into two lines', () => {
+    claiming(CLAIMS, () => {
+      const e = entry([change('Speaker Mid', 'MOTECO'), change('Speaker Mid', 'MOI')])
+      assert.deepEqual(lines([e]), ['SPEAKER MID (MOT) = 2'])
+    })
+  })
+
+  test('the same part across two entries of one model is summed too', () => {
+    claiming(CLAIMS, () => {
+      const a = entry([change('Speaker Mid', 'MOI')])
+      const b = entry([change('Speaker Mid', 'MOTECO', 3)])
+      assert.deepEqual(lines([a, b]), ['SPEAKER MID (MOI) = 4'])
+    })
+  })
+
+  // The code is the identity, so two spellings of one claim are one part.
+  test('a second spelling of the same claim lands on the same line', () => {
+    claiming(CLAIMS, () => {
+      const e = entry([change('Speaker Mid', 'MOTECO'), change('SPEAKER-MID', 'MOTECO')])
+      assert.deepEqual(lines([e]), ['SPEAKER MID (MOT) = 2'])
+    })
+  })
+
+  test('different parts stay on their own lines', () => {
+    claiming(CLAIMS, () => {
+      const e = entry([change('Speaker Mid', 'MOI'), change('ANTENNA', 'MOI')])
+      assert.deepEqual(lines([e]), ['ANTENNA (MOI) = 1', 'SPEAKER MID (MOI) = 1'])
+    })
+  })
+
+  // Hand-typed items, and every report saved before codes existed: no claim to
+  // read, so the name carries the identity and must still merge.
+  test('an unclaimed item merges on its name', () => {
+    claiming(CLAIMS, () => {
+      const e = entry([change('BCOVER', 'MOTECO'), change('BCOVER', 'MOI')])
+      assert.deepEqual(lines([e]), ['BCOVER (MOT) = 2'])
+    })
+  })
+
+  // The name space and the code space are kept apart, so an item someone names
+  // after a code cannot be counted as that code's part.
+  test('an item named like a code does not land on that code', () => {
+    claiming(CLAIMS, () => {
+      const e = entry([change('Speaker Mid', 'MOI'), change('45B', 'MOI')])
+      assert.deepEqual(lines([e]), ['45B (MOI) = 1', 'SPEAKER MID (MOI) = 1'])
+    })
+  })
+
+  test('programming still collapses to its one line', () => {
+    claiming(CLAIMS, () => {
+      const e = entry([
+        { issue: 'Speaker Mid', quantity: 1, action: 'PROGRAM', company: 'MOI' },
+        { issue: 'ANTENNA', quantity: 2, action: 'PROGRAM', company: 'MOTECO' },
+      ])
+      assert.deepEqual(lines([e]), ['PROGRAMMING = 3'])
+    })
+  })
+})
+
+// The Notes block at the foot of the TXT — "MODEL — comment", one line per
+// entry that carries a comment.
+describe('the notes block names the device, except where there is none', () => {
+  const noted = (model, comment) => entry([{ issue: 'ANTENNA', quantity: 1, action: 'CHANGE', company: 'MOTECO' }], { model, comment })
+  const txt = (e) => buildTxt(buildDateReport('17/08/2026', 'MAKKAH-REP-0021', [e], { branch: 'Makkah' }))
+
+  test('an ordinary entry prefixes its note with the model', () => {
+    assert.match(txt(noted('TH1N', 'Bench test passed.')), /\nTH1N — Bench test passed\.$/)
+  })
+
+  // "For Record Purpose Only. — closed for the holiday" reads as a note about a
+  // device. The whole point of that entry is that no device was involved.
+  test('the no-activity record leaves the placeholder model out', () => {
+    assert.match(txt(noted('For Record Purpose Only.', 'Friday, branch closed.')), /\nFriday, branch closed\.$/)
+  })
+
+  test('an entry with no model at all does not open with a stray dash', () => {
+    assert.match(txt(noted('', 'Collected from stores.')), /\nCollected from stores\.$/)
+  })
+
+  test('an entry with no comment contributes no note', () => {
+    assert.ok(!txt(noted('TH1N', '')).includes('Notes'))
   })
 })
 
