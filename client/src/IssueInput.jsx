@@ -68,9 +68,17 @@ export default function IssueInput({
   // could ever cut are the inventory ones, which is precisely the half someone
   // is searching for when they type a part name. The menu scrolls; the typing
   // narrows it. Neither needs a number in the way.
+  // The code is searchable too, because it is how the codes are read back off a
+  // WhatsApp message: someone holding "19A" is looking for the issue it names,
+  // and knows the code before they know the spelling. Matched from the START of
+  // the code, not anywhere inside it — "19" should find 19A and 19B, while a
+  // bare "a" must not drag in every variant-A row whose name nobody typed.
   const filtered = useMemo(() => {
     const all = suggestions.filter((s) => s.name)
-    return q ? all.filter((s) => s.name.toLowerCase().includes(q)) : all
+    if (!q) return all
+    return all.filter(
+      (s) => s.name.toLowerCase().includes(q) || String(s.code ?? '').toLowerCase().startsWith(q),
+    )
   }, [suggestions, q])
 
   useEffect(() => setActiveIndex(filtered.length ? 0 : -1), [q, open]) // eslint-disable-line react-hooks/exhaustive-deps
