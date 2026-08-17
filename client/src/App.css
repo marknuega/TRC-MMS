@@ -475,6 +475,70 @@
   cursor: not-allowed;
 }
 
+/* ⭳ PDF + its Tel/ISSI lock, welded into one segmented control: the halves
+   share a seam and a single outer radius, so they read as one thing that has a
+   setting rather than two buttons that happen to be adjacent.
+   The wrapper is the border — the halves square off the corners they meet at
+   and the lock drops its left edge, leaving exactly one line between them
+   instead of two stacked borders. Selectors are scoped to .pdf-group so they
+   outrank `.breakdown-head button`, which sizes everything else in this row. */
+.pdf-group {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.pdf-group .btn-pdf {
+  border-radius: 0;
+  height: 100%;
+}
+/* The lock: outlined rather than filled like the PDF half beside it — that DOES
+   something when clicked, this only says how the next PDF will come out. Masked
+   adds a tint so the safe state reads across the room, while the lock itself
+   still carries it up close. */
+.pdf-group .btn-numbers {
+  box-sizing: border-box;
+  width: 2.4rem;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.05rem;
+  line-height: 1;
+  border: 0;
+  border-left: 1.5px solid var(--border);
+  border-radius: 0;
+  background: var(--surface-2);
+  color: inherit;
+}
+.pdf-group .btn-numbers.is-masked {
+  background: color-mix(in srgb, var(--success) 14%, var(--surface-2));
+}
+.pdf-group .btn-numbers:hover {
+  background: color-mix(in srgb, var(--primary) 14%, var(--surface-2));
+}
+/* The press belongs to the whole control, not to the half under the finger —
+   one half sinking while the other stays put would tear the seam open. :active
+   on the wrapper covers a press on either. */
+.pdf-group .btn-pdf:active,
+.pdf-group .btn-numbers:active {
+  transform: none;
+}
+.pdf-group:active {
+  transform: translateY(1px);
+}
+.pdf-group .btn-numbers:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+/* The group is the visible edge, so a focused half has to draw its ring inside
+   it — overflow: hidden would otherwise clip an outline drawn on the boundary. */
+.pdf-group button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -3px;
+}
+
 .error {
   background: color-mix(in srgb, var(--danger) 12%, var(--surface));
   color: var(--danger);
@@ -2017,22 +2081,6 @@ h2 {
 .saved-list li.ref-only {
   background: var(--warn-soft);
   border-color: var(--warn);
-}
-/* The same id, short form. Quieter than the long one beside it: it is a second
-   rendering of that id, not a second fact about the report. */
-.short-id {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.78rem;
-  color: var(--muted);
-  letter-spacing: 0.02em;
-}
-/* Print header: sits under the long id in the same cell. */
-.print-short-id {
-  display: block;
-  font-style: normal;
-  font-size: 0.72rem;
-  letter-spacing: 0.03em;
-  opacity: 0.75;
 }
 .ref-badge {
   display: inline-block;

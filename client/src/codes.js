@@ -167,6 +167,16 @@ const FAULT_RE = new RegExp(`^([A-Z])(\\d{2})([A-Z])(${ACTION_ALT})(\\d*)([A-Z]{
 // on, inheriting the device from the one before it. One report is one device
 // (enforced below), so repeating the letter was only ever a restatement.
 const SHORT_FAULT_RE = new RegExp(`^(\\d{2})([A-Z])(${ACTION_ALT})(\\d*)([A-Z]{1,2})`)
+// The entry FORM takes a full tel / ISSI now, and the record stores whatever
+// was typed. This code format still carries exactly 4 digits of each, and
+// deliberately so: it is a contract shared with the WhatsApp decoder and with
+// every technician who has memorised it, and eight digits of tel typed into a
+// dense string is a different grammar, not a wider field. A decoded entry
+// therefore holds a genuine partial — the last 4 — which is exactly the shape
+// every report saved before full numbers existed already holds, and which
+// displayNumber (report.js) renders unchanged under both export modes. Someone
+// who wants the whole number on a code-created entry types it into that entry.
+//
 // tel(4) issi(4) technician(1+, letters or digits — a numeric ID or an
 // initials claim), OR just the technician alone with tel/issi both left off,
 // OR just ONE of tel/issi — a single "0" placeholder marks the other as not

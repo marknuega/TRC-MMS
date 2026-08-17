@@ -100,10 +100,17 @@ export function classify(action) {
 // reading the name is guessing; reading the code is not.
 const STANDALONE_PARTS = new Set(['98', '99'])
 
+// Strip to letters and digits. Case and punctuation carry no meaning when two
+// separately-maintained spellings of the same thing are compared — the same
+// idea as norm() in codes.js, which does it across the code map and the option
+// lists. Two callers here (the issue claims below, and the document-id search
+// further down) so there is one spelling of it in this module rather than a
+// third one written out by hand.
+const alnumKey = (v) => up(v).replace(/[^A-Z0-9]/g, '')
+
 // An entry stores the issue NAME, never the code — so the two are matched back
-// up through the claims. Punctuation and case carry no meaning across the two
-// lists, same normalisation the decoder uses on either side of matchOption.
-const claimKey = (v) => up(v).replace(/[^A-Z0-9]/g, '')
+// up through the claims.
+const claimKey = alnumKey
 
 // { standalone, coded } name sets, rebuilt from the live Issue types whenever
 // they change (see setIssueClaims). Null until something registers a list —
@@ -185,7 +192,13 @@ export function entryCounts(entry) {
 }
 
 // ---------------------------------------------------------------------------
-// Short-form document id: MAKKAH-REP-0018 also reads MAK-REP-A018.
+// Document id: MAK-REP-A018, the short form of MAKKAH-REP-0018.
+//
+// The short form is the id documents are SHOWN by — on the print sheet, in the
+// TXT, in the saved list. The long form is what the record is filed under: it
+// is what the database stores, what the inventory ledger references, and it
+// stays searchable, because a printout from before the change still carries it
+// and whoever holds one will type what they were given.
 //
 // Derived, never stored. It says nothing the long form does not already say —
 // branch, series and document number — so a column for it could only ever drift
@@ -242,11 +255,113 @@ export function blockNumber(n) {
  */
 export const seriesOf = (r) => r?.series || (up(r?.mode) === 'TRANSMITTAL' ? 'TRANS' : 'REP')
 
-/** "MAK-REP-A018" — the second, shorter rendering of a saved report's id. */
+/** "MAK-REP-A018" — the id a document is shown and quoted by. */
 export function shortDocId(branch, series, docNumber) {
   const b = branchCode(branch)
   const s = SERIES_SHORT[up(series)] ?? up(series).slice(0, 3)
   return `${b ? `${b}-` : ''}${s}-${blockNumber(docNumber)}`
+}
+
+/** The trailing number of a long id: "MAKKAH-REP-0018" -> 18. */
+const tailNumber = (id) => Number(String(id ?? '').match(/(\d+)\s*$/)?.[1] ?? 0)
+
+/**
+ * A saved row's short id — "MAK-REP-A018" for MAKKAH-REP-0018.
+ *
+ * The document number normally comes from the stored docNumber. A row that has
+ * none still carries the number in the tail of its long id, so it is read from
+ * there rather than defaulting: an offline save waiting to sync has no
+ * docNumber yet, and now that the short form is the id on show, every such row
+ * would otherwise read A001 and they would all read it together.
+ */
+export const shortIdOf = (r) =>
+  shortDocId(r?.branch, seriesOf(r), Number(r?.docNumber) || tailNumber(r?.reportId))
+
+// ---------------------------------------------------------------------------
+// Finding a saved document by its id.
+//
+// An id is written down on a printout, read out over the phone and typed back
+// in from memory, so the same document arrives spelled a dozen ways. All of
+// these name MAKKAH-REP-0018 (short form MAK-REP-A018):
+//
+//   A018   MAK-REP-A018   mak-rep-a018   makrepa018   mak rep a018
+//   0018   REP-0018       MAKKAH-REP-0018
+//
+// Both renderings are matched, because whichever one someone was handed is the
+// one they will type. Punctuation and case are dropped first (alnumKey), so the
+// separator style is not a case to handle — the same trick denseCode() plays on
+// a CDS code in codes.js.
+//
+// What is NOT dropped is where a partial id may start. A fragment matches only
+// a whole trailing run of SEGMENTS, never an arbitrary substring: A018 names
+// MAK-REP-A018 but must not drag in MAK-REP-A180 (report 0180) or a
+// MAK-RTO-A0181. A plain `includes` over the flattened id would match the
+// latter, quietly returning the wrong document to someone who typed the id they
+// were given correctly. Anchoring at the end also means a bare document number
+// like 0018 legitimately names every branch's 0018 — the query really is that
+// ambiguous, and the caller shows all of them rather than picking one.
+// ---------------------------------------------------------------------------
+
+/** ['MAKKAHREP0018', 'REP0018', '0018'] — every trailing run of an id's segments. */
+function idSuffixKeys(id) {
+  const segments = String(id ?? '').split('-').map(alnumKey).filter(Boolean)
+  return segments.map((_, i) => segments.slice(i).join(''))
+}
+
+/**
+ * Does `query` name one of `ids` — in full, or by a trailing run of segments?
+ *
+ * Deliberately a question about the ID, not about the query's shape. Asking
+ * "does this look like an id?" with a pattern would have to guess, and a real
+ * item search like "A COVER" reads exactly like a short id once its space is
+ * stripped. Asking "does this match an id?" cannot: A COVER matches no
+ * document, so nothing is claimed and the search stays an item search.
+ *
+ * @param {string} query   what was typed in the search box
+ * @param {string[]} ids   this document's ids, long and short
+ */
+export function docIdMatches(query, ids) {
+  const q = alnumKey(query)
+  if (!q) return false
+  return (ids ?? []).some((id) => idSuffixKeys(id).includes(q))
+}
+
+// ---------------------------------------------------------------------------
+// Tel / ISSI rendering.
+//
+// The record stores the number as it was TYPED, in full — that is the real
+// number, and a record that holds four digits of it is not the record. How much
+// of it leaves the app is a separate decision, made per export:
+//
+//   'full'   — the number as stored
+//   'masked' — the last 4, everything before them hidden
+//
+// The masked style is the house one, taken from the credentials line in
+// copyright.jsx (Electrical License#: CLN-NQ-***6092): three asterisks, then
+// the last four characters. Not a per-character run of asterisks — the length
+// of a technician's number is itself something the export need not publish.
+//
+// The asterisks stand for digits that are actually hidden, so a value with
+// nothing in front of its last 4 is printed as it is. That covers three real
+// cases at once and needs no special-casing for any of them: the '-' and '*'
+// placeholders a blank field is stored as, every report saved before this
+// existed (4 digits, all of them the last 4), and an entry created from a CDS
+// short code, whose format carries exactly tel(4) issi(4) and cannot supply
+// more. Rendering those as ***2221 would claim a hidden prefix that was never
+// recorded.
+//
+// Lives here, beside shortDocId, for the same reason: server/src/dailyText.js
+// imports this module, so the page, the exported file and the WhatsApp text
+// share one definition and cannot drift into showing different amounts.
+// ---------------------------------------------------------------------------
+
+const MASK_PREFIX = '***'
+const MASK_TAIL = 4
+
+export function displayNumber(value, mode = 'full') {
+  const v = String(value ?? '').trim()
+  if (mode !== 'masked' || v.length <= MASK_TAIL) return v
+  return `${MASK_PREFIX}${v.slice(-MASK_TAIL)}`
 }
 
 const modelDisplay = (m) => MODEL_DISPLAY[up(m)] ?? String(m ?? '').trim()
@@ -835,18 +950,25 @@ export function groupReports(entries) {
 }
 
 // ---- Full report model for one date ----
-// opts: { branch, mode: 'report'|'transmittal', transmittedBy, receivedBy, shortId }
-// `shortId` is the abbreviated id (see shortDocId). Optional: a caller that has
-// no series/docNumber to build one from — a preview of an unsaved report, say —
-// leaves it off and the header prints exactly as it always has.
+// opts: { branch, mode: 'report'|'transmittal', transmittedBy, receivedBy,
+//         shortId, numberMode }
+// `shortId` is the id the document shows (see shortDocId). Optional: a caller
+// with no series/docNumber to build one from — the All-Branches merge, which is
+// never saved and so never draws a number — leaves it off, and the header falls
+// back to the long `reportId`.
+// `numberMode` is 'full' or 'masked' (see displayNumber). It rides on the model
+// rather than being read at each render site, so every view built from one
+// report — the print sheet, the TXT, the WhatsApp text — is answering the same
+// question with the same answer.
 export function buildDateReport(dateLabel, reportId, entries, opts = {}) {
-  const { branch = '', mode = 'report', transmittedBy = '', receivedBy = '', shortId = '' } = opts
+  const { branch = '', mode = 'report', transmittedBy = '', receivedBy = '', shortId = '', numberMode = 'full' } = opts
   return {
     dateLabel,
     reportId,
     shortId,
     branch,
     mode,
+    numberMode,
     transmittedBy,
     receivedBy,
     entries,
@@ -865,6 +987,15 @@ function buildNotes(entries) {
 }
 
 // ---- TXT export (Report or Transmittal) ----
+//
+// Note on tel / ISSI: this text carries neither, and never has. It is a
+// summary format — day, ids, materials and device totals — with no per-entry
+// row for a number to sit in, and it is also the text server/src/dailyText.js
+// sends to the WhatsApp group, where a technician's number would be leaving the
+// app into a third-party channel. So report.numberMode has nothing to act on
+// here, and the TXT cannot disagree with the print sheet by construction. If a
+// per-entry line is ever added, render its numbers through displayNumber(v,
+// report.numberMode) — do not read the stored value directly.
 export function buildTxt(report) {
   const join = (sections) =>
     sections.length ? sections.reduce((acc, s, i) => (i ? [...acc, DIVIDER, s] : [s]), []) : ['NO ENTRY']
@@ -878,9 +1009,11 @@ export function buildTxt(report) {
     ...(report.branch ? [`BRANCH: ${report.branch}`] : []),
     ...(isTransmittal && report.transmittedBy ? [`TRANSMITTED BY: ${report.transmittedBy}`] : []),
     ...(isTransmittal && report.receivedBy ? [`RECEIVED BY: ${report.receivedBy}`] : []),
-    // Both ids on one line: the long one is what the record is filed under, the
-    // short one is what gets quoted out loud and typed into a search.
-    `${isTransmittal ? 'TRANSMITTAL' : 'REPORT'} ID: ${report.reportId ?? '-'}${report.shortId ? ` (${report.shortId})` : ''}`,
+    // The short id alone — one id on the page, the one that gets quoted out
+    // loud and typed into a search. A report built without one (an All-Branches
+    // merge, which has no document number of its own) still prints the long
+    // form: a header with no id at all would be worse than the older rendering.
+    `${isTransmittal ? 'TRANSMITTAL' : 'REPORT'} ID: ${report.shortId || report.reportId || '-'}`,
     DIVIDER,
   ]
 

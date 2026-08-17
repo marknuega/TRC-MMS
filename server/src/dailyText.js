@@ -12,7 +12,7 @@
 // client/src/report.js and is not duplicated here.
 
 import { prisma } from './db.js'
-import { buildDateReport, buildTxt, shortDocId, seriesOf } from '../../client/src/report.js'
+import { buildDateReport, buildTxt, shortIdOf } from '../../client/src/report.js'
 
 export const dmy = (value) => {
   const d = new Date(value)
@@ -49,9 +49,9 @@ export async function dailyReportText({ where = {}, mode = 'report', date } = {}
         buildDateReport(r.dateLabel, repLabel(r.reportId, r.branch, r.mode), r.entries, {
           branch: r.branch,
           mode: r.mode,
-          // Same short id the page shows — shortDocId is imported rather than
+          // The id the text actually prints — shortIdOf is imported rather than
           // mirrored, so unlike repLabel above there is no second copy to drift.
-          shortId: shortDocId(r.branch, seriesOf(r), r.docNumber),
+          shortId: shortIdOf(r),
         }),
       ),
     )

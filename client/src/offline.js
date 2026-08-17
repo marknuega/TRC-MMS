@@ -198,7 +198,10 @@ async function applyOptimistic(op) {
     const optimistic = {
       id: tmpId(),
       seq: Date.now(),
-      docNumber: 0,
+      // The number this save drew, not a placeholder: the short id the row is
+      // shown by is rendered from docNumber, so a 0 here would print every
+      // queued offline save as A001. The server assigns the real one on sync.
+      docNumber: Number(String(reportId).match(/(\d+)$/)?.[1] ?? 0),
       reportId,
       branch: String(body.branch ?? ''),
       mode,

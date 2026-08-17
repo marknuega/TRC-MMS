@@ -58,7 +58,10 @@ import {
   setIssueClaims,
   classify,
   shortDocId,
+  shortIdOf,
   seriesOf,
+  docIdMatches,
+  displayNumber,
   TYPE_ORDER,
 } from './report'
 import { PeriodPicker, makePeriod, periodLabel } from './period'
@@ -134,7 +137,9 @@ const saveLast = (v) => {
   }
 }
 
-// Report number with the branch prefixed, e.g. "MAKKAH-REP-0001".
+// Report number with the branch prefixed, e.g. "MAKKAH-REP-0001" — the long
+// form the record is FILED under. Documents are shown by their short id
+// (shortLabel below); this stays for what the server stores and for search.
 // In transmittal mode the "REP" series reads "TRANS" (e.g. "TAIF-TRANS-0003").
 const repLabel = (baseId, branch, mode) => {
   const id = mode === 'transmittal' ? String(baseId ?? '-').replace('REP-', 'TRANS-') : baseId ?? '-'
@@ -143,10 +148,10 @@ const repLabel = (baseId, branch, mode) => {
 const isTx = (r) => String(r?.mode ?? '').toUpperCase() === 'TRANSMITTAL'
 
 const pad4 = (n) => String(n).padStart(4, '0')
-// The second, shorter id: MAKKAH-REP-0018 also reads MAK-REP-A018. Both forms
-// render the same stored docNumber — see shortDocId in report.js, which the
-// server's daily text imports too so the two can never disagree.
-const shortLabel = (r) => shortDocId(r?.branch, seriesOf(r), r?.docNumber)
+// The id a saved document is SHOWN by: MAKKAH-REP-0018 reads MAK-REP-A018.
+// Both forms render the same stored docNumber — see shortIdOf in report.js,
+// which the server's daily text imports too so the two can never disagree.
+const shortLabel = (r) => shortIdOf(r)
 
 // Next document number for a branch's OWN run of a series (each branch numbers
 // itself, and REP / REF / TRANS number independently of each other).
@@ -162,6 +167,29 @@ function nextSeriesNumber(saved, series, branch) {
   return max + 1
 }
 
+// The two ids one saved snapshot answers to: "MAKKAH-REP-0004" and its short
+// form "MAK-REP-A004". Both are searchable — whichever one someone was handed
+// is the one they will type.
+const docIdsOf = (r) => [repLabel(r.reportId, r.branch, r.mode), shortLabel(r)]
+
+// Saved snapshots the query names by ID -> whole reports.
+//
+// Separate from searchInside because the two answer different questions and owe
+// different answers. Someone typing A018 wants the DOCUMENT; searchInside walks
+// down to fault lines and would hand back one row per fault, so a three-fault
+// report arrives as three near-identical rows and a report with no fault lines
+// at all — a saved snapshot with nothing but a device on it — arrives as
+// nothing, unfindable by the very id printed at the top of it.
+//
+// Which query counts as an id is settled by docIdMatches (report.js): a query
+// is an id query when it MATCHES an id, not when it looks like one. So an
+// ordinary item search is never misread as an id — "A COVER" flattens to
+// ACOVER, matches no document, and falls through to the item search untouched.
+// A query that genuinely does both ways (a report id that is also a comment's
+// text, say) is not resolved in favour of one: the caller shows the report AND
+// the line items, because both readings are true.
+const searchById = (list, query) => (list ?? []).filter((r) => docIdMatches(query, docIdsOf(r)))
+
 // Deep search INSIDE a set of saved snapshots -> matching line items.
 function searchInside(list, query) {
   const q = String(query ?? '').trim().toLowerCase()
@@ -169,16 +197,22 @@ function searchInside(list, query) {
   const out = []
   for (const r of list) {
     const entries = Array.isArray(r.entries) ? r.entries : []
-    const label = repLabel(r.reportId, r.branch, r.mode) // e.g. "MAKKAH-REP-0004"
-    // Both ids are searchable: whichever one someone was given, it finds this
-    // report. Without this, typing a short id off a printout finds nothing.
-    const short = shortLabel(r) // e.g. "MAK-REP-A004"
+    const label = shortLabel(r) // e.g. "MAK-REP-A004"
     for (const e of entries) {
       const model = e.model && e.model !== '-' ? e.model : ''
       for (const f of e.faults ?? []) {
-        // Tel/ISSI are in the haystack so a technician's radio can be traced
-        // back to the reports it appears in.
-        const hay = `${label} ${short} ${r.reportId} ${r.branch} ${r.dateLabel} ${e.technician ?? ''} ${r.receivedBy ?? ''} ${e.telNumber ?? ''} ${e.issiNumber ?? ''} ${e.type} ${e.model} ${f.issue} ${f.company} ${f.status} ${e.comment ?? ''}`
+        // The ids are NOT in this haystack. searchById above owns them now, and
+        // leaving them here too was the whole flood: an id sits on every one of
+        // a report's fault lines, so typing one matched all of them and handed
+        // back a three-fault report as three near-identical rows next to the
+        // report itself. A line item matches on what is on the LINE.
+        //
+        // Tel/ISSI are here IN FULL, whatever an export is set to show. Masking
+        // is about what leaves the app; this is a signed-in technician looking
+        // for the reports a radio appears in, and searching the masked form
+        // would mean the only number they have — the whole one, off the handset
+        // — is the one number that finds nothing.
+        const hay = `${r.branch} ${r.dateLabel} ${e.technician ?? ''} ${r.receivedBy ?? ''} ${e.telNumber ?? ''} ${e.issiNumber ?? ''} ${e.type} ${e.model} ${f.issue} ${f.company} ${f.status} ${e.comment ?? ''}`
         if (hay.toLowerCase().includes(q)) {
           out.push({
             date: r.dateLabel,
@@ -233,6 +267,22 @@ const lsSet = (k, v) => {
 }
 const MODE_KEY = 'trc_mode'
 const loadMode = () => (lsGet(MODE_KEY) === 'transmittal' ? 'transmittal' : 'report')
+
+// How much of a Tel / ISSI the PDF shows — 'masked' (last 4 only, as ***4567)
+// or 'full'. A toggle beside the PDF button rather than a per-print prompt: it
+// is a standing decision about what this workstation is allowed to put on
+// paper, and the person printing at the end of a long day is exactly the person
+// who should not have to answer it again each time. It sits next to the button
+// it governs so the answer is readable before the PDF is made.
+//
+// Masked is the default, for two reasons. It is the safe way round — a printout
+// is emailed on and photographed, and an unmasked default would have quietly
+// published every full number the moment full numbers started being stored. And
+// it costs nothing to adopt: every report saved before now holds 4 digits, all
+// of which are the last 4, so masked and full render those identically (see
+// displayNumber in report.js) — no existing report changes appearance.
+const NUMBERS_KEY = 'trc_numbers'
+const loadNumberMode = () => (lsGet(NUMBERS_KEY) === 'full' ? 'full' : 'masked')
 
 // Handover personnel are remembered PER BRANCH: { [branch]: { t, r } }. In an
 // All-Branches export each branch's own transmit/receive names are added.
@@ -418,6 +468,7 @@ function App({ user, onLogout }) {
   const branchList = isDirector ? options.regions?.[user.region] ?? [] : options.branches?.length ? options.branches : BRANCHES
   const [theme, setTheme] = useState(loadTheme)
   const [mode, setMode] = useState(loadMode)
+  const [numberMode, setNumberMode] = useState(loadNumberMode)
   // Each branch has its OWN document series — derive the next id for the branch
   // in view (All Branches previews the unassigned '' series; saving is off there).
   const seriesBranch = isAllBranches ? '' : branch
@@ -477,17 +528,6 @@ function App({ user, onLogout }) {
   // possibly disagree with, which is itself.
 
   const isTransmittal = mode === 'transmittal'
-  // The browser's "Save as PDF" dialog seeds its filename from document.title,
-  // so name it after the current document type. Transmittals also carry their
-  // number (e.g. "TRC Transmittal Report-0004") to match the printed doc.
-  useEffect(() => {
-    if (isTransmittal) {
-      const seq = String(nextTransId).replace(/^TRANS[-_]?/i, '')
-      document.title = `TRC Transmittal Report-${seq}`
-    } else {
-      document.title = 'TRC Maintenance Report'
-    }
-  }, [isTransmittal, nextTransId])
   // A save containing an RTO is marked reference-only, and a reference-only save
   // draws a REF number rather than a REP one — so the preview has to know which
   // it will be. Same test the server applies (hasRtoAction in routes/
@@ -501,6 +541,20 @@ function App({ user, onLogout }) {
   const nextSeries = isTransmittal ? 'TRANS' : willBeReferenceOnly ? 'REF' : 'REP'
   const nextDocId = isTransmittal ? nextTransId : willBeReferenceOnly ? nextRefId : nextReportId
   const nextShortId = shortDocId(seriesBranch, nextSeries, nextSeriesNumber(saved, nextSeries, seriesBranch))
+
+  // The browser's "Save as PDF" dialog seeds its filename from document.title,
+  // so every saved PDF carries the id of the document inside it — e.g. "TRC
+  // Maintenance Report-MAK-REP-A019.pdf". A folder of them then sorts and
+  // searches by the same id printed at the top of each sheet, instead of a
+  // dozen files sharing one name and telling them apart by save date.
+  //
+  // nextShortId, not the mode's own counter, because it already answers for
+  // every document type: a transmittal draws TRA, and a save holding an RTO
+  // draws RTO rather than the REP it is not (see nextSeries above).
+  useEffect(() => {
+    document.title = `TRC ${isTransmittal ? 'Transmittal' : 'Maintenance'} Report-${nextShortId}`
+  }, [isTransmittal, nextShortId])
+
   // Inventory item names, offered as suggestions in the issue/material fields.
   const inventoryNames = useMemo(
     () => [...new Set((inventory ?? []).map((i) => String(i.itemCode || '').trim()).filter(Boolean))].sort(),
@@ -534,6 +588,11 @@ function App({ user, onLogout }) {
       /* ignore storage errors */
     }
   }, [theme])
+
+  // Persist the PDF Tel/ISSI setting, same as the theme above.
+  useEffect(() => {
+    lsSet(NUMBERS_KEY, numberMode)
+  }, [numberMode])
 
   // Auto-collapse the sidebar when the window gets narrow (never auto-expands,
   // so a manual choice on a wide screen is respected).
@@ -714,7 +773,7 @@ function App({ user, onLogout }) {
       await refresh() // saving auto-clears the working set server-side — reflect it
       await refreshSaved()
       refreshInventory() // stock was deducted server-side for matched items
-      setSaveToast(`Saved as report number ${repLabel(rep.reportId, rep.branch, rep.mode)}.`)
+      setSaveToast(`Saved as report number ${shortLabel(rep)}.`)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -723,7 +782,7 @@ function App({ user, onLogout }) {
   }
 
   async function handleLoadReport(rep) {
-    if (!window.confirm(`Load ${repLabel(rep.reportId, rep.branch, rep.mode)} into the form? This replaces the entries currently listed.`)) return
+    if (!window.confirm(`Load ${shortLabel(rep)} into the form? This replaces the entries currently listed.`)) return
     setBusy(true)
     try {
       await loadSavedReport(rep.id)
@@ -767,7 +826,7 @@ function App({ user, onLogout }) {
   }
 
   async function handleDeleteSaved(rep) {
-    if (!window.confirm(`Delete ${repLabel(rep.reportId, rep.branch, rep.mode)}? This cannot be undone.`)) return
+    if (!window.confirm(`Delete ${shortLabel(rep)}? This cannot be undone.`)) return
     try {
       await deleteSavedReport(rep.id)
       await refreshSaved()
@@ -1038,7 +1097,7 @@ function App({ user, onLogout }) {
     if (isAllBranches) {
       if (!entries.length) return []
       const id = `${ALL_BRANCHES}-${nextDocId}` // e.g. "All Branches-REP-0001"
-      const handover = { branch: ALL_BRANCHES, mode, transmittedBy: reportTransmittedBy, receivedBy: reportReceivedBy }
+      const handover = { branch: ALL_BRANCHES, mode, numberMode, transmittedBy: reportTransmittedBy, receivedBy: reportReceivedBy }
       // Label spans the date range the merged entries cover.
       const dates = [...new Set(entries.map((e) => fmtLongDate(e.reportDate)).filter(Boolean))]
       const label = dates.length <= 1 ? dates[0] ?? '' : `${dates[0]} … ${dates[dates.length - 1]}`
@@ -1048,12 +1107,13 @@ function App({ user, onLogout }) {
       buildDateReport(g.dateLabel, repLabel(nextDocId, branch, mode), g.entries, {
         branch,
         mode,
+        numberMode,
         transmittedBy: reportTransmittedBy,
         receivedBy: reportReceivedBy,
         shortId: nextShortId,
       }),
     )
-  }, [isAllBranches, form.reportDate, saved, entries, nextDocId, nextShortId, branch, mode, reportTransmittedBy, reportReceivedBy])
+  }, [isAllBranches, form.reportDate, saved, entries, nextDocId, nextShortId, branch, mode, numberMode, reportTransmittedBy, reportReceivedBy])
   // buildTxt folds the Agency Summary in (daily reports only), so this single
   // string is what the box shows, what ⭳ Text writes, and what a copy yields.
   const combinedTxt = useMemo(() => reports.map(buildTxt).join('\n\n\n'), [reports])
@@ -1335,6 +1395,12 @@ function App({ user, onLogout }) {
   const reportResults = useMemo(() => searchInside(dailySaved, savedSearch), [dailySaved, savedSearch])
   const refResults = useMemo(() => searchInside(refSaved, savedRefSearch), [refSaved, savedRefSearch])
   const txResults = useMemo(() => searchInside(txSaved, savedTxSearch), [txSaved, savedTxSearch])
+  // Each list is searchable by its OWN short form — RTO-A001 finds the
+  // reference-only record, TRA-A001 the transmittal — because each one asks
+  // about the ids of the reports it actually holds.
+  const reportIdHits = useMemo(() => searchById(dailySaved, savedSearch), [dailySaved, savedSearch])
+  const refIdHits = useMemo(() => searchById(refSaved, savedRefSearch), [refSaved, savedRefSearch])
+  const txIdHits = useMemo(() => searchById(txSaved, savedTxSearch), [txSaved, savedTxSearch])
 
   async function handleCopyTxt() {
     if (!combinedTxt) return
@@ -1351,8 +1417,7 @@ function App({ user, onLogout }) {
   const savedRow = (r) => (
     <li key={r.id} className={r.isReferenceOnly ? 'ref-only' : undefined}>
       <div>
-        <strong>{repLabel(r.reportId, r.branch, r.mode)}</strong>{' '}
-        <span className="short-id" title="Short form of the same id">{shortLabel(r)}</span>{' '}
+        <strong>{shortLabel(r)}</strong>{' '}
         {r.isReferenceOnly && (
           <span className="ref-badge" title="Kept for the record only — no parts were used">
             Reference only
@@ -1428,7 +1493,7 @@ function App({ user, onLogout }) {
     )
 
   // A collapsible "Saved …" card (used for daily reports and transmittals).
-  const savedCard = ({ icon, title, list, open, setOpen, search, setSearch, results, hint, empty, placeholder, tx = false }) => (
+  const savedCard = ({ icon, title, list, open, setOpen, search, setSearch, results, idHits = [], hint, empty, placeholder, tx = false }) => (
     <section className="saved">
       <button type="button" className="manage-toggle" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
         <span>
@@ -1451,7 +1516,19 @@ function App({ user, onLogout }) {
           {list.length === 0 ? (
             <p className="empty">{empty}</p>
           ) : search.trim() ? (
-            searchList(results, search, tx)
+            // An id query surfaces the DOCUMENT, in the same row the unfiltered
+            // list uses — so it arrives with Load / Mark reference / Delete on
+            // it, which is what someone who went looking for a specific report
+            // came to do. Reusing savedRow rather than inventing a one-off
+            // "report result" row also means the two can never describe the
+            // same report differently.
+            <>
+              {idHits.length > 0 && <ul className="saved-list">{idHits.map(savedRow)}</ul>}
+              {/* Line items are still shown when there are any — a query can
+                  honestly be both. When it is only an id query they would be
+                  noise, so the "No items match" line is suppressed. */}
+              {(results.length > 0 || idHits.length === 0) && searchList(results, search, tx)}
+            </>
           ) : (
             <ul className="saved-list">{list.map(savedRow)}</ul>
           )}
@@ -1654,11 +1731,11 @@ function App({ user, onLogout }) {
                 </label>
                 <label>
                   <span className="cap">Tel number <span className="opt">(optional)</span></span>
-                  <input value={form.telNumber} onChange={set('telNumber')} placeholder="Last 4 digits, e.g. 1234" />
+                  <input value={form.telNumber} onChange={set('telNumber')} placeholder="Full number, e.g. 0501234567" />
                 </label>
                 <label>
                   <span className="cap">ISSI number <span className="opt">(optional)</span></span>
-                  <input value={form.issiNumber} onChange={set('issiNumber')} placeholder="Last 4 digits, e.g. 1234" />
+                  <input value={form.issiNumber} onChange={set('issiNumber')} placeholder="Full number, e.g. 12346575" />
                 </label>
                 <label>
                   <span className="cap">Technician <span className="opt">(optional · multiple)</span></span>
@@ -1870,6 +1947,11 @@ function App({ user, onLogout }) {
                         </strong>{' '}
                         <span className="muted small">
                           · {e.agency}
+                          {/* Full numbers on screen, whatever exports are set
+                              to show. This list is the working view behind a
+                              login — masking it would hide the number from the
+                              one person who needs to read it back off the
+                              handset, while protecting nothing that has left. */}
                           {e.technician ? ` · ${e.technician}` : ''} · TEL {e.telNumber} · ISSI {e.issiNumber}
                         </span>
                         <p>{issueActionCell(e)}</p>
@@ -1912,11 +1994,11 @@ function App({ user, onLogout }) {
                     </label>
                     <label>
                       <span className="cap">Tel number <span className="opt">(optional)</span></span>
-                      <input value={editForm.telNumber} onChange={eSet('telNumber')} placeholder="Last 4 digits, e.g. 1234" />
+                      <input value={editForm.telNumber} onChange={eSet('telNumber')} placeholder="Full number, e.g. 0501234567" />
                     </label>
                     <label>
                       <span className="cap">ISSI number <span className="opt">(optional)</span></span>
-                      <input value={editForm.issiNumber} onChange={eSet('issiNumber')} placeholder="Last 4 digits, e.g. 1234" />
+                      <input value={editForm.issiNumber} onChange={eSet('issiNumber')} placeholder="Full number, e.g. 12346575" />
                     </label>
                     <label>
                       <span className="cap">Technician <span className="opt">(optional · multiple)</span></span>
@@ -2029,7 +2111,10 @@ function App({ user, onLogout }) {
           <div className="breakdown-head">
             <h2>
               Report text{' '}
-              {reports.length > 0 && <span className="hint">(next: {nextDocId} · unsaved)</span>}
+              {/* The id the pending save will draw, in the form the saved
+                  document will be shown by — the same one printed in the
+                  report text below it. */}
+              {reports.length > 0 && <span className="hint">(next: {nextShortId} · unsaved)</span>}
             </h2>
             <div className="breakdown-actions">
               <button type="button" className="btn-txt" onClick={handleCopyTxt} disabled={!reports.length}>
@@ -2053,9 +2138,45 @@ function App({ user, onLogout }) {
               >
                 💾 Save report
               </button>
-              <button type="button" className="btn-pdf" onClick={() => window.print()} disabled={!reports.length}>
-                ⭳ PDF
-              </button>
+              {/* PDF and its Tel/ISSI lock are one control in two halves: the
+                  button that produces the file, and the setting that decides
+                  what is on it. Joined into a single bordered group — no gap, a
+                  shared seam — because the adjacency IS the statement that the
+                  lock applies to this output and nothing else. Wrapping them
+                  also takes them out of the row's flex gap, which would
+                  otherwise prise the pair apart.
+                  Closed lock = masked; the entry list, the search and the
+                  stored record all still hold the complete number. The state is
+                  carried by the lock AND its tint, never by colour alone, and
+                  the label the icon replaces lives on title + aria-label so it
+                  is readable by hover and by screen reader. A transmittal has
+                  no Tel/ISSI column, so there is nothing there to decide. */}
+              <span className="pdf-group">
+                <button type="button" className="btn-pdf" onClick={() => window.print()} disabled={!reports.length}>
+                  ⭳ PDF
+                </button>
+                {!isTransmittal && (
+                  <button
+                    type="button"
+                    className={`btn-numbers${numberMode === 'masked' ? ' is-masked' : ''}`}
+                    onClick={() => setNumberMode((m) => (m === 'masked' ? 'full' : 'masked'))}
+                    disabled={!reports.length}
+                    aria-pressed={numberMode === 'masked'}
+                    aria-label={
+                      numberMode === 'masked'
+                        ? 'Tel/ISSI masked in the PDF — click for complete numbers'
+                        : 'Tel/ISSI complete in the PDF — click to mask all but the last 4'
+                    }
+                    title={
+                      numberMode === 'masked'
+                        ? 'Tel/ISSI masked — the PDF shows the last 4 only (***4567). Click for complete numbers.'
+                        : 'Tel/ISSI complete — the PDF shows the whole number. Click to mask all but the last 4.'
+                    }
+                  >
+                    {numberMode === 'masked' ? '🔒' : '🔓'}
+                  </button>
+                )}
+              </span>
               <Toast message={saveToast} onDone={() => setSaveToast('')} />
             </div>
           </div>
@@ -2076,9 +2197,10 @@ function App({ user, onLogout }) {
             search: savedSearch,
             setSearch: setSavedSearch,
             results: reportResults,
+            idHits: reportIdHits,
             hint: 'Daily-report snapshots, saved under a unique REP-#### number. Load one back to review or edit it, then Save again to store it as a new report.',
             empty: 'No saved reports yet — in Report mode, click “Save report” above.',
-            placeholder: '🔎 Search inside reports (item, model, branch, date, tel, ISSI)…',
+            placeholder: '🔎 Search reports (id, item, model, branch, date, tel, ISSI)…',
           })}
 
         {/* Directly under the daily reports, and deliberately its own card: a
@@ -2094,9 +2216,10 @@ function App({ user, onLogout }) {
             search: savedRefSearch,
             setSearch: setSavedRefSearch,
             results: refResults,
+            idHits: refIdHits,
             hint: 'Kept for the record, not counted. Saved under their own REF-#### number, and left out of the monthly report, the dashboard, the spare-parts report and every agency and technician total. Marked automatically when a report contains an RTO; use “Unmark reference” to move one back.',
             empty: 'No reference-only reports — a report is filed here when it contains an RTO, or when you mark it by hand.',
-            placeholder: '🔎 Search inside reference-only reports (item, model, branch, date, tel, ISSI)…',
+            placeholder: '🔎 Search reference-only reports (id, item, model, branch, date, tel, ISSI)…',
           })}
 
         {isTransmittal &&
@@ -2109,9 +2232,10 @@ function App({ user, onLogout }) {
             search: savedTxSearch,
             setSearch: setSavedTxSearch,
             results: txResults,
+            idHits: txIdHits,
             hint: 'Transmittal snapshots, saved under a unique TRANS-#### number — kept separate from daily reports.',
             empty: 'No saved transmittals yet — switch to Transmittal mode and Save.',
-            placeholder: '🔎 Search inside transmittals (item, model, branch, date, tel, ISSI)…',
+            placeholder: '🔎 Search transmittals (id, item, model, branch, date, tel, ISSI)…',
             tx: true,
           })}
             </>
@@ -2376,7 +2500,7 @@ function TransmittalPrint({ report, descByMaterial = {}, handoverByBranch = {} }
       <h3 className="print-title">MATERIAL TRANSMITTAL</h3>
       <div className="print-meta">
         <div><span>DATE</span><b>{report.dateLabel}</b></div>
-        <div><span>TRANSMITTAL ID</span><b>{report.reportId ?? '-'}</b>{report.shortId && <i className="print-short-id">{report.shortId}</i>}</div>
+        <div><span>TRANSMITTAL ID</span><b>{report.shortId || report.reportId || '-'}</b></div>
         <div><span>BRANCH</span><b>{report.branch || '-'}</b></div>
         <div><span>TRANSMITTED BY</span><b>{report.transmittedBy || '-'}</b></div>
         <div><span>RECEIVED BY</span><b>{report.receivedBy || '-'}</b></div>
@@ -2481,7 +2605,7 @@ function ReportPrint({ report }) {
       <div className="print-meta">
         <div><span>REPORT DATE</span><b>{report.dateLabel}</b></div>
         <div><span>BRANCH</span><b>{report.branch || '-'}</b></div>
-        <div><span>REPORT ID</span><b>{report.reportId ?? '-'}</b>{report.shortId && <i className="print-short-id">{report.shortId}</i>}</div>
+        <div><span>REPORT ID</span><b>{report.shortId || report.reportId || '-'}</b></div>
         <div><span>TOTAL ENTRIES</span><b>{t.totalEntries}</b></div>
         <div><span>ALL DEVICE TOTAL PROGRAMMING</span><b>{t.programming}</b></div>
         <div><span>ALL DEVICE TOTAL MAINTENANCE</span><b>{t.maintenance}</b></div>
@@ -2500,8 +2624,12 @@ function ReportPrint({ report }) {
           {report.entries.map((e, i) => (
             <tr key={e.id}>
               <td>{i + 1}</td>
-              <td>{e.telNumber}</td>
-              <td>{e.issiNumber}</td>
+              {/* The sheet is the thing that leaves the app, so it is the thing
+                  that decides how much of a number to show — never the stored
+                  value read straight out. report.numberMode came from the
+                  export setting via buildDateReport. */}
+              <td>{displayNumber(e.telNumber, report.numberMode)}</td>
+              <td>{displayNumber(e.issiNumber, report.numberMode)}</td>
               <td>{e.model}</td>
               <td className="ia">{issueActionCell(e)}</td>
               <td>{entryQty(e)}</td>

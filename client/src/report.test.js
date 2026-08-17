@@ -4,7 +4,8 @@ import {
   classify, entryCounts, technicianTotals, agencyBlocks, activityTotals, buildSparePartsReport,
   agencyComment, buildDateReport, buildTxt, deviceBlocksByType, setIssueClaims,
   isCountable, periodEntries, buildMonthlyMatrix, buildDayMatrix, buildYearMatrix,
-  dashboardSummary, monthlyTrend, shortDocId, blockNumber, branchCode, seriesOf,
+  dashboardSummary, monthlyTrend, shortDocId, shortIdOf, blockNumber, branchCode, seriesOf,
+  docIdMatches, displayNumber,
 } from './report.js'
 import { DEFAULT_OPTIONS } from './options.js'
 
@@ -326,8 +327,9 @@ describe('reference-only reports stay out of every aggregation', () => {
   })
 })
 
-// The second, shorter rendering of a saved report's id: MAKKAH-REP-0018 also
-// reads MAK-REP-A018. Derived from branch + series + docNumber, never stored.
+// The id a document is shown by: MAKKAH-REP-0018 reads MAK-REP-A018. Derived
+// from branch + series + docNumber, never stored — the long form remains what
+// the record is filed under, and stays searchable.
 describe('short-form document ids', () => {
   test('the three forms, exactly', () => {
     assert.equal(shortDocId('Makkah', 'REP', 18), 'MAK-REP-A018')
@@ -398,11 +400,164 @@ describe('short-form document ids', () => {
     assert.equal(seriesOf({}), 'REP')
   })
 
-  test('the report header carries both ids, and only the long one without a short', () => {
+  test('the report header carries the short id alone', () => {
     const opts = { branch: 'Makkah' }
     const withShort = buildDateReport('16/08/2026', 'MAKKAH-REP-0018', [], { ...opts, shortId: 'MAK-REP-A018' })
-    assert.match(buildTxt(withShort), /REPORT ID: MAKKAH-REP-0018 \(MAK-REP-A018\)/)
-    const without = buildDateReport('16/08/2026', 'MAKKAH-REP-0018', [], opts)
+    const txt = buildTxt(withShort)
+    assert.match(txt, /REPORT ID: MAK-REP-A018\n/)
+    assert.ok(!txt.includes('MAKKAH-REP-0018'), 'the long form is not printed beside it')
+  })
+
+  // The All-Branches merge is never saved and so never draws a document number.
+  test('a report with no short id still prints the long one', () => {
+    const without = buildDateReport('16/08/2026', 'MAKKAH-REP-0018', [], { branch: 'Makkah' })
     assert.match(buildTxt(without), /REPORT ID: MAKKAH-REP-0018\n/)
+  })
+
+  // The short id is what shows, so it must be right for a row whose docNumber
+  // has not been assigned yet — an offline save waiting to sync.
+  test('shortIdOf reads the number from the long id when docNumber is missing', () => {
+    const row = { branch: 'Makkah', series: 'REP', docNumber: 0, reportId: 'REP-0018' }
+    assert.equal(shortIdOf(row), 'MAK-REP-A018')
+    assert.equal(shortIdOf({ ...row, docNumber: 18 }), 'MAK-REP-A018')
+    assert.equal(shortIdOf({ branch: 'Taif', mode: 'transmittal', reportId: 'TRANS-0007' }), 'TAI-TRA-A007')
+  })
+})
+
+// Finding a saved report by the id printed on it. Both renderings are matched,
+// in every spelling the id realistically arrives in.
+describe('finding a document by its id', () => {
+  // The pair the short form abbreviates, plus the two near-misses it must not
+  // pull in: 0180 (short A180) and a document numbered 181.
+  const ids18 = ['MAKKAH-REP-0018', 'MAK-REP-A018']
+  const ids180 = ['MAKKAH-REP-0180', 'MAK-REP-A180']
+  const ids181 = ['MAKKAH-REF-0181', 'MAK-RTO-A181']
+
+  test('every way someone writes MAKKAH-REP-0018 finds it', () => {
+    for (const q of [
+      'A018', 'a018', 'MAK-REP-A018', 'mak-rep-a018', 'makrepa018', 'mak rep a018',
+      'MAK_REP_A018', '  A018  ',
+      '0018', 'REP-0018', 'rep 0018', 'MAKKAH-REP-0018', 'makkah-rep-0018', 'makkahrep0018',
+    ]) {
+      assert.equal(docIdMatches(q, ids18), true, `"${q}" should find MAKKAH-REP-0018`)
+    }
+  })
+
+  // The whole reason a fragment anchors at the END of a segment run rather than
+  // matching anywhere: a flattened id contains A018 in all three of these.
+  test('a fragment does not drag in a neighbouring number', () => {
+    assert.equal(docIdMatches('A018', ids180), false)
+    assert.equal(docIdMatches('REP-0018', ids180), false)
+    assert.equal(docIdMatches('A018', ids181), false)
+    assert.equal(docIdMatches('A0181', ids18), false)
+    // Nor may it start mid-segment.
+    assert.equal(docIdMatches('018', ids18), false)
+    assert.equal(docIdMatches('EP-A018', ids18), false)
+    assert.equal(docIdMatches('MAKKAH', ids18), false)
+  })
+
+  test('each series answers to its own short form', () => {
+    assert.equal(docIdMatches('RTO-A001', ['MAKKAH-REP-0001', 'MAK-RTO-A001']), true)
+    assert.equal(docIdMatches('TRA-A001', ['MAKKAH-TRANS-0001', 'MAK-TRA-A001']), true)
+    // …and not to another's. A REP and a REF may share a document number.
+    assert.equal(docIdMatches('RTO-A001', ['MAKKAH-REP-0001', 'MAK-REP-A001']), false)
+  })
+
+  // A query is an id query because it MATCHES an id, not because it looks like
+  // one — so a genuine item search can never be mistaken for an id.
+  test('an ordinary item search matches no document', () => {
+    for (const q of ['A COVER', 'ANTENNA', 'CHARGER12', 'AMIR', 'MOTECO']) {
+      assert.equal(docIdMatches(q, ids18), false, `"${q}" is an item search, not an id`)
+    }
+  })
+
+  test('an empty query matches nothing', () => {
+    assert.equal(docIdMatches('', ids18), false)
+    assert.equal(docIdMatches('   ', ids18), false)
+    assert.equal(docIdMatches('-', ids18), false)
+    assert.equal(docIdMatches('A018', []), false)
+  })
+
+  // The unassigned/legacy branch has no branch segment at all (see shortDocId).
+  test('a document with no branch segment is still findable', () => {
+    assert.equal(docIdMatches('A018', ['REP-0018', 'REP-A018']), true)
+    assert.equal(docIdMatches('REP-A018', ['REP-0018', 'REP-A018']), true)
+  })
+
+  // The match is a question about the DOCUMENT's id and nothing else. That is
+  // what makes a snapshot with no fault lines on it findable at all: the old
+  // search only ever reached an id by walking down to a fault line, so a report
+  // with none could not be found by the id printed at the top of it.
+  test('nothing about the report but its id takes part', () => {
+    const ids = (r) => [shortDocId(r.branch, seriesOf(r), r.docNumber)]
+    const noFaults = { branch: 'Makkah', series: 'REP', docNumber: 19, mode: 'report', entries: [] }
+    assert.equal(docIdMatches('A019', ids(noFaults)), true)
+  })
+})
+
+// The record stores what was typed; each export decides how much of it to show.
+describe('Tel / ISSI display', () => {
+  test('complete prints the number as stored', () => {
+    assert.equal(displayNumber('0501234567', 'full'), '0501234567')
+    assert.equal(displayNumber('0501234567'), '0501234567') // 'full' is the default
+  })
+
+  test('masked prints exactly the last 4, house style', () => {
+    assert.equal(displayNumber('0501234567', 'masked'), '***4567')
+    assert.equal(displayNumber('12346575', 'masked'), '***6575')
+    // Three asterisks whatever the length — the length of a number is itself
+    // not something an export needs to publish.
+    assert.equal(displayNumber('96650123456789', 'masked'), '***6789')
+  })
+
+  // Reports saved before full numbers existed hold 4 digits, all of which ARE
+  // the last 4. Asterisks would claim a hidden prefix that was never recorded.
+  test('a legacy 4-digit value renders sensibly in both modes', () => {
+    assert.equal(displayNumber('2221', 'full'), '2221')
+    assert.equal(displayNumber('2221', 'masked'), '2221')
+  })
+
+  // A CDS short code carries exactly tel(4) issi(4) — that contract is
+  // unchanged, so a code-decoded entry is simply a 4-digit legacy value.
+  test('a code-decoded entry behaves like any other 4-digit value', () => {
+    assert.equal(displayNumber('6575', 'masked'), '6575')
+  })
+
+  test('a blank number and its stored placeholders render as they always did', () => {
+    for (const mode of ['full', 'masked']) {
+      assert.equal(displayNumber('', mode), '')
+      assert.equal(displayNumber(null, mode), '')
+      assert.equal(displayNumber(undefined, mode), '')
+      assert.equal(displayNumber('-', mode), '-') // the stored "no tel"
+      assert.equal(displayNumber('*', mode), '*') // the stored "no ISSI"
+    }
+  })
+
+  test('the mode rides on the report model, defaulting to complete', () => {
+    const opts = { branch: 'Makkah' }
+    assert.equal(buildDateReport('16/08/2026', 'MAKKAH-REP-0018', [], opts).numberMode, 'full')
+    assert.equal(
+      buildDateReport('16/08/2026', 'MAKKAH-REP-0018', [], { ...opts, numberMode: 'masked' }).numberMode,
+      'masked',
+    )
+  })
+
+  // The TXT — which is also the WhatsApp daily text (server/src/dailyText.js) —
+  // is a summary format and carries no per-entry number at all. So it cannot
+  // disagree with the print sheet about how much of one to show: it shows none,
+  // in either mode. If a per-entry line is ever added, this test fails and the
+  // line must go through displayNumber.
+  test('the TXT export publishes no Tel / ISSI in either mode', () => {
+    const entries = [{
+      id: 1, reportDate: '2026-08-16', technician: 'AMIR', agency: 'PSD',
+      telNumber: '0501234567', issiNumber: '12346575', type: 'AIRBUS', model: 'TH1N', comment: '',
+      faults: [{ issue: 'ANTENNA', quantity: 1, action: 'CHANGE', company: 'MOTECO', status: 'New' }],
+    }]
+    for (const numberMode of ['full', 'masked']) {
+      const txt = buildTxt(buildDateReport('16/08/2026', 'MAKKAH-REP-0018', entries, { branch: 'Makkah', numberMode }))
+      assert.doesNotMatch(txt, /0501234567|12346575/, numberMode)
+      assert.doesNotMatch(txt, /\*\*\*\d{4}/, numberMode)
+      assert.match(txt, /ANTENNA/) // …but the report itself is unaffected
+    }
   })
 })
