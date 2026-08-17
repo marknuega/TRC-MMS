@@ -2172,6 +2172,173 @@ h2 {
   background: var(--warn-soft);
   border-color: var(--warn);
 }
+/* ---- ISSUE field: suggestions, with a code you can add in place ---------- */
+.issue-input {
+  position: relative;
+  display: flex;
+  min-width: 0; /* it sits in a grid track; without this it refuses to shrink */
+}
+.issue-input > input {
+  width: 100%;
+}
+.issue-menu {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  max-height: 17rem;
+  overflow-y: auto;
+  /* No horizontal scrollbar: the menu is exactly as wide as the field, and a
+     name too long for it is ellipsised rather than pushing the row out of view.
+     A sideways scrollbar to reach a button is a button you cannot see. */
+  overflow-x: hidden;
+  padding: 0.25rem;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: 0 10px 28px rgb(15 23 42 / 18%);
+}
+.issue-opt {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  border-radius: var(--radius-sm);
+  /* Stated rather than inherited because the code badge is sized to match it
+     exactly — the row and the circle have to agree, so the number lives in one
+     place and .issue-code refers back to it. */
+  line-height: 1.4;
+  cursor: pointer;
+}
+.issue-opt.active {
+  background: var(--surface-3);
+}
+/* Shrink-to-fit, not stretch-to-fill: the code or the "+ code" chip sits
+   directly after the name it belongs to, instead of being flung to the far
+   edge of the row with a gulf of white between them. */
+.issue-opt-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Takes the leftover width so the ✕ stays pinned right, clear of the code. */
+.issue-opt-spacer {
+  flex: 1 1 auto;
+}
+/* The code, where a row has one — a pill rather than loose text beside the
+   name, so it reads as a tag attached to the issue rather than as part of its
+   title. Monospace keeps the two halves the same width down the column, so a
+   scan of the list compares like with like. */
+/* A true circle, not a pill: a code is always exactly three characters — two
+   digits and a letter (issueCode in options.js enforces it) — so the badge can
+   be a fixed square and be round for every code there will ever be. Padding
+   around the text is what made it an oval; a fixed square cannot be one.
+   Sized to the NAME's em box (1rem text -> 1.2rem ring, the little over being
+   the border and its breathing room), not to the row's 1.4rem line box, which
+   includes the leading above and below the letters and made the ring stand
+   taller than the word beside it.
+   It cannot shrink to the cap height of the letters: the ring has to enclose
+   three characters, so its diameter is driven by their width, and the font
+   inside is already as small as stays legible. box-sizing keeps the border
+   inside the square. */
+.issue-code {
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.2rem;
+  height: 1.2rem;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--border));
+  border-radius: 50%;
+  background: none; /* the ring alone — it marks the code, it does not fill it */
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.56rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--primary);
+}
+/* One control per row, and deliberately quiet: it opens an editor, it does not
+   change anything by itself. Faint until the row is hovered or arrowed onto, so
+   a list being read does not look like a list being edited. */
+.issue-opt-edit {
+  flex: 0 0 auto;
+  padding: 0 0.35rem;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.85rem;
+  line-height: 1;
+  opacity: 0;
+  cursor: pointer;
+}
+.issue-opt:hover .issue-opt-edit,
+.issue-opt.active .issue-opt-edit,
+.issue-opt-edit:focus-visible {
+  opacity: 1;
+}
+.issue-opt-edit:hover {
+  color: var(--primary);
+}
+.issue-code-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+}
+.issue-code-form input {
+  width: 2.6rem;
+  height: 1.9rem;
+  padding: 0 0.35rem;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: inherit;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-align: center;
+}
+.issue-code-form input:last-of-type {
+  width: 2.1rem;
+}
+.issue-code-form button {
+  height: 1.9rem;
+  padding: 0 0.5rem;
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.issue-code-save {
+  border: 0;
+  background: var(--primary);
+  color: #fff;
+  font-weight: 600;
+}
+.issue-code-error {
+  flex-basis: 100%;
+  color: var(--danger);
+  font-size: 0.72rem;
+  font-style: normal;
+}
+/* Destructive, so it is coloured as such — but it lives inside the editor, one
+   step in from the row, which is the distance that keeps it off a mis-click. */
+.issue-code-del {
+  border: 1px solid var(--danger);
+  background: none;
+  color: var(--danger);
+  font-weight: 600;
+}
+.issue-code-del:hover {
+  background: var(--danger);
+  color: #fff;
+}
+
 .ref-badge {
   display: inline-block;
   padding: 0.1rem 0.45rem;

@@ -39,6 +39,7 @@ import ReferenceCard from './ReferenceCard'
 import Toast from './Toast'
 import CodeEntry from './CodeEntry'
 import SearchSelect from './SearchSelect'
+import IssueInput from './IssueInput'
 import { Credit, Copyright, COPYRIGHT_HTML } from './copyright'
 import { BrandMark } from './brand'
 import {
@@ -666,6 +667,89 @@ function App({ user, onLogout }) {
   )
   // Material name (UPPER) -> Description, for the transmittal DESCRIPTION column.
   const descByMaterial = useMemo(() => materialDescMap(options.materials), [options.materials])
+
+  // ---- ISSUE suggestions ---------------------------------------------------
+  // Coded issues first — they are the ones a code can be typed for later, and
+  // the ones the WhatsApp decoder can read back — then everything else that is
+  // a legitimate thing to write in the field: the standalone actions (an issue
+  // in their own right, and they auto-set the Action), issues nobody has coded
+  // yet, and the inventory item names, whose match is what deducts stock.
+  //
+  // The uncoded ones are NOT hidden. They are real, they are in use, and a form
+  // that silently dropped them would send someone to Manage Inputs mid-entry.
+  // Each carries the way to give it a code instead — see IssueInput.
+  const issueSuggestions = useMemo(() => {
+    const out = []
+    const seen = new Set()
+    // `source` is which admin-managed list the row came from, and it is what
+    // decides whether the row can be removed and from where. An inventory name
+    // has no such list — it is offered because stock matches on it — so it is
+    // not removable here; deleting it belongs to the Inventory page.
+    const add = (name, code = '', source = 'issue') => {
+      const key = String(name ?? '').trim().toUpperCase()
+      if (!key || seen.has(key)) return
+      seen.add(key)
+      out.push({ name: String(name).trim(), code, source, removable: source !== 'inventory' })
+    }
+    for (const it of options.issueTypes ?? []) {
+      const code = issueCode(it)
+      if (code) add(issueName(it), code)
+    }
+    for (const it of options.issueTypes ?? []) if (!issueCode(it)) add(issueName(it))
+    for (const a of options.actions ?? []) {
+      if (!['CHANGE', 'REPAIR', 'NEW'].includes(String(a).toUpperCase())) add(a, '', 'action')
+    }
+    for (const n of inventoryNames) add(n, '', 'inventory')
+    return out
+  }, [options.issueTypes, options.actions, inventoryNames])
+
+  /**
+   * Drop a suggestion from the admin-managed list it belongs to.
+   *
+   * Confirmed, and the confirmation names the LIST rather than just the row:
+   * removing an action takes it out of the Action dropdown as well, which is a
+   * consequence somewhere the person cannot see from here. Existing entries and
+   * saved reports keep the text they already hold either way — this edits the
+   * vocabulary offered from now on, not the records written with it.
+   */
+  function removeIssueSuggestion(s) {
+    const key = s.source === 'action' ? 'actions' : 'issueTypes'
+    const where = s.source === 'action' ? 'Actions — it will also leave the Action dropdown' : 'Issue types'
+    if (!window.confirm(`Remove "${s.name}" from ${where}?`)) return
+    const list = options[key] ?? []
+    const nameOf = key === 'actions' ? (v) => String(v ?? '') : issueName
+    setCategory(key, list.filter((v) => !sameName(nameOf(v), s.name)))
+  }
+
+  /**
+   * Give an issue a CDS code from inside the entry form, and keep it.
+   *
+   * Returns an error STRING when it cannot — the caller shows it against the
+   * field rather than throwing, because this happens mid-entry and a thrown
+   * error would take the half-typed entry with it.
+   *
+   * A code already claimed by a different issue is refused, never reassigned:
+   * the code map is shared with the WhatsApp decoder, so a duplicate would make
+   * that code ambiguous for every reader of it — and the person who would find
+   * out is not the person typing here. Same rule Manage Inputs enforces.
+   */
+  const sameName = (a, b) => String(a ?? '').trim().toUpperCase() === String(b ?? '').trim().toUpperCase()
+
+  function assignIssueCode(name, parts, variant) {
+    const code = `${parts}${variant}`
+    const list = options.issueTypes ?? []
+    const clash = list.find((it) => issueCode(it) === code && sameName(issueName(it), name) === false)
+    if (clash) return `${code} is already ${issueName(clash)}`
+
+    const at = list.findIndex((it) => sameName(issueName(it), name))
+    const coded = { name: at >= 0 ? issueName(list[at]) : name, parts, variant }
+    // An issue already on the list is updated in place, keeping its position;
+    // an action or inventory name that has never been an issue is appended.
+    const next = at >= 0 ? list.map((it, i) => (i === at ? coded : it)) : [...list, coded]
+    setCategory('issueTypes', next)
+    return ''
+  }
+
 
   function changeMode(e) {
     const m = e.target.value === 'transmittal' ? 'transmittal' : 'report'
@@ -2029,13 +2113,24 @@ function App({ user, onLogout }) {
                     ) : (
                       <span className="tx-type-spacer" aria-hidden="true" />
                     ))}
-                  <input
-                    list={isTransmittal ? 'materials-list' : 'issue-types'}
-                    value={fault.issue}
-                    onChange={setFault(i, 'issue')}
-                    placeholder={isTransmittal ? 'e.g. A COVER' : 'e.g. A COVER'}
-                    aria-label={isTransmittal ? 'Material' : 'Issue'}
-                  />
+                  {isTransmittal ? (
+                    <input
+                      list="materials-list"
+                      value={fault.issue}
+                      onChange={setFault(i, 'issue')}
+                      placeholder="e.g. A COVER"
+                      aria-label="Material"
+                    />
+                  ) : (
+                    <IssueInput
+                      value={fault.issue}
+                      onChange={setFault(i, 'issue')}
+                      suggestions={issueSuggestions}
+                      onAssignCode={assignIssueCode}
+                      onRemove={removeIssueSuggestion}
+                      placeholder="e.g. A COVER"
+                    />
+                  )}
                   <input
                     type="number"
                     min="1"
@@ -2069,29 +2164,11 @@ function App({ user, onLogout }) {
                 </div>
               ))}
             </div>
-            <datalist id="issue-types">
-              {/* Standalone actions usable directly as an issue (auto-set the Action). */}
-              {options.actions
-                .filter((a) => !['CHANGE', 'REPAIR', 'NEW'].includes(a.toUpperCase()))
-                .map((a) => (
-                  <option key={`act-${a}`} value={a} />
-                ))}
-              {options.issueTypes.map((it, i) => {
-                const name = issueName(it)
-                // The CDS code rides along as the option's label, so it is
-                // visible while picking the issue by hand too.
-                const code = issueCode(it)
-                return (
-                  <option key={`iss-${name}-${i}`} value={name}>
-                    {code || undefined}
-                  </option>
-                )
-              })}
-              {/* Inventory items — picking one links it for auto stock deduction. */}
-              {inventoryNames.map((n) => (
-                <option key={`inv-${n}`} value={n} />
-              ))}
-            </datalist>
+            {/* The issue-types datalist that used to live here is gone: its rows
+                are built by issueSuggestions and drawn by IssueInput, which can
+                put an "+ code" control inside a row — the one thing an
+                OS-rendered datalist cannot do. Materials keep theirs; nothing
+                is added from that field. */}
             <datalist id="materials-list">
               {options.materials.map((m, i) => {
                 const name = materialName(m)
@@ -2300,13 +2377,24 @@ function App({ user, onLogout }) {
                   </div>
                   {editForm.faults.map((fault, i) => (
                     <div className={`fault-row${isTransmittal ? ' fault-row--tx' : ''}`} key={i}>
-                      <input
-                        list={isTransmittal ? 'materials-list' : 'issue-types'}
-                        value={fault.issue}
-                        onChange={eSetFault(i, 'issue')}
-                        placeholder="e.g. A COVER"
-                        aria-label={isTransmittal ? 'Material' : 'Issue'}
-                      />
+                      {isTransmittal ? (
+                        <input
+                          list="materials-list"
+                          value={fault.issue}
+                          onChange={eSetFault(i, 'issue')}
+                          placeholder="e.g. A COVER"
+                          aria-label="Material"
+                        />
+                      ) : (
+                        <IssueInput
+                          value={fault.issue}
+                          onChange={eSetFault(i, 'issue')}
+                          suggestions={issueSuggestions}
+                          onAssignCode={assignIssueCode}
+                          onRemove={removeIssueSuggestion}
+                          placeholder="e.g. A COVER"
+                        />
+                      )}
                       <input type="number" min="1" step="1" value={fault.quantity} onChange={eSetFault(i, 'quantity')} aria-label="Quantity" />
                       {!isTransmittal && (
                         <SearchSelect value={fault.action} onChange={eSetFault(i, 'action')} options={options.actions} ariaLabel="Action" />
