@@ -78,7 +78,13 @@ export const FALLBACK = {
     28: 'Micro-Loud Speaker', 29: 'Speaker Base', 30: 'Antenna Base', 31: 'LCD Base',
     33: 'Fuse Cover', 41: 'Rotary Knob', 42: 'Rotary Switch', 43: 'Side Grip',
     44: 'Microphone', 45: 'Speaker Low', 46: 'Speaker Mid', 95: 'Battery Pack',
-    97: 'Charging Pin', 98: 'Power Supply', 99: 'Charger',
+    // 97 "Charging Pin" is retired — the item is gone from the listings. It is
+    // dropped rather than kept as a dead entry because `components` is not
+    // consulted by any decode (see parseCodeReport): it is the Code Reference's
+    // vocabulary, so leaving 97 here would only offer a technician a part that
+    // can no longer be filed. A 97 code saved before the retirement still
+    // decodes, through whichever Issue type claims it.
+    98: 'Power Supply', 99: 'Charger',
   },
   // Variant letters. They no longer carry a suffix: B is not "the 3D build of
   // A" — 12A is A Cover and 12B is B Cover, a different part. A code's meaning

@@ -2,7 +2,7 @@ import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   classify, entryCounts, technicianTotals, agencyBlocks, activityTotals, buildSparePartsReport,
-  agencyComment, buildDateReport, buildTxt, deviceBlocksByType,
+  agencyComment, buildDateReport, buildTxt, deviceBlocksByType, setIssueClaims,
 } from './report.js'
 
 // RTO (Return to Owner) = the device went back untouched. It is not maintenance
@@ -119,8 +119,8 @@ describe('chargers and power supplies count on top of the entry max', () => {
     }
   })
 
-  // 97 is Charging Pin, 99 is Charger — different parts, and only one of them
-  // is standalone.
+  // A charging pin was never a charger (it was part 97, since retired from the
+  // listings), and the name pattern must keep telling the two apart.
   test('a charging pin is an ordinary part, not a standalone item', () => {
     assert.equal(entryCounts(entry([change('CHARGING PIN', 1), change('ANTENNA', 1)])).maintenance, 1)
   })
@@ -178,5 +178,68 @@ describe('chargers and power supplies count on top of the entry max', () => {
         'PSD [MAIN 5]',
       ].join('\n'),
     )
+  })
+})
+
+// Which items are standalone is the CODE an Issue type claims — 98 Power
+// Supply, 99 Charger — not what the item happens to be called. A claim may name
+// its part anything, so the name is a guess and the code is not.
+describe('the standalone rule reads claimed codes, not names', () => {
+  const change = (issue, quantity = 1) => ({ issue, quantity, action: 'CHANGE', company: 'MOTECO' })
+  // The item under test, plus one ordinary part: a standalone item counts on
+  // top of that part, so 2 means standalone and 1 means it folded into the max.
+  const withPart = (name) => entry([change(name), change('ANTENNA')])
+
+  const CLAIMS = [
+    { name: 'Charger12', parts: '99', variant: 'A' },
+    { name: 'ChargerDC', parts: '99', variant: 'B' },
+    { name: 'Power Supply - PSE65-12', parts: '98', variant: 'A' },
+    { name: 'DEY-450', parts: '99', variant: 'C' }, // a charger named nothing like one
+    { name: 'CHARGER CABLE', parts: '45', variant: 'C' }, // named like one, but is not
+    { name: 'ANTENNA', parts: '10', variant: 'A' },
+  ]
+
+  // Registration is module-level, so it must not leak into the tests above.
+  const claiming = (list, fn) => {
+    try {
+      setIssueClaims(list)
+      fn()
+    } finally {
+      setIssueClaims([])
+    }
+  }
+
+  test('99A is the Charger12', () => {
+    claiming(CLAIMS, () => assert.equal(entryCounts(withPart('Charger12')).maintenance, 2))
+  })
+
+  test('a 99 part counts standalone however it is named', () => {
+    claiming(CLAIMS, () => assert.equal(entryCounts(withPart('DEY-450')).maintenance, 2))
+  })
+
+  test('98 (power supply) is standalone on the same rule', () => {
+    claiming(CLAIMS, () => assert.equal(entryCounts(withPart('Power Supply - PSE65-12')).maintenance, 2))
+  })
+
+  test('a part claimed as something else is not, however charger-ish its name', () => {
+    claiming(CLAIMS, () => assert.equal(entryCounts(withPart('CHARGER CABLE')).maintenance, 1))
+  })
+
+  test('the claim is matched past case and punctuation', () => {
+    claiming(CLAIMS, () => assert.equal(entryCounts(withPart('charger 12')).maintenance, 2))
+  })
+
+  // Hand-typed issues, and every report saved before codes existed.
+  test('a name no claim covers still falls back to the pattern', () => {
+    claiming(CLAIMS, () => {
+      assert.equal(entryCounts(withPart('CHARGER818')).maintenance, 2)
+      assert.equal(entryCounts(withPart('BCOVER')).maintenance, 1)
+    })
+  })
+
+  test('with nothing registered the pattern alone decides, as it always has', () => {
+    setIssueClaims([])
+    assert.equal(entryCounts(withPart('CHARGER CABLE')).maintenance, 2) // the name wins again
+    assert.equal(entryCounts(withPart('DEY-450')).maintenance, 1)
   })
 })

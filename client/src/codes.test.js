@@ -572,3 +572,35 @@ describe('RTO shorthand', () => {
     assert.equal(botFaults[0].companyCode, app.faults[0].companyCode)
   })
 })
+
+// Part 97 ("Charging Pin") is retired — gone from the listings and dropped from
+// `components`. Reports filed against it before that must still decode, and they
+// do for a reason worth pinning down: `components` never took part in a decode.
+// A fault code resolves through its CLAIM, so retiring the reference entry
+// cannot reach the history.
+describe('a retired parts number still decodes from its claim', () => {
+  const WITH_97 = {
+    ...OPTS,
+    issueTypes: [...OPTS.issueTypes, { name: 'CHARGING PIN', parts: '97', variant: 'A' }],
+  }
+
+  test('97 is gone from the code map', () => {
+    assert.equal(FALLBACK.components[97], undefined)
+    assert.equal(FALLBACK.components['97'], undefined)
+  })
+
+  test('…yet a claimed 97A decodes exactly as it always did', () => {
+    const r = parseCodeReport('H97A C 1 MT 2221 6575 1', FALLBACK, WITH_97)
+    assert.equal(r.ok, true, r.errors.join('; '))
+    assert.equal(r.entry.faults[0].issue, 'CHARGING PIN')
+    assert.equal(r.entry.faults[0].quantity, 1)
+  })
+
+  // The other half of the rule, unchanged: without a claim it is refused rather
+  // than guessed at from the parts number.
+  test('an unclaimed 97A is refused, not guessed', () => {
+    const r = parseCodeReport('H97A C 1 MT 2221 6575 1', FALLBACK, OPTS)
+    assert.equal(r.ok, false)
+    assert.match(r.errors.join(' '), /97A .* is not a defined code/)
+  })
+})

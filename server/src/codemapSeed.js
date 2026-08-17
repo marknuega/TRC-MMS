@@ -57,7 +57,7 @@ export const CODEMAP_SEED = {
     "45": "Speaker Low",
     "46": "Speaker Mid",
     "95": "Battery Pack",
-    "97": "Charging Pin",
+    // 97 "Charging Pin" was here — retired, the item is gone from the listings.
     "98": "Power Supply",
     // H43A, H43B, 98A, 99A, 99B used to live here too, carried over verbatim
     // from the WhatsApp bridge. A parts number is exactly two digits (see
@@ -65,7 +65,7 @@ export const CODEMAP_SEED = {
     // a decode — H43A/H43B just duplicated 43+A/43+B (already covered by
     // `variants` below), and 98A/99A/99B named real parts with no code able to
     // reach them. Those three are re-homed as Issue-type claims instead (Manage
-    // inputs -> Issue types: 98+A "Power Supply - PSE65-12", 99+A "Charger818",
+    // inputs -> Issue types: 98+A "Power Supply - PSE65-12", 99+A "Charger12",
     // 99+B "ChargerDC"), which is the mechanism built for exactly this case.
   },
   // No suffix: B is not "the 3D build of A" — see FALLBACK in client/src/codes.js.

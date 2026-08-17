@@ -1,3 +1,7 @@
+// Extension-ful so `node --test` resolves it too, not just Vite. options.js is
+// pure (no React), so a pure module may read it.
+import { issueCode, issueName } from './options.js'
+
 // ---------------------------------------------------------------------------
 // Report engine — turns entries into the MOTECO-style TXT and PDF report data.
 // Ported from the MOTECO generator. The DATA-DRIVEN bits that the samples don't
@@ -89,13 +93,64 @@ export function classify(action) {
 // its own (its full quantity), on top of the single "device" the rest of the
 // entry's maintenance faults represent. So an entry with 10 chargers + another
 // (non-charger) part counts as 11, not the max (10). Both items share this rule.
-// Matched on the START of the word only. Chargers are named with the model
-// joined straight on — CHARGER12, CHARGER818, CHARGERDC — and a closing \b
-// after CHARGER only matches when a space or punctuation follows, so every one
-// of those fell through and was counted as an ordinary part. CHARGING PIN is a
-// different item and does not begin with CHARGER, so it stays excluded.
+//
+// WHICH parts those are is the code, not the name: 98 is the Power Supply and
+// 99 the Charger, and the variant letter after them says which one — 99A is a
+// Charger12, 99B a ChargerDC. A claim may name its part anything at all, so
+// reading the name is guessing; reading the code is not.
+const STANDALONE_PARTS = new Set(['98', '99'])
+
+// An entry stores the issue NAME, never the code — so the two are matched back
+// up through the claims. Punctuation and case carry no meaning across the two
+// lists, same normalisation the decoder uses on either side of matchOption.
+const claimKey = (v) => up(v).replace(/[^A-Z0-9]/g, '')
+
+// { standalone, coded } name sets, rebuilt from the live Issue types whenever
+// they change (see setIssueClaims). Null until something registers a list —
+// the tests and the server never do, and fall through to the name pattern.
+let claims = null
+
+/**
+ * Register the Issue types so the standalone rule can read codes.
+ *
+ * A module-level registration rather than an argument threaded through every
+ * aggregation: the counts are derived in a dozen places (summary, print, TXT
+ * export, dashboard, monthly), and one forgotten call site would mean two
+ * screens quietly disagreeing about the same day — exactly the drift this rule
+ * already cost us once. One writer, every reader in step.
+ */
+export function setIssueClaims(issueTypes) {
+  const standalone = new Set()
+  const coded = new Set()
+  for (const it of issueTypes ?? []) {
+    const code = issueCode(it) // '' unless BOTH parts and variant are present
+    const key = claimKey(issueName(it))
+    if (!code || !key) continue
+    coded.add(key)
+    if (STANDALONE_PARTS.has(code.slice(0, 2))) standalone.add(key)
+  }
+  claims = coded.size ? { standalone, coded } : null
+}
+
+// Fallback for a name no claim covers: hand-typed issues, and every report
+// saved before codes existed. Matched on the START of the word — chargers are
+// named with the model joined straight on (CHARGER12, CHARGER818, CHARGERDC)
+// and a closing \b only matches when a space or punctuation follows, so every
+// one of those used to fall through and count as an ordinary part. CHARGING
+// PIN does not begin with CHARGER, so it stays excluded.
 const STANDALONE_ITEM = /\bCHARGER|\bPOWER\s*SUPPLY/
-const isStandaloneItem = (issue) => STANDALONE_ITEM.test(up(issue))
+
+function isStandaloneItem(issue) {
+  if (claims) {
+    const key = claimKey(issue)
+    // A claimed code wins outright, in both directions: a 99 counts standalone
+    // whatever it is called, and a part claimed as something else does NOT,
+    // however charger-ish its name reads.
+    if (claims.standalone.has(key)) return true
+    if (claims.coded.has(key)) return false
+  }
+  return STANDALONE_ITEM.test(up(issue))
+}
 
 // Maintenance units on an entry = (sum of charger / power-supply-unit quantities)
 // + (max quantity among the remaining maintenance faults). A multi-component

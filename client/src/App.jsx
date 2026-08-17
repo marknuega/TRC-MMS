@@ -55,6 +55,7 @@ import {
   buildDayMatrix,
   buildYearMatrix,
   parseMonthlyPaste,
+  setIssueClaims,
   TYPE_ORDER,
 } from './report'
 import { PeriodPicker, makePeriod, periodLabel } from './period'
@@ -618,6 +619,17 @@ function App({ user, onLogout }) {
   useEffect(() => {
     reloadAll() // populate entries, saved, inventory + option suggestions
   }, [])
+
+  // Which parts count on their own (98 Power Supply, 99 Charger) is decided by
+  // the code an Issue type claims, so the report engine needs the live list —
+  // here rather than at each call site, so every count on every screen reads
+  // the same claims. Runs on load and on every Manage Inputs edit.
+  //
+  // During render, NOT in an effect: an effect fires after the tree has already
+  // rendered, so the first paint with a freshly loaded list would count against
+  // the previous one, and nothing would re-render to correct it. A useMemo runs
+  // before the summaries below and before any child reads them.
+  useMemo(() => setIssueClaims(options.issueTypes), [options.issueTypes])
 
   // Live refresh: poll the working entries every 5s and, when a new one arrives (added,
   // edited or removed — e.g. from another device), refresh the view once. It

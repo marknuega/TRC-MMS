@@ -32,7 +32,11 @@ const STALE = {
   H43A: null,
   H43B: null,
   '98A': { name: 'Power Supply - PSE65-12', parts: '98', variant: 'A' },
-  '99A': { name: 'Charger818', parts: '99', variant: 'A' },
+  // 99A is the Charger12 (it named the Charger818 until 2026-08-17). Renaming
+  // it here only affects an install that has not run this script yet: the claim
+  // is a row in app_options once made, and this script never touches a code
+  // that is already claimed. See the note at the top about the live map.
+  '99A': { name: 'Charger12', parts: '99', variant: 'A' },
   '99B': { name: 'ChargerDC', parts: '99', variant: 'B' },
 }
 
