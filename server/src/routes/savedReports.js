@@ -96,12 +96,22 @@ async function nextSeq() {
 //
 // Keyed on series rather than mode so taking a REF number never advances REP,
 // and vice versa: the two run side by side inside mode='report'.
+//
+// The lowest number NOT already taken, not the highest-ever plus one — a
+// number picked by hand out of order (matching a paper document already
+// numbered ahead of where the digital run has reached) must not strand every
+// number below it forever. Backfilling old paper reports relies on this: save
+// #12, then #13, and the suggestion keeps counting up through the gap instead
+// of jumping straight past a #19 someone typed in early.
 async function nextDocNumber(series, branch) {
-  const max = await prisma.savedReport.aggregate({
+  const rows = await prisma.savedReport.findMany({
     where: { series, branch: branch ?? '' },
-    _max: { docNumber: true },
+    select: { docNumber: true },
   })
-  return (max._max.docNumber ?? 0) + 1
+  const used = new Set(rows.map((r) => r.docNumber))
+  let n = 1
+  while (used.has(n)) n++
+  return n
 }
 
 // ---------------------------------------------------------------------------

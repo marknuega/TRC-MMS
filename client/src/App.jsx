@@ -181,15 +181,23 @@ const shortLabel = (r) => shortIdOf(r)
 // Next document number for a branch's OWN run of a series (each branch numbers
 // itself, and REP / REF / TRANS number independently of each other).
 // Derived from the saved list so it updates instantly when the branch changes.
+//
+// The lowest number NOT already taken — mirrors nextDocNumber in
+// server/src/routes/savedReports.js, so the preview always names the number a
+// Save is actually about to mint. A number picked by hand out of order (a
+// paper document already numbered ahead of the digital run) must not strand
+// the preview past every gap below it forever.
 function nextSeriesNumber(saved, series, branch) {
   const b = String(branch ?? '')
-  let max = 0
+  const used = new Set()
   for (const r of saved ?? []) {
     if (seriesOf(r) !== series) continue
     if (String(r.branch ?? '') !== b) continue
-    if ((r.docNumber ?? 0) > max) max = r.docNumber ?? 0
+    used.add(r.docNumber ?? 0)
   }
-  return max + 1
+  let n = 1
+  while (used.has(n)) n++
+  return n
 }
 
 // The two ids one saved snapshot answers to: "MAKKAH-REP-0004" and its short
