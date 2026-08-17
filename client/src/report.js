@@ -1,6 +1,6 @@
 // Extension-ful so `node --test` resolves it too, not just Vite. options.js is
 // pure (no React), so a pure module may read it.
-import { issueCode, issueName, isNoActivityModel } from './options.js'
+import { issueCode, issueName, isNoActivityModel, isNoActivityIssue } from './options.js'
 
 // ---------------------------------------------------------------------------
 // Report engine — turns entries into the MOTECO-style TXT and PDF report data.
@@ -461,12 +461,19 @@ export function materialBlocksByType(entries) {
     modelOrder.sort((a, b) => modelRank(rawOf.get(a)) - modelRank(rawOf.get(b)))
     const blocks = []
     for (const md of modelOrder) {
+      // "No Activity" carries no count — it survives the qty>0 filter on its
+      // own (its quantity is 0, the whole point of it) and prints as its bare
+      // label, with no "= N" and no company: there is neither a unit nor a
+      // pool of stock behind it.
       const rows = [...byModel.get(md).values()]
-        .filter((r) => r.qty > 0)
+        .filter((r) => r.qty > 0 || isNoActivityIssue(r.label))
         // Materials Summary is sorted alphabetically by label (unlike Entry Summary).
         .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base', numeric: true }))
       if (!rows.length) continue
-      blocks.push({ header: `${type} ${md}`, lines: rows.map((r) => `${r.label}${r.company} = ${r.qty}`) })
+      blocks.push({
+        header: `${type} ${md}`,
+        lines: rows.map((r) => (isNoActivityIssue(r.label) ? r.label : `${r.label}${r.company} = ${r.qty}`)),
+      })
     }
     byType[type] = blocks
   }
@@ -1098,11 +1105,13 @@ export function buildTxt(report) {
     'Entry & Materials Summary',
     DIVIDER,
     ...join(report.materialsSummary),
-    DIVIDER,
-    'Device Summary',
-    DIVIDER,
-    ...join(report.deviceSummary),
   ]
+  // A no-activity day has nothing for either section: every fault classifies
+  // as maintenance at quantity 0, so no device block and no agency block ever
+  // forms for it. Omitted rather than printed empty — same call the Agency
+  // Summary section already makes below — so the report does not carry a
+  // "Device Summary / NO ENTRY" heading over nothing.
+  if (report.deviceSummary.length) lines.push(DIVIDER, 'Device Summary', DIVIDER, ...join(report.deviceSummary))
   // Agency roll-up, scoped to THIS report's own entries so a multi-date export
   // gets one tally per date rather than one merged tally for the whole file.
   const agency = agencyComment(report.entries)
