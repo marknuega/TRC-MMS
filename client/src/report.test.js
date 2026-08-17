@@ -2,6 +2,7 @@ import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   classify, entryCounts, technicianTotals, agencyBlocks, activityTotals, buildSparePartsReport,
+  agencyComment, buildDateReport, buildTxt, deviceBlocksByType,
 } from './report.js'
 
 // RTO (Return to Owner) = the device went back untouched. It is not maintenance
@@ -82,5 +83,100 @@ describe('RTO stays out of the service totals', () => {
     assert.deepEqual(buildSparePartsReport([rtoOnly]).parts, {})
     // …while a real CHANGE on the same shape still is.
     assert.equal(buildSparePartsReport([realWork]).grandParts, 2)
+  })
+})
+
+// A charger / power supply unit is counted on its own, on TOP of the single
+// device the entry's other maintenance faults represent. The rule was already
+// here; what was broken was recognising the item — the names carry the model
+// joined onto the word (CHARGER12), which the old closing \b never matched.
+describe('chargers and power supplies count on top of the entry max', () => {
+  const DIVIDER = '------------------------------' // 30 dashes, as buildTxt writes them
+  const change = (issue, quantity) => ({ issue, quantity, action: 'CHANGE', company: 'MOTECO' })
+
+  test('an entry whose only fault is a charger counts once', () => {
+    assert.equal(entryCounts(entry([change('CHARGER12', 1)])).maintenance, 1)
+  })
+
+  test('a charger alongside another part counts as two, not the max', () => {
+    assert.equal(entryCounts(entry([change('CHARGER12', 1), change('ANTENNA', 1)])).maintenance, 2)
+  })
+
+  test('an entry with no charger still counts once however many faults it has', () => {
+    assert.equal(entryCounts(entry([change('ANTENNA', 1), change('BCOVER', 1)])).maintenance, 1)
+  })
+
+  // The store names these several ways; all of them are the same rule.
+  test('the model number may be joined on, spaced, or absent', () => {
+    for (const name of ['CHARGER', 'CHARGER12', 'CHARGER818', 'CHARGERDC', 'CHARGER 818', 'CHARGER DEY']) {
+      assert.equal(entryCounts(entry([change(name, 1), change('ANTENNA', 1)])).maintenance, 2, name)
+    }
+  })
+
+  test('power supplies follow the same rule', () => {
+    for (const name of ['POWER SUPPLY', 'POWERSUPPLY12', 'POWER SUPPLY - PSE65-12']) {
+      assert.equal(entryCounts(entry([change(name, 1), change('ANTENNA', 1)])).maintenance, 2, name)
+    }
+  })
+
+  // 97 is Charging Pin, 99 is Charger — different parts, and only one of them
+  // is standalone.
+  test('a charging pin is an ordinary part, not a standalone item', () => {
+    assert.equal(entryCounts(entry([change('CHARGING PIN', 1), change('ANTENNA', 1)])).maintenance, 1)
+  })
+
+  test('each unit counts, so quantity carries', () => {
+    assert.equal(entryCounts(entry([change('CHARGER12', 10), change('ANTENNA', 1)])).maintenance, 11)
+  })
+
+  // Makkah MAKKAH-REP-0017, 09/08/2026 — three chargers across the day, one of
+  // them on an entry that also had an antenna changed. That entry is the one
+  // worth 2, which is why the day totals 5.
+  const makkah = [
+    entry([change('CHARGER12', 1)]),
+    entry([change('CHARGER12', 1)]),
+    entry([change('CHARGER12', 1), change('ANTENNA', 1)]),
+    entry([change('BCOVER', 1)]),
+  ]
+
+  test('the device summary totals 5', () => {
+    const [block] = deviceBlocksByType(makkah).AIRBUS
+    assert.equal(block.header, 'AIRBUS TH1N')
+    assert.deepEqual(block.cats, [['MAINTENANCE', 5]])
+    assert.equal(block.total, 5)
+  })
+
+  test('the agency summary agrees with it', () => {
+    assert.equal(agencyComment(makkah), ['Agency Summary', DIVIDER, 'PSD [MAIN 5]'].join('\n'))
+  })
+
+  test('the exported report reads exactly as it should', () => {
+    const report = buildDateReport('09/08/2026', 'MAKKAH-REP-0017', makkah, { branch: 'Makkah' })
+    assert.equal(
+      buildTxt(report),
+      [
+        '09/08/2026',
+        'DAILY ACTIVITY REPORT',
+        'BRANCH: Makkah',
+        'REPORT ID: MAKKAH-REP-0017',
+        DIVIDER,
+        'Entry & Materials Summary',
+        DIVIDER,
+        'AIRBUS TH1N',
+        'ANTENNA (MOT) = 1',
+        'BCOVER (MOT) = 1',
+        'CHARGER12 (MOT) = 3',
+        DIVIDER,
+        'Device Summary',
+        DIVIDER,
+        'AIRBUS TH1N',
+        '1. MAINTENANCE = 5',
+        '       TOTAL = 5',
+        DIVIDER,
+        'Agency Summary',
+        DIVIDER,
+        'PSD [MAIN 5]',
+      ].join('\n'),
+    )
   })
 })

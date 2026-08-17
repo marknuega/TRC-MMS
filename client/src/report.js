@@ -89,7 +89,12 @@ export function classify(action) {
 // its own (its full quantity), on top of the single "device" the rest of the
 // entry's maintenance faults represent. So an entry with 10 chargers + another
 // (non-charger) part counts as 11, not the max (10). Both items share this rule.
-const STANDALONE_ITEM = /\bCHARGER\b|\bPOWER\s*SUPPLY\b/
+// Matched on the START of the word only. Chargers are named with the model
+// joined straight on — CHARGER12, CHARGER818, CHARGERDC — and a closing \b
+// after CHARGER only matches when a space or punctuation follows, so every one
+// of those fell through and was counted as an ordinary part. CHARGING PIN is a
+// different item and does not begin with CHARGER, so it stays excluded.
+const STANDALONE_ITEM = /\bCHARGER|\bPOWER\s*SUPPLY/
 const isStandaloneItem = (issue) => STANDALONE_ITEM.test(up(issue))
 
 // Maintenance units on an entry = (sum of charger / power-supply-unit quantities)
