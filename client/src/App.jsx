@@ -57,6 +57,8 @@ import {
   parseMonthlyPaste,
   setIssueClaims,
   classify,
+  shortDocId,
+  seriesOf,
   TYPE_ORDER,
 } from './report'
 import { PeriodPicker, makePeriod, periodLabel } from './period'
@@ -141,11 +143,10 @@ const repLabel = (baseId, branch, mode) => {
 const isTx = (r) => String(r?.mode ?? '').toUpperCase() === 'TRANSMITTAL'
 
 const pad4 = (n) => String(n).padStart(4, '0')
-// Which ID series a saved row belongs to. Rows saved before the series column
-// existed carry only their mode, and every one of those is a REP or a TRANS —
-// REF did not exist to be one. Mirrors seriesFor() in routes/savedReports.js.
-const seriesOf = (r) =>
-  r?.series || (String(r?.mode ?? 'report').toLowerCase() === 'transmittal' ? 'TRANS' : 'REP')
+// The second, shorter id: MAKKAH-REP-0018 also reads MAK-REP-A018. Both forms
+// render the same stored docNumber — see shortDocId in report.js, which the
+// server's daily text imports too so the two can never disagree.
+const shortLabel = (r) => shortDocId(r?.branch, seriesOf(r), r?.docNumber)
 
 // Next document number for a branch's OWN run of a series (each branch numbers
 // itself, and REP / REF / TRANS number independently of each other).
@@ -169,12 +170,15 @@ function searchInside(list, query) {
   for (const r of list) {
     const entries = Array.isArray(r.entries) ? r.entries : []
     const label = repLabel(r.reportId, r.branch, r.mode) // e.g. "MAKKAH-REP-0004"
+    // Both ids are searchable: whichever one someone was given, it finds this
+    // report. Without this, typing a short id off a printout finds nothing.
+    const short = shortLabel(r) // e.g. "MAK-REP-A004"
     for (const e of entries) {
       const model = e.model && e.model !== '-' ? e.model : ''
       for (const f of e.faults ?? []) {
         // Tel/ISSI are in the haystack so a technician's radio can be traced
         // back to the reports it appears in.
-        const hay = `${label} ${r.reportId} ${r.branch} ${r.dateLabel} ${e.technician ?? ''} ${r.receivedBy ?? ''} ${e.telNumber ?? ''} ${e.issiNumber ?? ''} ${e.type} ${e.model} ${f.issue} ${f.company} ${f.status} ${e.comment ?? ''}`
+        const hay = `${label} ${short} ${r.reportId} ${r.branch} ${r.dateLabel} ${e.technician ?? ''} ${r.receivedBy ?? ''} ${e.telNumber ?? ''} ${e.issiNumber ?? ''} ${e.type} ${e.model} ${f.issue} ${f.company} ${f.status} ${e.comment ?? ''}`
         if (hay.toLowerCase().includes(q)) {
           out.push({
             date: r.dateLabel,
@@ -492,8 +496,11 @@ function App({ user, onLogout }) {
     () => (entries ?? []).some((e) => (e.faults ?? []).some((f) => classify(f.action) === 'rto')),
     [entries],
   )
-  // The next id a Save would mint, for the current document type.
+  // The next id a Save would mint, for the current document type — in both
+  // forms, so the preview shows what the saved report will actually carry.
+  const nextSeries = isTransmittal ? 'TRANS' : willBeReferenceOnly ? 'REF' : 'REP'
   const nextDocId = isTransmittal ? nextTransId : willBeReferenceOnly ? nextRefId : nextReportId
+  const nextShortId = shortDocId(seriesBranch, nextSeries, nextSeriesNumber(saved, nextSeries, seriesBranch))
   // Inventory item names, offered as suggestions in the issue/material fields.
   const inventoryNames = useMemo(
     () => [...new Set((inventory ?? []).map((i) => String(i.itemCode || '').trim()).filter(Boolean))].sort(),
@@ -1043,9 +1050,10 @@ function App({ user, onLogout }) {
         mode,
         transmittedBy: reportTransmittedBy,
         receivedBy: reportReceivedBy,
+        shortId: nextShortId,
       }),
     )
-  }, [isAllBranches, form.reportDate, saved, entries, nextDocId, branch, mode, reportTransmittedBy, reportReceivedBy])
+  }, [isAllBranches, form.reportDate, saved, entries, nextDocId, nextShortId, branch, mode, reportTransmittedBy, reportReceivedBy])
   // buildTxt folds the Agency Summary in (daily reports only), so this single
   // string is what the box shows, what ⭳ Text writes, and what a copy yields.
   const combinedTxt = useMemo(() => reports.map(buildTxt).join('\n\n\n'), [reports])
@@ -1344,6 +1352,7 @@ function App({ user, onLogout }) {
     <li key={r.id} className={r.isReferenceOnly ? 'ref-only' : undefined}>
       <div>
         <strong>{repLabel(r.reportId, r.branch, r.mode)}</strong>{' '}
+        <span className="short-id" title="Short form of the same id">{shortLabel(r)}</span>{' '}
         {r.isReferenceOnly && (
           <span className="ref-badge" title="Kept for the record only — no parts were used">
             Reference only
@@ -2367,7 +2376,7 @@ function TransmittalPrint({ report, descByMaterial = {}, handoverByBranch = {} }
       <h3 className="print-title">MATERIAL TRANSMITTAL</h3>
       <div className="print-meta">
         <div><span>DATE</span><b>{report.dateLabel}</b></div>
-        <div><span>TRANSMITTAL ID</span><b>{report.reportId ?? '-'}</b></div>
+        <div><span>TRANSMITTAL ID</span><b>{report.reportId ?? '-'}</b>{report.shortId && <i className="print-short-id">{report.shortId}</i>}</div>
         <div><span>BRANCH</span><b>{report.branch || '-'}</b></div>
         <div><span>TRANSMITTED BY</span><b>{report.transmittedBy || '-'}</b></div>
         <div><span>RECEIVED BY</span><b>{report.receivedBy || '-'}</b></div>
@@ -2472,7 +2481,7 @@ function ReportPrint({ report }) {
       <div className="print-meta">
         <div><span>REPORT DATE</span><b>{report.dateLabel}</b></div>
         <div><span>BRANCH</span><b>{report.branch || '-'}</b></div>
-        <div><span>REPORT ID</span><b>{report.reportId ?? '-'}</b></div>
+        <div><span>REPORT ID</span><b>{report.reportId ?? '-'}</b>{report.shortId && <i className="print-short-id">{report.shortId}</i>}</div>
         <div><span>TOTAL ENTRIES</span><b>{t.totalEntries}</b></div>
         <div><span>ALL DEVICE TOTAL PROGRAMMING</span><b>{t.programming}</b></div>
         <div><span>ALL DEVICE TOTAL MAINTENANCE</span><b>{t.maintenance}</b></div>

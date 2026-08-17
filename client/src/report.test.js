@@ -4,8 +4,9 @@ import {
   classify, entryCounts, technicianTotals, agencyBlocks, activityTotals, buildSparePartsReport,
   agencyComment, buildDateReport, buildTxt, deviceBlocksByType, setIssueClaims,
   isCountable, periodEntries, buildMonthlyMatrix, buildDayMatrix, buildYearMatrix,
-  dashboardSummary, monthlyTrend,
+  dashboardSummary, monthlyTrend, shortDocId, blockNumber, branchCode, seriesOf,
 } from './report.js'
+import { DEFAULT_OPTIONS } from './options.js'
 
 // RTO (Return to Owner) = the device went back untouched. It is not maintenance
 // work and consumes no part, so it must stay out of every service total.
@@ -322,5 +323,86 @@ describe('reference-only reports stay out of every aggregation', () => {
     const txt = buildTxt(buildDateReport('16/08/2026', 'MAKKAH-REF-0001', refOnly.entries, { branch: 'Makkah' }))
     assert.match(txt, /REPORT ID: MAKKAH-REF-0001/)
     assert.match(txt, /ANTENNA/)
+  })
+})
+
+// The second, shorter rendering of a saved report's id: MAKKAH-REP-0018 also
+// reads MAK-REP-A018. Derived from branch + series + docNumber, never stored.
+describe('short-form document ids', () => {
+  test('the three forms, exactly', () => {
+    assert.equal(shortDocId('Makkah', 'REP', 18), 'MAK-REP-A018')
+    assert.equal(shortDocId('Makkah', 'REF', 1), 'MAK-RTO-A001')
+    assert.equal(shortDocId('Makkah', 'TRANS', 1), 'MAK-TRA-A001')
+  })
+
+  test('each series gets its own three letters', () => {
+    assert.equal(shortDocId('Taif', 'REP', 7), 'TAI-REP-A007')
+    assert.equal(shortDocId('Jeddah', 'TRANS', 7), 'JED-TRA-A007')
+    // REF reads RTO — Return To Owner. Deliberate: the two id forms name this
+    // series differently, and that is the point, not a slip.
+    assert.equal(shortDocId('Jeddah', 'REF', 7), 'JED-RTO-A007')
+  })
+
+  test('the letter blocks hold 999 each, and 000 is never emitted', () => {
+    assert.equal(blockNumber(1), 'A001')
+    assert.equal(blockNumber(18), 'A018')
+    assert.equal(blockNumber(999), 'A999')
+    assert.equal(blockNumber(1000), 'B001')
+    assert.equal(blockNumber(1998), 'B999')
+    assert.equal(blockNumber(1999), 'C001')
+    for (let n = 1; n <= 3000; n++) assert.doesNotMatch(blockNumber(n), /000$/, `n=${n}`)
+  })
+
+  test('every number up to Z999 is distinct', () => {
+    const seen = new Set()
+    for (let n = 1; n <= 26 * 999; n++) seen.add(blockNumber(n))
+    assert.equal(seen.size, 26 * 999)
+  })
+
+  // Past Z999 there is no letter left, so it falls back to the plain number —
+  // visibly different, and it cannot collide with a lettered form.
+  test('past Z999 it degrades to the bare number rather than a stray character', () => {
+    assert.equal(blockNumber(26 * 999), 'Z999')
+    assert.equal(blockNumber(26 * 999 + 1), '25975')
+    assert.doesNotMatch(blockNumber(26 * 999 + 1), /[A-Z]/)
+  })
+
+  test('a branch shorter than three letters gives the letters it has', () => {
+    assert.equal(shortDocId('Al', 'REP', 1), 'AL-REP-A001')
+  })
+
+  // The unassigned/legacy branch drops the segment entirely, the same way
+  // repLabel drops the prefix rather than emitting a leading hyphen.
+  test('the unassigned branch has no branch segment', () => {
+    assert.equal(shortDocId('', 'REP', 18), 'REP-A018')
+    assert.equal(shortDocId(undefined, 'REF', 1), 'RTO-A001')
+  })
+
+  test('the branch code ignores case and punctuation', () => {
+    assert.equal(shortDocId('makkah', 'REP', 1), 'MAK-REP-A001')
+    assert.equal(shortDocId('  Makkah  ', 'REP', 1), 'MAK-REP-A001')
+  })
+
+  // The short id is a rendering, not a key: two branches sharing a three-letter
+  // prefix would share a code. The shipped list must not contain such a pair —
+  // if this fails, the new branch needs an entry in BRANCH_SHORT.
+  test('no two shipped branches collide on their code', () => {
+    const codes = DEFAULT_OPTIONS.branches.map(branchCode)
+    assert.equal(new Set(codes).size, codes.length, `collision in ${codes.join(', ')}`)
+  })
+
+  test('seriesOf reads rows saved before the series column existed', () => {
+    assert.equal(seriesOf({ series: 'REF', mode: 'report' }), 'REF')
+    assert.equal(seriesOf({ mode: 'report' }), 'REP')
+    assert.equal(seriesOf({ mode: 'transmittal' }), 'TRANS')
+    assert.equal(seriesOf({}), 'REP')
+  })
+
+  test('the report header carries both ids, and only the long one without a short', () => {
+    const opts = { branch: 'Makkah' }
+    const withShort = buildDateReport('16/08/2026', 'MAKKAH-REP-0018', [], { ...opts, shortId: 'MAK-REP-A018' })
+    assert.match(buildTxt(withShort), /REPORT ID: MAKKAH-REP-0018 \(MAK-REP-A018\)/)
+    const without = buildDateReport('16/08/2026', 'MAKKAH-REP-0018', [], opts)
+    assert.match(buildTxt(without), /REPORT ID: MAKKAH-REP-0018\n/)
   })
 })

@@ -2018,6 +2018,22 @@ h2 {
   background: var(--warn-soft);
   border-color: var(--warn);
 }
+/* The same id, short form. Quieter than the long one beside it: it is a second
+   rendering of that id, not a second fact about the report. */
+.short-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.78rem;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+/* Print header: sits under the long id in the same cell. */
+.print-short-id {
+  display: block;
+  font-style: normal;
+  font-size: 0.72rem;
+  letter-spacing: 0.03em;
+  opacity: 0.75;
+}
 .ref-badge {
   display: inline-block;
   padding: 0.1rem 0.45rem;

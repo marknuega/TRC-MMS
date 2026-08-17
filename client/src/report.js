@@ -184,6 +184,71 @@ export function entryCounts(entry) {
   return c
 }
 
+// ---------------------------------------------------------------------------
+// Short-form document id: MAKKAH-REP-0018 also reads MAK-REP-A018.
+//
+// Derived, never stored. It says nothing the long form does not already say —
+// branch, series and document number — so a column for it could only ever drift
+// out of step with the id it abbreviates. Both forms render the same stored
+// docNumber; neither is the source of the other.
+//
+// Lives here rather than beside repLabel because repLabel is duplicated (once in
+// App.jsx, once in server/dailyText.js) to keep the page and the WhatsApp text
+// identical. dailyText.js already imports this module, so one definition serves
+// both and there is no second copy to keep in step.
+// ---------------------------------------------------------------------------
+
+// REF reads RTO in the short form — Return To Owner, which is what the flag
+// actually means and what a technician calls it. Deliberate, not a typo: the
+// two forms name the same series differently, and this is the reason why.
+const SERIES_SHORT = { REP: 'REP', REF: 'RTO', TRANS: 'TRA' }
+
+// Branch names are admin-managed free text, so the 3-letter code is the first
+// three letters. That is a rendering, NOT a key: two branches sharing a prefix
+// would share a code, and the long form remains the identifier. If such a pair
+// ever exists, give one of them an entry here — report.test.js checks the
+// shipped branch list for exactly this collision, so it fails at the point the
+// branch is added rather than the day two reports print the same short id.
+const BRANCH_SHORT = {}
+
+export function branchCode(branch) {
+  const b = up(branch).replace(/[^A-Z0-9]/g, '')
+  if (!b) return '' // unassigned/legacy branch: no prefix, same as repLabel
+  return BRANCH_SHORT[up(branch)] ?? b.slice(0, 3) // a short name yields a short code
+}
+
+// Blocks of 999: A001…A999, B001…B999, C001… — 000 is never emitted, so each
+// letter carries exactly 999 numbers and the first is always 001.
+const BLOCK = 999
+const LETTERS = 26
+
+export function blockNumber(n) {
+  const i = Math.max(1, Math.floor(Number(n) || 1)) - 1
+  const letter = Math.floor(i / BLOCK)
+  // Past Z999 (25,974 documents in one branch series) there is no letter left.
+  // Fall back to the plain number: visibly different, never wrong, and it can
+  // never collide with a lettered form.
+  if (letter >= LETTERS) return String(i + 1)
+  return `${String.fromCharCode(65 + letter)}${String((i % BLOCK) + 1).padStart(3, '0')}`
+}
+
+/**
+ * Which id series a saved row belongs to.
+ *
+ * Rows saved before the `series` column existed carry only their mode, and every
+ * one of those is a REP or a TRANS — REF did not exist yet to be one. Mirrors
+ * seriesFor() in server/src/routes/savedReports.js, which decides it at save
+ * time; this is the read side, for rows that predate it.
+ */
+export const seriesOf = (r) => r?.series || (up(r?.mode) === 'TRANSMITTAL' ? 'TRANS' : 'REP')
+
+/** "MAK-REP-A018" — the second, shorter rendering of a saved report's id. */
+export function shortDocId(branch, series, docNumber) {
+  const b = branchCode(branch)
+  const s = SERIES_SHORT[up(series)] ?? up(series).slice(0, 3)
+  return `${b ? `${b}-` : ''}${s}-${blockNumber(docNumber)}`
+}
+
 const modelDisplay = (m) => MODEL_DISPLAY[up(m)] ?? String(m ?? '').trim()
 const lastWord = (s) => String(s ?? '').trim().split(/\s+/).pop() || ''
 const modelShort = (m) => lastWord(modelDisplay(m)) // "SRG CARKIT" -> "CARKIT", "TH1N" -> "TH1N"
@@ -770,12 +835,16 @@ export function groupReports(entries) {
 }
 
 // ---- Full report model for one date ----
-// opts: { branch, mode: 'report'|'transmittal', transmittedBy, receivedBy }
+// opts: { branch, mode: 'report'|'transmittal', transmittedBy, receivedBy, shortId }
+// `shortId` is the abbreviated id (see shortDocId). Optional: a caller that has
+// no series/docNumber to build one from — a preview of an unsaved report, say —
+// leaves it off and the header prints exactly as it always has.
 export function buildDateReport(dateLabel, reportId, entries, opts = {}) {
-  const { branch = '', mode = 'report', transmittedBy = '', receivedBy = '' } = opts
+  const { branch = '', mode = 'report', transmittedBy = '', receivedBy = '', shortId = '' } = opts
   return {
     dateLabel,
     reportId,
+    shortId,
     branch,
     mode,
     transmittedBy,
@@ -809,7 +878,9 @@ export function buildTxt(report) {
     ...(report.branch ? [`BRANCH: ${report.branch}`] : []),
     ...(isTransmittal && report.transmittedBy ? [`TRANSMITTED BY: ${report.transmittedBy}`] : []),
     ...(isTransmittal && report.receivedBy ? [`RECEIVED BY: ${report.receivedBy}`] : []),
-    `${isTransmittal ? 'TRANSMITTAL' : 'REPORT'} ID: ${report.reportId ?? '-'}`,
+    // Both ids on one line: the long one is what the record is filed under, the
+    // short one is what gets quoted out loud and typed into a search.
+    `${isTransmittal ? 'TRANSMITTAL' : 'REPORT'} ID: ${report.reportId ?? '-'}${report.shortId ? ` (${report.shortId})` : ''}`,
     DIVIDER,
   ]
 
