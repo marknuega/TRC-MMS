@@ -2628,6 +2628,12 @@ h2 {
   text-align: center;
   text-transform: uppercase;
 }
+/* A Tel prefix field holds a comma-separated list ("355, 06"), not one short
+   token, so it reads from the left like the text it is. */
+.field-prefix input {
+  width: 8rem;
+  text-align: left;
+}
 /* In the edit row the two code fields share a line above the description. */
 .edit-code-row {
   display: flex;
@@ -2850,8 +2856,10 @@ h2 {
     grid-column: 1 / -1;
   }
   /* Three technician fields would leave a ragged single cell — let the name
-     run the full width under them instead. */
-  .manage-inputs .manage-controls.cat-tech .field-name {
+     run the full width under them instead. Models pair Category + Tel prefixes
+     on the first line for the same reason. */
+  .manage-inputs .manage-controls.cat-tech .field-name,
+  .manage-inputs .manage-controls.cat-models .field-name {
     grid-column: 1 / -1;
   }
   .manage-inputs .add-action {
@@ -2885,7 +2893,8 @@ h2 {
        materials  3 + 4 + 4 + 1
        plain      3 + 8     + 1
        issues     3 + 2+2 + 4 + 1
-       technicians 2 + 2+2+2 + 3 + 1                                        */
+       technicians 2 + 2+2+2 + 3 + 1
+       models     3 + 2   + 6 + 1                                          */
   .manage-inputs .field-category {
     grid-column: span 3;
   }
@@ -2908,6 +2917,9 @@ h2 {
   }
   .manage-inputs .manage-controls.cat-issues .field-name {
     grid-column: span 4;
+  }
+  .manage-inputs .manage-controls.cat-models .field-name {
+    grid-column: span 6;
   }
   .manage-inputs .manage-controls.cat-tech .field-category {
     grid-column: span 2;

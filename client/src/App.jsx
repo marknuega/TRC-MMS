@@ -27,7 +27,7 @@ import { onSyncChange } from './offline'
 import { advanceOnEnter } from './focusNav'
 import {
   DEFAULT_OPTIONS, mergeOptions, MODEL_TYPE, BRANCHES, ALL_BRANCHES, ALL_REGIONS,
-  materialName, materialDescMap, issueName, issueCode, technicianName,
+  materialName, materialDescMap, issueName, issueCode, technicianName, modelNames, telModel,
 } from './options'
 import ManageInputs from './ManageInputs'
 import Inventory from './Inventory'
@@ -1100,10 +1100,52 @@ function App({ user, onLogout }) {
 
   const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }))
 
+  // Whether Model or Type has been set BY HAND for the entry being typed, which
+  // is what stops the Tel auto-select below from writing over it.
+  //
+  // It has to be a flag, not a look at whether the fields are empty: a fresh
+  // form arrives with the previous entry's Model and Type already in it
+  // (emptyForm reads saveLast), so "still blank" would be false almost always
+  // and the auto-select would effectively never fire. A value carried over from
+  // the last device is not a choice about this one.
+  const devicePicked = useRef(false)
+
   // Choosing a model auto-fills Type from the model→type map (if the model is mapped).
   const setModel = (e) => {
     const model = e.target.value
+    if (model !== form.model) devicePicked.current = true
     setForm((f) => ({ ...f, model, type: MODEL_TYPE[model.toUpperCase()] ?? f.type }))
+  }
+  // Picking the Type by hand counts too: someone who has just chosen OTHER does
+  // not want the number overruling them a keystroke later.
+  //
+  // Both only count a change of VALUE. Enter walks Model -> Type -> Tel, and a
+  // SearchSelect re-commits whatever row is highlighted on the way past — which
+  // is the current one. Treating that as a decision would arm the block on the
+  // exact keystrokes used to reach the Tel field, killing the auto-select for
+  // anyone who fills the form by keyboard.
+  const setType = (e) => {
+    if (e.target.value !== form.type) devicePicked.current = true
+    set('type')(e)
+  }
+
+  // A Tel number's leading digits say which model it is (Manage inputs →
+  // Models → Tel prefixes), so typing it selects the Model — and the Type comes
+  // off the model from there, through the same MODEL_TYPE map setModel uses.
+  // The number picks the Model; the Model still picks the Type.
+  //
+  // Touch the Model or the Type yourself and the number stops filling them for
+  // the rest of the entry: correct a wrong guess (109 leads with the car kit,
+  // the bench has the desktop) and the correction stands, however much of the
+  // number is typed afterwards.
+  const setTel = (e) => {
+    const telNumber = e.target.value
+    const model = devicePicked.current ? '' : telModel(telNumber, options.models)
+    setForm((f) => ({
+      ...f,
+      telNumber,
+      ...(model && { model, type: MODEL_TYPE[model.toUpperCase()] ?? f.type }),
+    }))
   }
   const setFault = (i, field) => (e) => {
     // Remember the last Company so new fault rows (and the next entry) pre-select it.
@@ -1170,6 +1212,9 @@ function App({ user, onLogout }) {
       // Mirrored into state so the Agency dropdown re-sorts straight away —
       // localStorage on its own would not re-render anything.
       setLastAgency(payload.agency)
+      // A new entry, so the carried-over Model/Type are nobody's choice yet and
+      // the next Tel number is free to say what the device is.
+      devicePicked.current = false
       setForm((f) => ({ ...emptyForm(), reportDate: f.reportDate, technician: f.technician }))
       setError(null)
       refresh()
@@ -1211,7 +1256,9 @@ function App({ user, onLogout }) {
   }
 
   // ---- Edit an existing entry (modal) ----
+  const eDevicePicked = useRef(false)
   function openEdit(e) {
+    eDevicePicked.current = false
     setEditForm({
       reportDate: String(e.reportDate).slice(0, 10),
       technician: e.technician || '',
@@ -1238,7 +1285,25 @@ function App({ user, onLogout }) {
   const eSet = (field) => (ev) => setEditForm((f) => ({ ...f, [field]: ev.target.value }))
   const eSetModel = (ev) => {
     const model = ev.target.value
+    if (model !== editForm.model) eDevicePicked.current = true
     setEditForm((f) => ({ ...f, model, type: MODEL_TYPE[model.toUpperCase()] ?? f.type }))
+  }
+  const eSetType = (ev) => {
+    if (ev.target.value !== editForm.type) eDevicePicked.current = true
+    eSet('type')(ev)
+  }
+  // Same auto-select as setTel, on the edit modal's own copy of the fields. The
+  // flag starts down per open (openEdit above): re-typing a saved entry's Tel
+  // number is usually the correction, so the Model follows it, and picking the
+  // Model by hand still ends the argument.
+  const eSetTel = (ev) => {
+    const telNumber = ev.target.value
+    const model = eDevicePicked.current ? '' : telModel(telNumber, options.models)
+    setEditForm((f) => ({
+      ...f,
+      telNumber,
+      ...(model && { model, type: MODEL_TYPE[model.toUpperCase()] ?? f.type }),
+    }))
   }
   const eSetFault = (i, field) => (ev) => {
     if (field === 'company') saveLast({ company: ev.target.value })
@@ -1451,6 +1516,8 @@ function App({ user, onLogout }) {
   // alongside the name, so everywhere else works off this instead of
   // options.technicians directly.
   const technicianNames = useMemo(() => (options.technicians ?? []).map(technicianName), [options.technicians])
+  // Models may carry Tel prefixes now; the dropdown only ever shows the name.
+  const modelOptions = useMemo(() => modelNames(options.models), [options.models])
 
   // Collapse the entry card in All-Branches (read-only merged) mode.
   useEffect(() => {
@@ -2068,11 +2135,11 @@ function App({ user, onLogout }) {
               <div className="grid">
                 <label>
                   Model {form.type === 'OTHER' && <span className="opt">(optional)</span>}
-                  <SearchSelect value={form.model} onChange={setModel} options={options.models} />
+                  <SearchSelect value={form.model} onChange={setModel} options={modelOptions} />
                 </label>
                 <label>
                   Type
-                  <SearchSelect value={form.type} onChange={set('type')} options={options.types} />
+                  <SearchSelect value={form.type} onChange={setType} options={options.types} />
                 </label>
                 <label>
                   <span className="cap">Technician <span className="opt">(optional · multiple)</span></span>
@@ -2084,7 +2151,7 @@ function App({ user, onLogout }) {
                 </label>
                 <label>
                   <span className="cap">Tel number <span className="opt">(optional)</span></span>
-                  <input value={form.telNumber} onChange={set('telNumber')} placeholder="Full number, e.g. 0501234567" />
+                  <input value={form.telNumber} onChange={setTel} placeholder="Full number, e.g. 0501234567" />
                 </label>
                 <label>
                   <span className="cap">ISSI number <span className="opt">(optional)</span></span>
@@ -2320,11 +2387,11 @@ function App({ user, onLogout }) {
                   <div className="grid" onKeyDown={advanceOnEnter}>
                     <label>
                       Model {editForm.type === 'OTHER' && <span className="opt">(optional)</span>}
-                      <SearchSelect value={editForm.model} onChange={eSetModel} options={options.models} />
+                      <SearchSelect value={editForm.model} onChange={eSetModel} options={modelOptions} />
                     </label>
                     <label>
                       Type
-                      <SearchSelect value={editForm.type} onChange={eSet('type')} options={options.types} />
+                      <SearchSelect value={editForm.type} onChange={eSetType} options={options.types} />
                     </label>
                     <label>
                       Agency
@@ -2340,7 +2407,7 @@ function App({ user, onLogout }) {
                     </label>
                     <label>
                       <span className="cap">Tel number <span className="opt">(optional)</span></span>
-                      <input value={editForm.telNumber} onChange={eSet('telNumber')} placeholder="Full number, e.g. 0501234567" />
+                      <input value={editForm.telNumber} onChange={eSetTel} placeholder="Full number, e.g. 0501234567" />
                     </label>
                     <label>
                       <span className="cap">ISSI number <span className="opt">(optional)</span></span>

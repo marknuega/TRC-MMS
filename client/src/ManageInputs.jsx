@@ -2,6 +2,7 @@ import { useState } from 'react'
 import {
   CATEGORIES,
   CHART_TOGGLES,
+  MODEL_PREFIX_RE,
   PARTS_RE,
   VARIANT_RE,
   TECH_ID_RE,
@@ -13,6 +14,9 @@ import {
   issueVariant,
   materialName,
   materialDesc,
+  modelName,
+  modelPrefixIndex,
+  modelPrefixes,
   technicianName,
   technicianId,
   technicianInitials2,
@@ -33,6 +37,7 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
   const [newDesc, setNewDesc] = useState('')
   const [newParts, setNewParts] = useState('')
   const [newVariant, setNewVariant] = useState('')
+  const [newPrefixes, setNewPrefixes] = useState('')
   const [newId, setNewId] = useState('')
   const [newInitials2, setNewInitials2] = useState('')
   const [newInitials3, setNewInitials3] = useState('')
@@ -41,6 +46,7 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
   const [editDesc, setEditDesc] = useState('')
   const [editParts, setEditParts] = useState('')
   const [editVariant, setEditVariant] = useState('')
+  const [editPrefixes, setEditPrefixes] = useState('')
   const [editId, setEditId] = useState('')
   const [editInitials2, setEditInitials2] = useState('')
   const [editInitials3, setEditInitials3] = useState('')
@@ -54,10 +60,12 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
   const { map } = useCodeMap()
 
   // Materials carry a separate Description; Issue types carry a parts code +
-  // variant, and their description IS their name; every other list is a string.
+  // variant, and their description IS their name; Models carry the Tel number
+  // prefixes that select them; every other list is a string.
   const isMaterials = cat === 'materials'
   const isIssues = cat === 'issueTypes'
   const isTechnicians = cat === 'technicians'
+  const isModels = cat === 'models'
   const list = options[cat] ?? []
   // Issue types with a claimed CDS code display in ascending code order
   // (parts number, then variant letter) — reading order left to right,
@@ -81,15 +89,34 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
           return 0
         })
     : list.map((value, i) => ({ value, i }))
-  const nameOf = (v) => (isMaterials ? materialName(v) : isIssues ? issueName(v) : isTechnicians ? technicianName(v) : String(v))
+  const nameOf = (v) =>
+    isMaterials
+      ? materialName(v)
+      : isIssues
+        ? issueName(v)
+        : isTechnicians
+          ? technicianName(v)
+          : isModels
+            ? modelName(v)
+            : String(v)
   const descOf = (v) => (isMaterials ? materialDesc(v) : '')
-  const makeItem = (name, desc, parts, variant, id, initials2, initials3) => {
-    if (isIssues) return { name, parts: parts.trim(), variant: variant.trim().toUpperCase() }
-    if (isMaterials) return { name, description: desc.trim() }
+  // Prefixes are typed as one free-text field ("355, 06") because a model may
+  // hold several and nobody knows in advance how many. Any run of non-digits
+  // separates them, so a comma, a space or both all work.
+  const parsePrefixes = (s) => [...new Set(String(s ?? '').split(/\D+/).filter(Boolean))]
+  const makeItem = (name, f) => {
+    if (isIssues) return { name, parts: f.parts.trim(), variant: f.variant.trim().toUpperCase() }
+    if (isMaterials) return { name, description: f.desc.trim() }
+    if (isModels) {
+      const prefixes = parsePrefixes(f.prefixes)
+      // A model with no prefixes stays a plain string, exactly as it was
+      // before this field existed — nothing to store, so nothing stored.
+      return prefixes.length ? { name, prefixes } : name
+    }
     if (isTechnicians) {
-      const idT = id.trim()
-      const i2 = initials2.trim().toUpperCase()
-      const i3 = initials3.trim().toUpperCase()
+      const idT = f.id.trim()
+      const i2 = f.initials2.trim().toUpperCase()
+      const i3 = f.initials3.trim().toUpperCase()
       if (!idT && !i2 && !i3) return name
       return { name, ...(idT && { id: idT }), ...(i2 && { initials2: i2 }), ...(i3 && { initials3: i3 }) }
     }
@@ -124,6 +151,27 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
     initialsProblem(TECH_INITIALS2_RE, technicianInitials2, '2-letter initial', 'MA', v, exceptIndex)
   const initials3Problem = (v, exceptIndex = -1) =>
     initialsProblem(TECH_INITIALS3_RE, technicianInitials3, '3-letter initial', 'MRA', v, exceptIndex)
+
+  // What is wrong with a Tel prefix list, or '' when it is usable (or blank —
+  // blank is allowed, for a model no number identifies).
+  function prefixProblem(value) {
+    if (!isModels) return ''
+    const bad = parsePrefixes(value).find((p) => !MODEL_PREFIX_RE.test(p))
+    if (!bad) return ''
+    return `"${bad}" is not a Tel prefix — 2 to 6 digits, e.g. 190. A single digit would claim a tenth of every number there is.`
+  }
+
+  // Which other models already answer to the prefixes being typed. Not an
+  // error: 109 is genuinely all three SRG3900 builds. It is said out loud so
+  // sharing is a decision rather than a surprise, and so it is clear which of
+  // the sharers a number will actually land on.
+  function prefixShareHint(value) {
+    const others = modelPrefixIndex(list)
+    const shared = parsePrefixes(value).filter((p) => MODEL_PREFIX_RE.test(p) && others[p]?.length)
+    if (!shared.length) return ''
+    const who = shared.map((p) => `${p} is also ${others[p].join(', ')}`).join('; ')
+    return `${who} — whichever comes first in this list is the one a number selects.`
+  }
 
   // What is wrong with a parts + variant pair, or '' when it is usable. Both
   // halves or neither: half a code decodes to nothing, so storing one is a trap.
@@ -165,23 +213,57 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
   // Which input a validation message belongs to. The checks return prose, so
   // the field is derived from which check produced it rather than parsed back
   // out of the sentence.
-  const problemFor = (parts, variant, id, i2, i3, exceptIndex = -1) => {
-    const code = codeProblem(parts, variant, exceptIndex)
+  const problemFor = (f, exceptIndex = -1) => {
+    const code = codeProblem(f.parts, f.variant, exceptIndex)
     if (code) return [code, 'code']
-    const tech = techIdProblem(id, exceptIndex)
+    const prefix = prefixProblem(f.prefixes)
+    if (prefix) return [prefix, 'prefixes']
+    const tech = techIdProblem(f.id, exceptIndex)
     if (tech) return [tech, 'id']
-    const a = initials2Problem(i2, exceptIndex)
+    const a = initials2Problem(f.initials2, exceptIndex)
     if (a) return [a, 'initials2']
-    const b = initials3Problem(i3, exceptIndex)
+    const b = initials3Problem(f.initials3, exceptIndex)
     if (b) return [b, 'initials3']
     return ['', '']
+  }
+
+  // The extra fields of the two rows, gathered so makeItem/problemFor take one
+  // argument each instead of a positional list nobody could read at a glance.
+  const newFields = {
+    desc: newDesc,
+    parts: newParts,
+    variant: newVariant,
+    prefixes: newPrefixes,
+    id: newId,
+    initials2: newInitials2,
+    initials3: newInitials3,
+  }
+  const editFields = {
+    desc: editDesc,
+    parts: editParts,
+    variant: editVariant,
+    prefixes: editPrefixes,
+    id: editId,
+    initials2: editInitials2,
+    initials3: editInitials3,
+  }
+
+  function clearNew() {
+    setNewValue('')
+    setNewDesc('')
+    setNewParts('')
+    setNewVariant('')
+    setNewPrefixes('')
+    setNewId('')
+    setNewInitials2('')
+    setNewInitials3('')
   }
 
   function add() {
     const value = newValue.trim()
     if (!value) return
 
-    const [problem, field] = problemFor(newParts, newVariant, newId, newInitials2, newInitials3)
+    const [problem, field] = problemFor(newFields)
     if (problem) {
       flash(problem, field)
       return
@@ -191,37 +273,25 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
     // code and one is being given. That is the SAME issue type gaining its
     // code, so it is attached rather than refused: otherwise an entry like
     // "PCB" that predates the codes could never be given one from here, and
-    // adding a second row named "PCB" is not what anyone wants either.
+    // adding a second row named "PCB" is not what anyone wants either. A model
+    // gaining its first Tel prefixes is the same move, for the same reason —
+    // every models list predates the field.
     const clash = list.findIndex((v) => nameOf(v).toLowerCase() === value.toLowerCase())
     if (clash >= 0) {
-      const givingCode = isIssues && newParts.trim() && newVariant.trim()
-      const held = isIssues ? issueCode(list[clash]) : ''
+      const givingCode =
+        (isIssues && newParts.trim() && newVariant.trim()) || (isModels && parsePrefixes(newPrefixes).length > 0)
+      const held = isIssues ? issueCode(list[clash]) : isModels ? modelPrefixes(list[clash]).join(', ') : ''
       if (!givingCode || held) {
-        flash(`"${value}" is already in the list${held ? `, holding code ${held}` : ''}.`, 'name')
+        flash(`"${value}" is already in the list${held ? `, holding ${isModels ? 'prefix' : 'code'} ${held}` : ''}.`, 'name')
         return
       }
-      onChange(
-        cat,
-        list.map((v, i) => (i === clash ? makeItem(value, newDesc, newParts, newVariant, newId, newInitials2, newInitials3) : v)),
-      )
-      setNewValue('')
-      setNewDesc('')
-      setNewParts('')
-      setNewVariant('')
-      setNewId('')
-      setNewInitials2('')
-      setNewInitials3('')
+      onChange(cat, list.map((v, i) => (i === clash ? makeItem(value, newFields) : v)))
+      clearNew()
       return
     }
 
-    onChange(cat, [...list, makeItem(value, newDesc, newParts, newVariant, newId, newInitials2, newInitials3)])
-    setNewValue('')
-    setNewDesc('')
-    setNewParts('')
-    setNewVariant('')
-    setNewId('')
-    setNewInitials2('')
-    setNewInitials3('')
+    onChange(cat, [...list, makeItem(value, newFields)])
+    clearNew()
   }
 
   function startEdit(i) {
@@ -230,6 +300,7 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
     setEditDesc(descOf(list[i]))
     setEditParts(isIssues ? issueParts(list[i]) : '')
     setEditVariant(isIssues ? issueVariant(list[i]) : '')
+    setEditPrefixes(isModels ? modelPrefixes(list[i]).join(', ') : '')
     setEditId(isTechnicians ? technicianId(list[i]) : '')
     setEditInitials2(isTechnicians ? technicianInitials2(list[i]) : '')
     setEditInitials3(isTechnicians ? technicianInitials3(list[i]) : '')
@@ -242,20 +313,18 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
       flash(`"${value}" is already in the list.`, 'name')
       return
     }
-    const [problem, field] = problemFor(editParts, editVariant, editId, editInitials2, editInitials3, editIndex)
+    const [problem, field] = problemFor(editFields, editIndex)
     if (problem) {
       flash(problem, field)
       return
     }
-    onChange(
-      cat,
-      list.map((v, i) => (i === editIndex ? makeItem(value, editDesc, editParts, editVariant, editId, editInitials2, editInitials3) : v)),
-    )
+    onChange(cat, list.map((v, i) => (i === editIndex ? makeItem(value, editFields) : v)))
     setEditIndex(-1)
     setEditValue('')
     setEditDesc('')
     setEditParts('')
     setEditVariant('')
+    setEditPrefixes('')
     setEditId('')
     setEditInitials2('')
     setEditInitials3('')
@@ -300,7 +369,7 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
           <div
             className={`manage-controls${isIssues ? ' cat-issues' : ''}${isTechnicians ? ' cat-tech' : ''}${
               isMaterials ? ' cat-materials' : ''
-            }`}
+            }${isModels ? ' cat-models' : ''}`}
             /* Enter walks Category -> the code fields -> Name -> Description,
                and adds from the last one. */
             onKeyDown={(e) => advanceOnEnter(e, add)}
@@ -316,6 +385,7 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                   setNewDesc('')
                   setNewParts('')
                   setNewVariant('')
+                  setNewPrefixes('')
                   setNewId('')
                   setNewInitials2('')
                   setNewInitials3('')
@@ -351,6 +421,20 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                   />
                 </label>
               </>
+            )}
+            {isModels && (
+              <label className="field-code field-prefix">
+                Tel prefixes
+                <input
+                  value={newPrefixes}
+                  onChange={(e) => setNewPrefixes(e.target.value.replace(/[^\d,\s]/g, ''))}
+                  placeholder="355, 06"
+                  aria-invalid={noticeField === 'prefixes' || undefined}
+                  className={noticeField === 'prefixes' ? 'invalid' : undefined}
+                  inputMode="numeric"
+                  title="The leading digits of a Tel number that mean this model — 2 to 6 digits, several separated by commas, e.g. 355, 06. Optional."
+                />
+              </label>
             )}
             {isTechnicians && (
               <>
@@ -395,7 +479,15 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                 — on a tablet the description drops to its own full-width line
                 while Category and Name stay paired above it. */}
             <label className="field-name">
-              {isIssues ? 'Description' : isMaterials ? 'Material name' : isTechnicians ? 'Technician name' : 'Add new'}
+              {isIssues
+                ? 'Description'
+                : isMaterials
+                  ? 'Material name'
+                  : isTechnicians
+                    ? 'Technician name'
+                    : isModels
+                      ? 'Model name'
+                      : 'Add new'}
               <input
                 value={newValue}
                 onChange={(e) => setNewValue(e.target.value)}
@@ -408,7 +500,9 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                       ? 'Material name'
                       : isTechnicians
                         ? 'Muhammad Amir'
-                        : 'Type a value and press Add'
+                        : isModels
+                          ? 'STP9000'
+                          : 'Type a value and press Add'
                 }
               />
             </label>
@@ -438,6 +532,18 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
               this one entry. The variant is part of the part's identity, not just a build, so two variants of
               one parts number can be two genuinely different items rather than two builds of one. Leave both
               blank for an issue with no code.
+            </p>
+          )}
+          {isModels && (
+            <p className="manage-hint">
+              <strong>Tel prefixes</strong> are the leading digits of a Tel number that select this model — type a
+              number starting <code>190</code> into an entry and the Model becomes STP9000, <code>355</code> or{' '}
+              <code>06</code> and it becomes TH1N. The Type then follows from the Model as it always has. Give a model
+              as many prefixes as it needs, separated by commas; 2 to 6 digits each, and the longest one that matches
+              wins, so a narrower range can sit inside a wider one. Two models may share a prefix — the one higher up
+              this list is the one selected, and the other is a dropdown away. Leave it blank for a model no number
+              identifies. This is where a new device is taught to the auto-select — nothing else needs changing.
+              {newPrefixes.trim() && <span className="manage-code-hint"> {prefixShareHint(newPrefixes)}</span>}
             </p>
           )}
           {isTechnicians && (
@@ -497,6 +603,21 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                               }
                               onKeyDown={cancelOnEscape}
                               placeholder="B"
+                            />
+                          </label>
+                        </div>
+                      )}
+                      {isModels && (
+                        <div className="edit-code-row">
+                          <label className="field-code field-prefix">
+                            Tel prefixes
+                            <input
+                              className="edit-input"
+                              value={editPrefixes}
+                              onChange={(e) => setEditPrefixes(e.target.value.replace(/[^\d,\s]/g, ''))}
+                              onKeyDown={cancelOnEscape}
+                              placeholder="355, 06"
+                              inputMode="numeric"
                             />
                           </label>
                         </div>
@@ -568,6 +689,9 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                     <span className="manage-item-label">
                       {isIssues && issueCode(value) && (
                         <span className="manage-item-code">{issueCode(value)}</span>
+                      )}
+                      {isModels && modelPrefixes(value).length > 0 && (
+                        <span className="manage-item-code">{modelPrefixes(value).join(' / ')}</span>
                       )}
                       {isTechnicians &&
                         [technicianId(value), technicianInitials2(value), technicianInitials3(value)].filter(Boolean).length > 0 && (
