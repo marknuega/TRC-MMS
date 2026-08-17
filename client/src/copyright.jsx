@@ -15,7 +15,7 @@ export const DEVELOPED_BY = `Software Developed by ${AUTHOR} MT# MT1063`
 export const COPYRIGHT = `© 2026 ${AUTHOR}. All rights reserved.`
 export const CREDENTIAL = 'Certified Electronics and Electrical Technician'
 export const LICENSE_ELECTRICAL = 'Electrical License CLN-NQ-***6092'
-export const LICENSE_ELECTRONICS = 'Electronics License CLN-COC-***9204'
+export const LICENSE_ELECTRONICS = 'Electronics License CLN-NQ-***6595'
 export const LICENSE_LINE = `${LICENSE_ELECTRICAL} · ${LICENSE_ELECTRONICS}`
 
 // Plain copyright, one line — the ONLY thing shown on exported/printed reports.
