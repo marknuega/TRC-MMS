@@ -8,9 +8,18 @@ import { dailyReportText, dmy } from '../dailyText.js'
 
 const router = Router()
 
-// Human id per document type: transmittals get their own TRANS-#### series.
+// Human id per document type. Three series, each numbering itself per branch:
+// REP daily reports, TRANS transmittals, REF reference-only reports — the last
+// kept apart so the record-keeping numbers never interleave with real activity.
 const normMode = (m) => (String(m ?? 'report').trim().toLowerCase() === 'transmittal' ? 'transmittal' : 'report')
-const docId = (mode, n) => `${normMode(mode) === 'transmittal' ? 'TRANS' : 'REP'}-${String(n).padStart(4, '0')}`
+
+// The series a save mints. Reference-only is decided BEFORE the number, so the
+// badge and the number can never disagree at the moment of saving. Toggling the
+// flag afterwards does not renumber — see the note on `series` in schema.prisma.
+export const seriesFor = (mode, isReferenceOnly) =>
+  normMode(mode) === 'transmittal' ? 'TRANS' : isReferenceOnly ? 'REF' : 'REP'
+
+const docId = (series, n) => `${series}-${String(n).padStart(4, '0')}`
 const withFaults = { faults: { orderBy: { position: 'asc' } } }
 
 // RTO (Return to Owner) means the device went back untouched — no part was
@@ -77,12 +86,15 @@ async function nextSeq() {
   return (max._max.seq ?? 0) + 1
 }
 
-// Next series number within a document type AND branch — each branch keeps its
-// own independent series (Makkah REP-0001…, Dammam REP-0001…, and likewise for
-// TRANS-####). Branch '' is the unassigned/legacy series.
-async function nextDocNumber(mode, branch) {
+// Next number within a SERIES and branch — each branch keeps its own
+// independent run (Makkah REP-0001…, Dammam REP-0001…, and likewise for REF and
+// TRANS). Branch '' is the unassigned/legacy series.
+//
+// Keyed on series rather than mode so taking a REF number never advances REP,
+// and vice versa: the two run side by side inside mode='report'.
+async function nextDocNumber(series, branch) {
   const max = await prisma.savedReport.aggregate({
-    where: { mode: normMode(mode), branch: branch ?? '' },
+    where: { series, branch: branch ?? '' },
     _max: { docNumber: true },
   })
   return (max._max.docNumber ?? 0) + 1
@@ -94,22 +106,29 @@ router.get('/', async (req, res, next) => {
     // Preview the next id for the branch in view (client also derives its own).
     const previewBranch = writeBranch(req, req.query.branch)
     if (previewBranch === null) return res.status(400).json({ error: 'That branch is outside your region' })
-    const [reports, repNo, transNo] = await Promise.all([
+    const [reports, repNo, refNo, transNo] = await Promise.all([
       prisma.savedReport.findMany({
         where: branchWhere(req, req.query.branch),
         orderBy: { seq: 'desc' },
         select: {
-          id: true, seq: true, docNumber: true, reportId: true, branch: true, mode: true,
+          id: true, seq: true, docNumber: true, reportId: true, branch: true, mode: true, series: true,
           transmittedBy: true, receivedBy: true, savedAt: true, dateLabel: true, entryCount: true,
           isReferenceOnly: true,
           entries: true, // snapshot, so the client can search inside report data
         },
       }),
-      nextDocNumber('report', previewBranch),
-      nextDocNumber('transmittal', previewBranch),
+      nextDocNumber('REP', previewBranch),
+      nextDocNumber('REF', previewBranch),
+      nextDocNumber('TRANS', previewBranch),
     ])
-    // Per-mode "next id" previews so each document type numbers independently.
-    res.json({ nextReportId: docId('report', repNo), nextTransmittalId: docId('transmittal', transNo), reports })
+    // Per-series "next id" previews so each numbers independently. The client
+    // picks between REP and REF by whether the pending save is reference-only.
+    res.json({
+      nextReportId: docId('REP', repNo),
+      nextReferenceId: docId('REF', refNo),
+      nextTransmittalId: docId('TRANS', transNo),
+      reports,
+    })
   } catch (err) {
     next(err)
   }
@@ -190,12 +209,15 @@ router.post('/', async (req, res, next) => {
     // false positive) without a second round-trip.
     const isReferenceOnly =
       req.body?.isReferenceOnly == null ? hasRtoAction(snapshot) : Boolean(req.body.isReferenceOnly)
+    // Reference-only is settled before the number is drawn, so a reference-only
+    // save is a REF from the start rather than a REP that is corrected later.
+    const series = seriesFor(mode, isReferenceOnly)
     const seq = await nextSeq()
-    const docNumber = await nextDocNumber(mode, branch)
+    const docNumber = await nextDocNumber(series, branch)
     const saved = await prisma.$transaction(async (tx) => {
       const created = await tx.savedReport.create({
         data: {
-          seq, docNumber, reportId: docId(mode, docNumber), branch, mode, transmittedBy, receivedBy,
+          seq, docNumber, reportId: docId(series, docNumber), branch, mode, series, transmittedBy, receivedBy,
           dateLabel, entryCount: snapshot.length, isReferenceOnly, entries: snapshot,
         },
       })

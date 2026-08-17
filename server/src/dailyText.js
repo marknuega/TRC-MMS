@@ -34,7 +34,10 @@ export const repLabel = (id, branch, mode) =>
 export async function dailyReportText({ where = {}, mode = 'report', date } = {}) {
   const dateLabel = dmy(date ?? new Date())
   const reports = await prisma.savedReport.findMany({
-    where: { ...where, mode, dateLabel },
+    // Reference-only records are left out: this is the day's activity, sent to
+    // a technician who asked for "report", and a document kept purely for the
+    // record is not part of it. It stays exportable on its own from the app.
+    where: { ...where, mode, dateLabel, isReferenceOnly: false },
     orderBy: { seq: 'asc' },
   })
 

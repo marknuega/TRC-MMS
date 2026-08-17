@@ -466,6 +466,26 @@ export function agencyComment(entries) {
 //   '2026-08-13' -> that day    '2026-08' -> that month    '2026' -> that year
 // Entry dates are ISO (YYYY-MM-DD), which sorts and truncates lexically, so a
 // prefix compare is exactly a range compare here.
+/**
+ * Does this saved report contribute to the aggregated views at all?
+ *
+ * Two ways to be excluded, and one place that says so, because "which reports
+ * count" is a single question however it is asked. Every roll-up in this file
+ * reaches the saved list through here or through buildMonthlyMatrix, which
+ * applies the same test.
+ *
+ *  - a TRANSMITTAL moves materials; it records no service activity;
+ *  - a REFERENCE-ONLY report is kept for the record and nothing else. It is
+ *    still openable, printable and exportable on its own — it just never counts
+ *    towards a month, a dashboard, an agency or a technician.
+ *
+ * Whole-report, not line-by-line. RTO faults are already dropped one at a time
+ * by classify(), but the reference-only mark is a statement about the document:
+ * it is set by hand as often as it is auto-detected, and a report someone has
+ * marked as a record is not half an activity report.
+ */
+export const isCountable = (r) => up(r?.mode) !== 'TRANSMITTAL' && !r?.isReferenceOnly
+
 export function periodEntries(savedReports, key, branch = '') {
   const want = String(key ?? '')
   if (!want) return []
@@ -475,7 +495,7 @@ export function periodEntries(savedReports, key, branch = '') {
   // set), so aggregate them all — no same-day dedup — and filter by each entry's
   // OWN service date, which also handles reports that span more than one day.
   for (const r of savedReports ?? []) {
-    if (up(r.mode) === 'TRANSMITTAL') continue
+    if (!isCountable(r)) continue
     if (wantBranch && up(r.branch) !== wantBranch) continue
     for (const e of Array.isArray(r.entries) ? r.entries : []) {
       if (String(e.reportDate || '').slice(0, want.length) === want) out.push(e)
@@ -674,7 +694,9 @@ export function monthlyTrend(savedReports, branch = '') {
   const months = new Set()
   const wantBranch = up(branch)
   for (const r of savedReports ?? []) {
-    if (up(r.mode) === 'TRANSMITTAL') continue
+    // Which MONTHS get a row, so this needs the same test: a month whose only
+    // report is reference-only would otherwise plot a row of zeroes.
+    if (!isCountable(r)) continue
     if (wantBranch && up(r.branch) !== wantBranch) continue
     const m = String(r.dateLabel || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
     if (m) months.add(`${m[3]}-${m[2].padStart(2, '0')}`)
@@ -898,7 +920,7 @@ export function buildMonthlyMatrix(savedReports, opts = {}) {
   // (reports are disjoint snapshots — saving auto-clears the working set).
   const byDay = new Map() // day -> { entries: [] }
   for (const r of savedReports ?? []) {
-    if (up(r.mode) === 'TRANSMITTAL') continue
+    if (!isCountable(r)) continue
     if (branch && up(r.branch) !== up(branch)) continue
     for (const e of Array.isArray(r.entries) ? r.entries : []) {
       const m = String(e.reportDate || '').match(/^(\d{4})-(\d{2})-(\d{2})$/)

@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import {
   classify, entryCounts, technicianTotals, agencyBlocks, activityTotals, buildSparePartsReport,
   agencyComment, buildDateReport, buildTxt, deviceBlocksByType, setIssueClaims,
+  isCountable, periodEntries, buildMonthlyMatrix, buildDayMatrix, buildYearMatrix,
+  dashboardSummary, monthlyTrend,
 } from './report.js'
 
 // RTO (Return to Owner) = the device went back untouched. It is not maintenance
@@ -241,5 +243,84 @@ describe('the standalone rule reads claimed codes, not names', () => {
     setIssueClaims([])
     assert.equal(entryCounts(withPart('CHARGER CABLE')).maintenance, 2) // the name wins again
     assert.equal(entryCounts(withPart('DEY-450')).maintenance, 1)
+  })
+})
+
+// A reference-only report is kept for the record and counts towards nothing.
+// It stays openable and exportable on its own; it just never reaches a total.
+describe('reference-only reports stay out of every aggregation', () => {
+  const entryOn = (date, issue) => ({
+    reportDate: date, technician: 'AMIR', agency: 'PSD', type: 'AIRBUS', model: 'TH1N',
+    faults: [{ issue, quantity: 1, action: 'CHANGE', company: 'MOTECO' }],
+  })
+  const report = (extra) => ({
+    mode: 'report', branch: 'Makkah', dateLabel: '16/08/2026',
+    entries: [entryOn('2026-08-16', 'ANTENNA')], ...extra,
+  })
+  const normal = report({ reportId: 'REP-0017' })
+  const refOnly = report({ reportId: 'REF-0001', isReferenceOnly: true })
+
+  test('isCountable rejects it, and a transmittal, and nothing else', () => {
+    assert.equal(isCountable(normal), true)
+    assert.equal(isCountable(refOnly), false)
+    assert.equal(isCountable({ mode: 'transmittal' }), false)
+    assert.equal(isCountable({}), true) // a plain report, no flag set
+  })
+
+  test('periodEntries skips it', () => {
+    assert.equal(periodEntries([refOnly], '2026-08').length, 0)
+    assert.equal(periodEntries([normal], '2026-08').length, 1)
+    assert.equal(periodEntries([normal, refOnly], '2026-08').length, 1)
+  })
+
+  test('the monthly matrix gives it no count and no description', () => {
+    const m = buildMonthlyMatrix([refOnly], { year: 2026, month: 7, branch: 'Makkah' })
+    const row = m.rows.find((r) => r.day === 16)
+    assert.equal(row.counts.th1n, 0)
+    assert.equal(row.description, '')
+    assert.equal(m.totals.th1n, 0)
+  })
+
+  // A day is still a row in the sheet whether or not anything countable
+  // happened on it — the matrix has one row per calendar day.
+  test('…and the day is still a row, not a hole', () => {
+    const m = buildMonthlyMatrix([refOnly], { year: 2026, month: 7, branch: 'Makkah' })
+    assert.equal(m.rows.length, 31)
+    assert.ok(m.rows.find((r) => r.day === 16))
+  })
+
+  test('a normal report on the same day still counts in full', () => {
+    const m = buildMonthlyMatrix([normal, refOnly], { year: 2026, month: 7, branch: 'Makkah' })
+    const row = m.rows.find((r) => r.day === 16)
+    assert.equal(row.counts.th1n, 1)
+    assert.match(row.description, /ANTENNA/)
+    assert.equal(m.totals.th1n, 1)
+  })
+
+  test('the day and year views inherit it from the monthly matrix', () => {
+    const day = buildDayMatrix([refOnly], { year: 2026, month: 7, day: 16, branch: 'Makkah' })
+    assert.equal(day.totals.th1n, 0)
+    const year = buildYearMatrix([refOnly], { year: 2026, branch: 'Makkah' })
+    assert.equal(year.totals.th1n, 0)
+  })
+
+  test('the dashboard and spare-parts totals ignore it', () => {
+    const entries = periodEntries([refOnly], '2026-08')
+    assert.equal(dashboardSummary(entries).devices, 0)
+    assert.equal(dashboardSummary(entries).maintenance, 0)
+    assert.equal(buildSparePartsReport(entries).grandParts, 0)
+  })
+
+  // monthlyTrend walks the saved list itself to decide which months get a row.
+  test('the trend chart does not plot a month that has only a reference-only report', () => {
+    assert.deepEqual(monthlyTrend([refOnly], 'Makkah'), [])
+    assert.equal(monthlyTrend([normal], 'Makkah').length, 1)
+  })
+
+  // Excluded from the roll-ups, not hidden: the report itself still renders.
+  test('it still builds its own report text', () => {
+    const txt = buildTxt(buildDateReport('16/08/2026', 'MAKKAH-REF-0001', refOnly.entries, { branch: 'Makkah' }))
+    assert.match(txt, /REPORT ID: MAKKAH-REF-0001/)
+    assert.match(txt, /ANTENNA/)
   })
 })

@@ -56,6 +56,7 @@ import {
   buildYearMatrix,
   parseMonthlyPaste,
   setIssueClaims,
+  classify,
   TYPE_ORDER,
 } from './report'
 import { PeriodPicker, makePeriod, periodLabel } from './period'
@@ -140,14 +141,20 @@ const repLabel = (baseId, branch, mode) => {
 const isTx = (r) => String(r?.mode ?? '').toUpperCase() === 'TRANSMITTAL'
 
 const pad4 = (n) => String(n).padStart(4, '0')
-// Next document number for a branch's OWN series (each branch numbers itself).
+// Which ID series a saved row belongs to. Rows saved before the series column
+// existed carry only their mode, and every one of those is a REP or a TRANS —
+// REF did not exist to be one. Mirrors seriesFor() in routes/savedReports.js.
+const seriesOf = (r) =>
+  r?.series || (String(r?.mode ?? 'report').toLowerCase() === 'transmittal' ? 'TRANS' : 'REP')
+
+// Next document number for a branch's OWN run of a series (each branch numbers
+// itself, and REP / REF / TRANS number independently of each other).
 // Derived from the saved list so it updates instantly when the branch changes.
-function nextSeriesNumber(saved, mode, branch) {
-  const m = String(mode ?? 'report').toLowerCase() === 'transmittal' ? 'transmittal' : 'report'
+function nextSeriesNumber(saved, series, branch) {
   const b = String(branch ?? '')
   let max = 0
   for (const r of saved ?? []) {
-    if (String(r.mode ?? 'report').toLowerCase() !== m) continue
+    if (seriesOf(r) !== series) continue
     if (String(r.branch ?? '') !== b) continue
     if ((r.docNumber ?? 0) > max) max = r.docNumber ?? 0
   }
@@ -368,6 +375,8 @@ function App({ user, onLogout }) {
   const [saved, setSaved] = useState([])
   const [savedOpen, setSavedOpen] = useState(false)
   const [savedSearch, setSavedSearch] = useState('')
+  const [savedRefOpen, setSavedRefOpen] = useState(false)
+  const [savedRefSearch, setSavedRefSearch] = useState('')
   const [savedTxOpen, setSavedTxOpen] = useState(false)
   const [savedTxSearch, setSavedTxSearch] = useState('')
   const [page, setPage] = useState('report')
@@ -408,8 +417,9 @@ function App({ user, onLogout }) {
   // Each branch has its OWN document series — derive the next id for the branch
   // in view (All Branches previews the unassigned '' series; saving is off there).
   const seriesBranch = isAllBranches ? '' : branch
-  const nextReportId = `REP-${pad4(nextSeriesNumber(saved, 'report', seriesBranch))}`
-  const nextTransId = `TRANS-${pad4(nextSeriesNumber(saved, 'transmittal', seriesBranch))}`
+  const nextReportId = `REP-${pad4(nextSeriesNumber(saved, 'REP', seriesBranch))}`
+  const nextRefId = `REF-${pad4(nextSeriesNumber(saved, 'REF', seriesBranch))}`
+  const nextTransId = `TRANS-${pad4(nextSeriesNumber(saved, 'TRANS', seriesBranch))}`
   const [sync, setSync] = useState({ online: true, pending: 0 })
   const [editId, setEditId] = useState(null) // entry id being edited in the modal
   const [editForm, setEditForm] = useState(null)
@@ -474,8 +484,16 @@ function App({ user, onLogout }) {
       document.title = 'TRC Maintenance Report'
     }
   }, [isTransmittal, nextTransId])
+  // A save containing an RTO is marked reference-only, and a reference-only save
+  // draws a REF number rather than a REP one — so the preview has to know which
+  // it will be. Same test the server applies (hasRtoAction in routes/
+  // savedReports.js), reading classify() so "what is an RTO" is defined once.
+  const willBeReferenceOnly = useMemo(
+    () => (entries ?? []).some((e) => (e.faults ?? []).some((f) => classify(f.action) === 'rto')),
+    [entries],
+  )
   // The next id a Save would mint, for the current document type.
-  const nextDocId = isTransmittal ? nextTransId : nextReportId
+  const nextDocId = isTransmittal ? nextTransId : willBeReferenceOnly ? nextRefId : nextReportId
   // Inventory item names, offered as suggestions in the issue/material fields.
   const inventoryNames = useMemo(
     () => [...new Set((inventory ?? []).map((i) => String(i.itemCode || '').trim()).filter(Boolean))].sort(),
@@ -1291,13 +1309,23 @@ function App({ user, onLogout }) {
     printDocument(html)
   }
 
-  // Keep daily reports and transmittals in separate lists (no mixing).
+  // Three lists, and every saved record lands in exactly one: daily reports,
+  // reference-only records, and transmittals. Reference-only is tested first
+  // because it is the narrower claim — a report is a daily report only if it is
+  // not one of these. A transmittal is never reference-only (the flag comes from
+  // an RTO, which is a service action), but the order settles that too.
   // Admin sees all branches' saved reports; scope the list to the selected
   // branch unless "All Branches" is chosen. (Non-admins are already server-scoped.)
   const inBranch = (r) => isAllBranches || String(r.branch ?? '') === String(branch)
-  const dailySaved = useMemo(() => saved.filter((r) => !isTx(r) && inBranch(r)), [saved, branch, isAllBranches])
+  const isRefOnly = (r) => !isTx(r) && Boolean(r.isReferenceOnly)
+  const dailySaved = useMemo(
+    () => saved.filter((r) => !isTx(r) && !isRefOnly(r) && inBranch(r)),
+    [saved, branch, isAllBranches],
+  )
+  const refSaved = useMemo(() => saved.filter((r) => isRefOnly(r) && inBranch(r)), [saved, branch, isAllBranches])
   const txSaved = useMemo(() => saved.filter((r) => isTx(r) && inBranch(r)), [saved, branch, isAllBranches])
   const reportResults = useMemo(() => searchInside(dailySaved, savedSearch), [dailySaved, savedSearch])
+  const refResults = useMemo(() => searchInside(refSaved, savedRefSearch), [refSaved, savedRefSearch])
   const txResults = useMemo(() => searchInside(txSaved, savedTxSearch), [txSaved, savedTxSearch])
 
   async function handleCopyTxt() {
@@ -2042,6 +2070,24 @@ function App({ user, onLogout }) {
             hint: 'Daily-report snapshots, saved under a unique REP-#### number. Load one back to review or edit it, then Save again to store it as a new report.',
             empty: 'No saved reports yet — in Report mode, click “Save report” above.',
             placeholder: '🔎 Search inside reports (item, model, branch, date, tel, ISSI)…',
+          })}
+
+        {/* Directly under the daily reports, and deliberately its own card: a
+            reference-only record is kept for the future and counts towards
+            nothing, so it should never be read as one row among the day's work. */}
+        {!isTransmittal &&
+          savedCard({
+            icon: '🔖',
+            title: 'Reference only',
+            list: refSaved,
+            open: savedRefOpen,
+            setOpen: setSavedRefOpen,
+            search: savedRefSearch,
+            setSearch: setSavedRefSearch,
+            results: refResults,
+            hint: 'Kept for the record, not counted. Saved under their own REF-#### number, and left out of the monthly report, the dashboard, the spare-parts report and every agency and technician total. Marked automatically when a report contains an RTO; use “Unmark reference” to move one back.',
+            empty: 'No reference-only reports — a report is filed here when it contains an RTO, or when you mark it by hand.',
+            placeholder: '🔎 Search inside reference-only reports (item, model, branch, date, tel, ISSI)…',
           })}
 
         {isTransmittal &&

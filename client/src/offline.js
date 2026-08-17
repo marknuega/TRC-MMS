@@ -180,8 +180,20 @@ async function applyOptimistic(op) {
   if (base === '/api/saved-reports' && method === 'POST') {
     const mode = modeOf(body)
     const entries = (await getCache(reportsKey(mode))) || []
-    const cache = (await getCache('/api/saved-reports')) || { nextReportId: 'REP-0001', nextTransmittalId: 'TRANS-0001', reports: [] }
-    const reportId = mode === 'transmittal' ? cache.nextTransmittalId : cache.nextReportId
+    const cache = (await getCache('/api/saved-reports')) || {
+      nextReportId: 'REP-0001', nextReferenceId: 'REF-0001', nextTransmittalId: 'TRANS-0001', reports: [],
+    }
+    // Same three decisions the server makes on a real save, so an offline save
+    // lands in the same list under the same series and does not jump between
+    // them when the queue drains. Mirrors hasRtoAction()/seriesFor() in
+    // routes/savedReports.js and isCountable() in report.js.
+    const isReferenceOnly =
+      body?.isReferenceOnly == null
+        ? entries.some((e) => (e.faults ?? []).some((f) => String(f.action ?? '').trim().toUpperCase() === 'RTO'))
+        : Boolean(body.isReferenceOnly)
+    const series = mode === 'transmittal' ? 'TRANS' : isReferenceOnly ? 'REF' : 'REP'
+    const reportId =
+      series === 'TRANS' ? cache.nextTransmittalId : series === 'REF' ? cache.nextReferenceId ?? 'REF-0001' : cache.nextReportId
     const dates = [...new Set(entries.map((e) => String(e.reportDate).slice(0, 10)))].sort()
     const optimistic = {
       id: tmpId(),
@@ -190,6 +202,8 @@ async function applyOptimistic(op) {
       reportId,
       branch: String(body.branch ?? ''),
       mode,
+      series,
+      isReferenceOnly,
       transmittedBy: String(body.transmittedBy ?? ''),
       receivedBy: String(body.receivedBy ?? ''),
       savedAt: new Date().toISOString(),
@@ -202,8 +216,11 @@ async function applyOptimistic(op) {
     await putCache('/api/saved-reports', {
       ...cache,
       reports: [optimistic, ...(cache.reports ?? [])],
-      nextReportId: mode === 'report' ? bump(cache.nextReportId) : cache.nextReportId,
-      nextTransmittalId: mode === 'transmittal' ? bump(cache.nextTransmittalId) : cache.nextTransmittalId,
+      // Only the series just used advances — the other two are untouched, the
+      // same way the server numbers them independently.
+      nextReportId: series === 'REP' ? bump(cache.nextReportId) : cache.nextReportId,
+      nextReferenceId: series === 'REF' ? bump(cache.nextReferenceId ?? 'REF-0001') : cache.nextReferenceId ?? 'REF-0001',
+      nextTransmittalId: series === 'TRANS' ? bump(cache.nextTransmittalId) : cache.nextTransmittalId,
     })
     return optimistic
   }
