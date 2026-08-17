@@ -21,6 +21,12 @@ import { prisma } from './db.js'
 // Actions whose "fault" is the whole device — no component issue needed.
 const DEVICE_LEVEL = new Set(['PROGRAM', 'RE-PROGRAM', 'INSTALL', 'RE-INSTALL', 'DISMANTLE'])
 
+// "No Activity" is not a fault: nothing was done, so there is no action to
+// name. Matched the same way the client does (client/src/options.js) — name
+// with case and punctuation stripped, prefix rather than exact, so "No
+// Activity", "No-Activity" and "No Activity Today" are all the one thing.
+const isNoActivityIssue = (issue) => /^NOACTIVITY/.test(String(issue ?? '').toUpperCase().replace(/[^A-Z0-9]/g, ''))
+
 export const withFaults = { faults: { orderBy: { position: 'asc' } } }
 
 export const repId = (seq) => `REP-${String(seq).padStart(4, '0')}`
@@ -49,7 +55,10 @@ export function parseEntry(body) {
   const faults = rawFaults
     .map((f) => ({
       issue: String(f?.issue ?? '').trim(),
-      quantity: Math.max(1, Number(f?.quantity) || 1),
+      // Floored at 1 — a row worth writing down is a row of at least one
+      // thing — except "No Activity", where 0 is the whole point (see
+      // client/src/App.jsx's withSavedQuantity, which this mirrors).
+      quantity: isNoActivityIssue(f?.issue) ? Math.max(0, Number(f?.quantity) || 0) : Math.max(1, Number(f?.quantity) || 1),
       action: String(f?.action ?? '').trim().toUpperCase(),
       company: String(f?.company ?? '').trim().toUpperCase(),
       status: String(f?.status ?? '').trim(),
@@ -62,7 +71,7 @@ export function parseEntry(body) {
 
   // Actions/companies are user-managed via /api/options, so we only require a
   // non-empty action rather than a fixed whitelist.
-  const missingAction = faults.find((f) => !f.action)
+  const missingAction = faults.find((f) => !f.action && !isNoActivityIssue(f.issue))
   if (missingAction) return { error: 'each fault needs an action' }
 
   const comment = String(body?.comment ?? '').trim()
