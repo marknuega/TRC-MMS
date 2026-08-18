@@ -429,13 +429,30 @@ function summaryCompanyText(company) {
   return label ? ` (${label})` : ''
 }
 
+// An item whose NAME is also the name of an action says nothing on its own: a
+// bare "PCB" line in the Materials Summary could be the board that was fitted
+// or the PCB action that was performed, and the reader cannot tell which. PCB
+// is the only such collision today, but the collision is what decides it, not
+// the word — an item named after any action reads the same way.
+const ACTION_NAMES = new Set(Object.keys(ACTION_CODE))
+const isActionNamedItem = (issue) => ACTION_NAMES.has(up(issue))
+
+// " (C)" — the fault's action, for the lines that need disambiguating (above).
+// Falls back to the action's own name, the same way issueActionCell does, so a
+// custom action still says something rather than printing empty brackets.
+function summaryActionText(action) {
+  const a = up(action)
+  const code = ACTION_CODE[a] || a
+  return code ? ` (${code})` : ''
+}
+
 // ---- Materials Summary (by TYPE then model, qty aggregated) ----
 // { AIRBUS: [{header, lines:[...]}], SEPURA: [...], ... } for the split PDF layout.
 export function materialBlocksByType(entries) {
   const byType = {}
   for (const type of orderedTypes(entries)) {
     const typeEntries = entries.filter((e) => up(e.type) === type)
-    const byModel = new Map() // modelDisplay -> Map(key -> {label, company, qty})
+    const byModel = new Map() // modelDisplay -> Map(key -> {label, code, company, qty})
     const rawOf = new Map() // modelDisplay -> raw model (for the fixed sort order)
     const modelOrder = []
     for (const e of typeEntries) {
@@ -450,11 +467,17 @@ export function materialBlocksByType(entries) {
         const isProgram = classify(f.action) === 'programming'
         const label = isProgram ? 'PROGRAMMING' : up(f.issue)
         const company = isProgram ? '' : summaryCompanyText(f.company)
+        // The action code, on the lines that would otherwise be ambiguous —
+        // "PCB (C)" rather than a bare "PCB". Purely a rendering: it is kept
+        // beside the label rather than folded into it, so the alphabetical
+        // sort below still orders on the item's own name.
+        const code = !isProgram && isActionNamedItem(f.issue) ? summaryActionText(f.action) : ''
         // Keyed on the part alone (materialKey), NOT on part-and-company: one
         // line per material, whichever pool each unit was drawn from. The
-        // company printed on that line is the first one seen for the part.
+        // company and the code printed on that line are the first ones seen
+        // for the part.
         const key = isProgram ? 'PROGRAMMING' : materialKey(f.issue)
-        if (!bucket.has(key)) bucket.set(key, { label, company, qty: 0 })
+        if (!bucket.has(key)) bucket.set(key, { label, code, company, qty: 0 })
         bucket.get(key).qty += Math.max(0, Number(f.quantity) || 0)
       }
     }
@@ -472,7 +495,7 @@ export function materialBlocksByType(entries) {
       if (!rows.length) continue
       blocks.push({
         header: `${type} ${md}`,
-        lines: rows.map((r) => (isNoActivityIssue(r.label) ? r.label : `${r.label}${r.company} = ${r.qty}`)),
+        lines: rows.map((r) => (isNoActivityIssue(r.label) ? r.label : `${r.label}${r.code}${r.company} = ${r.qty}`)),
       })
     }
     byType[type] = blocks

@@ -728,3 +728,273 @@ describe('Tel / ISSI display', () => {
     }
   })
 })
+
+// ---------------------------------------------------------------------------
+// MAK-REP-A011 (Makkah, 16/08/2026) — the day these rules were pinned to. Two
+// entries: a TH1N whose PCB was changed and which was then programmed, and a
+// Sepura car kit that took three parts and an installation.
+//
+// One fixture rather than five, because the rules constrain each other:
+// splitting INSTALLATION out of MAINTENANCE must not move the block total, and
+// giving the PCB line its action code must not move the line.
+// ---------------------------------------------------------------------------
+describe('a PCB, a programming and an installation on one day', () => {
+  const DIVIDER = '------------------------------' // 30 dashes, as buildTxt writes them
+  // A service action carries no company — the app clears it (see SERVICE_ACTIONS).
+  const th1n = () => ({
+    technician: 'AMIR', agency: 'PRI', type: 'AIRBUS', model: 'TH1N',
+    faults: [
+      { issue: 'PCB', quantity: 1, action: 'CHANGE', company: 'MOI' },
+      { issue: 'PROGRAMMING', quantity: 1, action: 'PROGRAM', company: '' },
+    ],
+  })
+  const carkit = () => ({
+    technician: 'AMIR', agency: 'PSD', type: 'SEPURA', model: 'SRG3900 CARKIT',
+    faults: [
+      { issue: 'FISTMIC', quantity: 2, action: 'CHANGE', company: 'MOTECO' },
+      { issue: 'FUSE COVER', quantity: 2, action: 'CHANGE', company: 'MOTECO' },
+      { issue: 'FUSE10', quantity: 2, action: 'CHANGE', company: 'MOTECO' },
+      { issue: 'INSTALLATION', quantity: 2, action: 'INSTALL', company: '' },
+    ],
+  })
+  const a011 = () => [th1n(), carkit()]
+  const report = (entries) =>
+    buildDateReport('16/08/2026', 'MAKKAH-REP-0011', entries, { branch: 'Makkah', shortId: 'MAK-REP-A011' })
+  const materialLines = (entries, type) => materialBlocksByType(entries)[type].flatMap((b) => b.lines)
+  const agencyOf = (entries, name) => agencyBlocks(entries).find((b) => b.agency === name)
+
+  // -- Rule 1: PCB carries its action code in the Entry & Materials Summary --
+  //
+  // PCB is the one item name that is also an action name, so a bare "PCB" line
+  // does not say which of the two it is.
+  describe('the PCB line says which PCB it means', () => {
+    const did = (issue, action, company = 'MOI', quantity = 1) => ({ issue, quantity, action, company })
+    const one = (faults) => materialLines([{ agency: 'PRI', type: 'AIRBUS', model: 'TH1N', faults }], 'AIRBUS')
+
+    test('the changed board reads PCB (C), not a bare PCB', () => {
+      assert.deepEqual(one([did('PCB', 'CHANGE')]), ['PCB (C) (MOI) = 1'])
+    })
+
+    test('the code is the action that was performed, whichever it was', () => {
+      for (const [action, code] of [['CHANGE', 'C'], ['REPAIR', 'R'], ['NEW', 'N'], ['PCB', 'PCB']]) {
+        assert.deepEqual(one([did('PCB', action)]), [`PCB (${code}) (MOI) = 1`], action)
+      }
+    })
+
+    // FISTMIC, FUSE COVER and FUSE10 name no action, so nothing about them is
+    // ambiguous and they print exactly as they always have.
+    test('no other part gets a code', () => {
+      assert.deepEqual(materialLines(a011(), 'SEPURA'), [
+        'FISTMIC (MOT) = 2',
+        'FUSE COVER (MOT) = 2',
+        'FUSE10 (MOT) = 2',
+        'INSTALLATION = 2',
+      ])
+    })
+
+    // The code is a rendering hung off the end of the line, so it must not
+    // reach the sort: the line sits where PCB sorts, not where "PCB (C)" would.
+    test('the line still sorts under its own name', () => {
+      const lines = one([
+        did('SPEAKER MID', 'CHANGE'),
+        did('PCB BASE', 'CHANGE'),
+        did('PCB', 'CHANGE'),
+        did('ANTENNA', 'CHANGE'),
+      ])
+      assert.deepEqual(lines, [
+        'ANTENNA (MOI) = 1',
+        'PCB (C) (MOI) = 1',
+        'PCB BASE (MOI) = 1',
+        'SPEAKER MID (MOI) = 1',
+      ])
+    })
+
+    // The aggregation key is still materialKey() — the part, not the part and
+    // its code. Two boards changed is two boards on one line, and the code is
+    // read off the first fault seen, exactly as the company already is.
+    test('the code does not split the part into two lines', () => {
+      assert.deepEqual(one([did('PCB', 'CHANGE', 'MOI'), did('PCB', 'REPAIR', 'MOTECO')]), ['PCB (C) (MOI) = 2'])
+    })
+
+    // A custom action has no entry in the code table, so it prints its own name
+    // rather than an empty pair of brackets — the fallback issueActionCell
+    // already makes. An item that is not an action name is not ambiguous in the
+    // first place, so it still gets nothing.
+    test('an action outside the code table prints itself, an ordinary part nothing', () => {
+      assert.deepEqual(one([did('RTO', 'RTO')]), ['RTO (RTO) (MOI) = 1'])
+      assert.deepEqual(one([did('ANTENNA', 'SOMETHING CUSTOM')]), ['ANTENNA (MOI) = 1'])
+    })
+  })
+
+  // -- Rule 2: INSTALLATION is its own category, never MAINTENANCE --
+  //
+  // An installation is not a repair and consumes no part.
+  describe('an installation is never counted as maintenance', () => {
+    test('it does not reach maintenanceCount', () => {
+      // 2 = the max quantity among the three parts. The installation's own 2
+      // is counted as an install and nowhere else.
+      assert.deepEqual(entryCounts(carkit()), { maintenance: 2, programming: 0, install: 2, dismantle: 0 })
+    })
+
+    test('the Device Summary splits the block into two categories', () => {
+      const [block] = deviceBlocksByType(a011()).SEPURA
+      assert.equal(block.header, 'SEPURA CARKIT')
+      assert.deepEqual(block.cats, [['MAINTENANCE', 2], ['INSTALLATION', 2]])
+      // The split moves nothing between the categories, so the block total is
+      // what it always was.
+      assert.equal(block.total, 4)
+    })
+
+    test('the Agency Summary splits it the same way', () => {
+      assert.deepEqual(agencyOf(a011(), 'PSD').cats, [['MAINTENANCE', 2], ['INSTALLATION', 2]])
+      assert.equal(agencyOf(a011(), 'PSD').total, 4)
+    })
+
+    // The rule INSTALLATION is being held to.
+    test('programming is kept out of maintenance in just the same way', () => {
+      assert.deepEqual(entryCounts(th1n()), { maintenance: 1, programming: 1, install: 0, dismantle: 0 })
+      assert.deepEqual(deviceBlocksByType(a011()).AIRBUS[0].cats, [['MAINTENANCE', 1], ['PROGRAMMING', 1]])
+    })
+  })
+
+  // -- Rule 3: an action line belongs to the device it was performed on --
+  describe('an action line belongs to the entry that recorded it', () => {
+    test('the programming prints under the TH1N and under no other device', () => {
+      assert.ok(materialLines(a011(), 'AIRBUS').includes('PROGRAMMING = 1'))
+      assert.ok(!materialLines(a011(), 'SEPURA').some((l) => l.startsWith('PROGRAMMING')))
+      const labels = (type) => deviceBlocksByType(a011())[type][0].cats.map(([l]) => l)
+      assert.ok(labels('AIRBUS').includes('PROGRAMMING'))
+      assert.ok(!labels('SEPURA').includes('PROGRAMMING'))
+    })
+
+    test('the installation prints under the car kit and under no other device', () => {
+      assert.ok(materialLines(a011(), 'SEPURA').includes('INSTALLATION = 2'))
+      assert.ok(!materialLines(a011(), 'AIRBUS').some((l) => l.startsWith('INSTALLATION')))
+      assert.ok(!deviceBlocksByType(a011()).AIRBUS[0].cats.some(([l]) => l === 'INSTALLATION'))
+    })
+
+    test('each lands on the agency of the entry that recorded it', () => {
+      assert.deepEqual(agencyOf(a011(), 'PRI').cats, [['MAINTENANCE', 1], ['PROGRAMMING', 1]])
+      assert.ok(!agencyOf(a011(), 'PSD').cats.some(([l]) => l === 'PROGRAMMING'))
+      assert.ok(!agencyOf(a011(), 'PRI').cats.some(([l]) => l === 'INSTALLATION'))
+    })
+  })
+
+  // -- Rule 4: the Agency Summary mirrors the Device Summary --
+  describe('the Agency Summary mirrors the Device Summary, category for category', () => {
+    test('each agency reads the categories its device block reads', () => {
+      const devices = deviceBlocksByType(a011())
+      assert.deepEqual(agencyOf(a011(), 'PRI').cats, devices.AIRBUS[0].cats)
+      assert.deepEqual(agencyOf(a011(), 'PSD').cats, devices.SEPURA[0].cats)
+    })
+
+    test('it never absorbs one category into another', () => {
+      assert.equal(
+        agencyComment(a011()),
+        ['Agency Summary', DIVIDER, 'PRI [MAIN 1] [PROG 1]', DIVIDER, 'PSD [MAIN 2] [INS 2]'].join('\n'),
+      )
+      // Not [MAIN 4] — the four are two maintenance units and two installations.
+      assert.ok(!agencyComment(a011()).includes('[MAIN 4]'))
+    })
+
+    test('a category with nothing in it is not shown', () => {
+      assert.ok(!agencyComment(a011()).includes('[DISM'))
+      assert.ok(!agencyComment(a011()).includes(' 0]'))
+    })
+  })
+
+  // -- Rule 5: Device Summary numbering --
+  describe('Device Summary numbering', () => {
+    const deviceSection = (entries) =>
+      buildTxt(report(entries)).split(`\n${DIVIDER}\nAgency Summary`)[0].split(`Device Summary\n${DIVIDER}\n`)[1]
+
+    test('line numbers run on across every block rather than restarting', () => {
+      assert.equal(
+        deviceSection(a011()),
+        [
+          'AIRBUS TH1N',
+          '1. MAINTENANCE = 1',
+          '2. PROGRAMMING = 1',
+          '       TOTAL = 2',
+          DIVIDER,
+          'SEPURA CARKIT',
+          '3. MAINTENANCE = 2',
+          '4. INSTALLATION = 2',
+          '       TOTAL = 4',
+        ].join('\n'),
+      )
+    })
+
+    test('TOTAL is per block, indented seven spaces, and sums that block', () => {
+      const totals = deviceSection(a011()).split('\n').filter((l) => l.includes('TOTAL'))
+      assert.equal(totals.length, 2) // one per block, not one for the report
+      for (const line of totals) assert.match(line, /^ {7}TOTAL = \d+$/)
+      assert.deepEqual(totals, ['       TOTAL = 2', '       TOTAL = 4'])
+    })
+  })
+
+  // -- The report as a whole --
+  test('MAK-REP-A011 renders exactly this', () => {
+    assert.equal(
+      buildTxt(report(a011())),
+      [
+        '16/08/2026',
+        'DAILY ACTIVITY REPORT',
+        'BRANCH: Makkah',
+        'REPORT ID: MAK-REP-A011',
+        DIVIDER,
+        'Entry & Materials Summary',
+        DIVIDER,
+        'AIRBUS TH1N',
+        'PCB (C) (MOI) = 1',
+        'PROGRAMMING = 1',
+        DIVIDER,
+        'SEPURA SRG CARKIT',
+        'FISTMIC (MOT) = 2',
+        'FUSE COVER (MOT) = 2',
+        'FUSE10 (MOT) = 2',
+        'INSTALLATION = 2',
+        DIVIDER,
+        'Device Summary',
+        DIVIDER,
+        'AIRBUS TH1N',
+        '1. MAINTENANCE = 1',
+        '2. PROGRAMMING = 1',
+        '       TOTAL = 2',
+        DIVIDER,
+        'SEPURA CARKIT',
+        '3. MAINTENANCE = 2',
+        '4. INSTALLATION = 2',
+        '       TOTAL = 4',
+        DIVIDER,
+        'Agency Summary',
+        DIVIDER,
+        'PRI [MAIN 1] [PROG 1]',
+        DIVIDER,
+        'PSD [MAIN 2] [INS 2]',
+      ].join('\n'),
+    )
+  })
+
+  // The print sheet and the PDF read materialBlocksByType / deviceBlocksByType
+  // directly (App.jsx SplitColumns), while the TXT — which is also the WhatsApp
+  // daily text (server/src/dailyText.js) — is built from those same two
+  // functions. So no view can print a line the others do not, and this is what
+  // says so.
+  test('the print sheet, the PDF blocks and the WhatsApp text carry the same lines', () => {
+    const txt = buildTxt(report(a011()))
+    for (const byType of [materialBlocksByType(a011()), deviceBlocksByType(a011())]) {
+      for (const type of Object.keys(byType)) {
+        for (const b of byType[type]) {
+          assert.ok(txt.includes(b.header), `block "${b.header}" is missing from the text`)
+          for (const line of b.lines) {
+            // The device blocks number per block for the split columns; the TXT
+            // numbers continuously, so compare on the part after the number.
+            const body = line.replace(/^\d+\. /, '')
+            assert.ok(txt.includes(body), `"${body}" is in the blocks but not in the text`)
+          }
+        }
+      }
+    }
+  })
+})
