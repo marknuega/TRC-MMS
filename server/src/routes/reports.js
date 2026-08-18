@@ -46,7 +46,7 @@ router.get('/', async (req, res, next) => {
 // POST /api/reports
 router.post('/', async (req, res, next) => {
   try {
-    const { data, error } = parseEntry(req.body)
+    const { data, error } = await parseEntry(req.body)
     if (error) return res.status(400).json({ error })
     data.branch = writeBranch(req, req.body?.branch) // tag with the owning branch
     if (data.branch === null) return res.status(400).json({ error: 'That branch is outside your region' })
@@ -73,7 +73,7 @@ router.delete('/', async (req, res, next) => {
 // PUT /api/reports/:id - replace an entry's fields + faults in place.
 router.put('/:id', async (req, res, next) => {
   try {
-    const { data, error } = parseEntry(req.body)
+    const { data, error } = await parseEntry(req.body)
     if (error) return res.status(400).json({ error })
     const id = Number(req.params.id)
     const { faults, ...scalar } = data

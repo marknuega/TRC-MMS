@@ -18,6 +18,8 @@ import {
   prefixIndex,
   optionPrefixes,
   optionIssiPrefixes,
+  optionStandIn,
+  optionStandInReal,
   optionFullForm,
   technicianName,
   technicianId,
@@ -41,6 +43,8 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
   const [newVariant, setNewVariant] = useState('')
   const [newPrefixes, setNewPrefixes] = useState('')
   const [newIssiPrefixes, setNewIssiPrefixes] = useState('')
+  const [newStandIn, setNewStandIn] = useState('')
+  const [newStandInReal, setNewStandInReal] = useState('')
   const [newFullForm, setNewFullForm] = useState('')
   const [newId, setNewId] = useState('')
   const [newInitials2, setNewInitials2] = useState('')
@@ -52,6 +56,8 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
   const [editVariant, setEditVariant] = useState('')
   const [editPrefixes, setEditPrefixes] = useState('')
   const [editIssiPrefixes, setEditIssiPrefixes] = useState('')
+  const [editStandIn, setEditStandIn] = useState('')
+  const [editStandInReal, setEditStandInReal] = useState('')
   const [editFullForm, setEditFullForm] = useState('')
   const [editId, setEditId] = useState('')
   const [editInitials2, setEditInitials2] = useState('')
@@ -79,6 +85,10 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
   // shown and still saved but no longer selects anything looks like it works.
   const hasTelPrefixes = isModels
   const hasIssiPrefixes = isAgencies
+  // A stand-in belongs to the number that selects a device, so it rides with
+  // the Tel prefixes and only the Models list has one. An agency is picked by
+  // its own ISSI and has nothing to stand in for.
+  const hasStandIn = isModels
   // Carries prefixes of SOME kind — the two behave identically here (same
   // rules, same validation, same stored shape), so everything that does not
   // care which number it is asks this rather than naming either one.
@@ -150,15 +160,22 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
       const prefixes = hasTelPrefixes ? parsePrefixes(f.prefixes) : []
       const issiPrefixes = hasIssiPrefixes ? parsePrefixes(f.issiPrefixes) : []
       const fullForm = isAgencies ? f.fullForm.trim() : ''
+      // Both halves or neither — half a stand-in rewrites nothing, so storing
+      // one on its own is a trap (the call codeProblem makes about a parts code
+      // with no variant). validated by standInProblem before we get here.
+      const standIn = hasStandIn ? f.standIn.replace(/\D/g, '') : ''
+      const standInReal = hasStandIn ? f.standInReal.replace(/\D/g, '') : ''
+      const pair = standIn && standInReal ? { standIn, standInReal } : {}
       // A model with no prefixes stays a plain string, exactly as it was
       // before this field existed — nothing to store, so nothing stored. An
       // agency given only some of its three optional fields stores only those,
       // for the same reason.
-      if (!prefixes.length && !issiPrefixes.length && !fullForm) return name
+      if (!prefixes.length && !issiPrefixes.length && !fullForm && !pair.standIn) return name
       return {
         name,
         ...(prefixes.length && { prefixes }),
         ...(issiPrefixes.length && { issiPrefixes }),
+        ...pair,
         ...(fullForm && { fullForm }),
       }
     }
@@ -223,6 +240,39 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
     return `${who} — whichever comes first in this list is the one a number selects.`
   }
 
+  // What is wrong with a stand-in pair, or '' when it is usable (or blank —
+  // most models need none). Both halves or neither, for the same reason a parts
+  // code needs its variant: one on its own rewrites nothing.
+  function standInProblem(standIn, real, exceptIndex = -1) {
+    if (!hasStandIn) return ''
+    const a = String(standIn ?? '').replace(/\D/g, '')
+    const b = String(real ?? '').replace(/\D/g, '')
+    if (!a && !b) return ''
+    if (!a) return 'Add the Stand-in prefix, or clear "Stored as".'
+    if (!b) return 'Add what the stand-in is "Stored as", or clear it.'
+    if (!PREFIX_RE.test(a)) return `"${a}" is not a prefix — 2 to 6 digits, e.g. 404.`
+    if (!PREFIX_RE.test(b)) return `"${b}" is not a prefix — 2 to 6 digits, e.g. 500.`
+    if (a === b) return `${a} would be stored as itself — a stand-in has to differ from the number it stands in for.`
+    // Another model's stand-in would rewrite the same digits to something else
+    // as soon as that model were picked. Two rules for one prefix is not a
+    // sharing decision like a Tel prefix is — it is two answers to one question.
+    const clash = list.findIndex((it, idx) => idx !== exceptIndex && optionStandIn(it) === a)
+    if (clash >= 0) return `${a} is already the stand-in for "${nameOf(list[clash])}".`
+    return ''
+  }
+
+  // Whether the stand-in will actually select this model. It only does if the
+  // model also claims it as a Tel prefix — the swap happens on save, the
+  // selection on typing, and they are two different lists. Said out loud rather
+  // than enforced: rewriting without auto-selecting is a legitimate thing to
+  // want, and silently adding the prefix would edit a field nobody typed in.
+  function standInHint(standIn, prefixes) {
+    const a = String(standIn ?? '').replace(/\D/g, '')
+    if (!a || !PREFIX_RE.test(a)) return ''
+    if (parsePrefixes(prefixes).includes(a)) return `Typing ${a} selects this model, and saves as the real prefix.`
+    return `${a} is not one of this model's Tel prefixes, so typing it selects nothing — add it above to have it select this model too.`
+  }
+
   // What is wrong with a parts + variant pair, or '' when it is usable. Both
   // halves or neither: half a code decodes to nothing, so storing one is a trap.
   function codeProblem(parts, variant, exceptIndex = -1) {
@@ -270,6 +320,8 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
     if (prefix) return [prefix, 'prefixes']
     const issi = hasIssiPrefixes ? prefixProblem(f.issiPrefixes, 'ISSI') : ''
     if (issi) return [issi, 'issiPrefixes']
+    const standIn = standInProblem(f.standIn, f.standInReal, exceptIndex)
+    if (standIn) return [standIn, 'standIn']
     const tech = techIdProblem(f.id, exceptIndex)
     if (tech) return [tech, 'id']
     const a = initials2Problem(f.initials2, exceptIndex)
@@ -287,6 +339,8 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
     variant: newVariant,
     prefixes: newPrefixes,
     issiPrefixes: newIssiPrefixes,
+    standIn: newStandIn,
+    standInReal: newStandInReal,
     fullForm: newFullForm,
     id: newId,
     initials2: newInitials2,
@@ -298,6 +352,8 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
     variant: editVariant,
     prefixes: editPrefixes,
     issiPrefixes: editIssiPrefixes,
+    standIn: editStandIn,
+    standInReal: editStandInReal,
     fullForm: editFullForm,
     id: editId,
     initials2: editInitials2,
@@ -311,6 +367,8 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
     setNewVariant('')
     setNewPrefixes('')
     setNewIssiPrefixes('')
+    setNewStandIn('')
+    setNewStandInReal('')
     setNewFullForm('')
     setNewId('')
     setNewInitials2('')
@@ -339,7 +397,10 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
       const givingCode =
         (isIssues && newParts.trim() && newVariant.trim()) ||
         (hasPrefixes &&
-          (parsePrefixes(hasTelPrefixes ? newPrefixes : newIssiPrefixes).length > 0 || newFullForm.trim() !== ''))
+          (parsePrefixes(hasTelPrefixes ? newPrefixes : newIssiPrefixes).length > 0 ||
+            newFullForm.trim() !== '' ||
+            // A model gaining only its first stand-in is the same move.
+            (hasStandIn && newStandIn.trim() !== '' && newStandInReal.trim() !== '')))
       // Whichever list this category actually answers to.
       const held = isIssues
         ? issueCode(list[clash])
@@ -367,6 +428,8 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
     setEditVariant(isIssues ? issueVariant(list[i]) : '')
     setEditPrefixes(hasTelPrefixes ? optionPrefixes(list[i]).join(', ') : '')
     setEditIssiPrefixes(hasIssiPrefixes ? optionIssiPrefixes(list[i]).join(', ') : '')
+    setEditStandIn(hasStandIn ? optionStandIn(list[i]) : '')
+    setEditStandInReal(hasStandIn ? optionStandInReal(list[i]) : '')
     // Seeded from the code map when the option carries none of its own, so
     // opening an agency to edit it offers the full form rather than a blank box
     // that would silently drop what the card was showing a moment ago.
@@ -396,6 +459,8 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
     setEditVariant('')
     setEditPrefixes('')
     setEditIssiPrefixes('')
+    setEditStandIn('')
+    setEditStandInReal('')
     setEditFullForm('')
     setEditId('')
     setEditInitials2('')
@@ -507,6 +572,34 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                   title="The leading digits of a Tel number that mean this model — 2 to 6 digits, several separated by commas, e.g. 355, 06. Optional."
                 />
               </label>
+            )}
+            {hasStandIn && (
+              <>
+                <label className="field-code">
+                  Stand-in prefix
+                  <input
+                    value={newStandIn}
+                    onChange={(e) => setNewStandIn(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    placeholder="404"
+                    aria-invalid={noticeField === 'standIn' || undefined}
+                    className={noticeField === 'standIn' ? 'invalid' : undefined}
+                    inputMode="numeric"
+                    title="A prefix typed to select this model but never stored — for a device whose real prefix is shared with another model and so cannot name it. Optional."
+                  />
+                </label>
+                <label className="field-code">
+                  Stored as
+                  <input
+                    value={newStandInReal}
+                    onChange={(e) => setNewStandInReal(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    placeholder="500"
+                    aria-invalid={noticeField === 'standIn' || undefined}
+                    className={noticeField === 'standIn' ? 'invalid' : undefined}
+                    inputMode="numeric"
+                    title="The prefix really on the radio — what the stand-in is swapped for when the entry is saved."
+                  />
+                </label>
+              </>
             )}
             {hasIssiPrefixes && (
               <label className="field-code field-prefix">
@@ -651,6 +744,22 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
               {newPrefixes.trim() && <span className="manage-code-hint"> {prefixShareHint(newPrefixes)}</span>}
             </p>
           )}
+          {hasStandIn && (
+            <p className="manage-hint">
+              A <strong>Stand-in prefix</strong> is for a device the real prefix cannot name on its own. Where two
+              models share a prefix, a Tel number cannot say which is on the bench and the auto-select lands on
+              whichever is higher in this list. Give one of them a stand-in — say <code>404</code>{' '}
+              <strong>Stored as</strong> <code>500</code> — add <code>404</code> to its Tel prefixes, and typing{' '}
+              <code>404…</code> selects that model while the entry saves with the <code>500…</code> really on the
+              radio. The swap happens once, at save, and only for the model that declares it: the same digits typed
+              against another model are somebody's real number and are stored untouched. Both boxes or neither;
+              leave them blank for a device that needs no stand-in, which is every one the app ships with — the
+              SRG3900 builds were the case this existed for, and they now hold a prefix each.
+              {newStandIn.trim() && (
+                <span className="manage-code-hint"> {standInHint(newStandIn, newPrefixes)}</span>
+              )}
+            </p>
+          )}
           {hasIssiPrefixes && (
             <p className="manage-hint">
               <strong>ISSI prefixes</strong> are the leading digits of an <strong>ISSI</strong> that select this
@@ -742,6 +851,32 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                                 inputMode="numeric"
                               />
                             </label>
+                          )}
+                          {hasStandIn && (
+                            <>
+                              <label className="field-code">
+                                Stand-in prefix
+                                <input
+                                  className="edit-input"
+                                  value={editStandIn}
+                                  onChange={(e) => setEditStandIn(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                                  onKeyDown={cancelOnEscape}
+                                  placeholder="404"
+                                  inputMode="numeric"
+                                />
+                              </label>
+                              <label className="field-code">
+                                Stored as
+                                <input
+                                  className="edit-input"
+                                  value={editStandInReal}
+                                  onChange={(e) => setEditStandInReal(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                                  onKeyDown={cancelOnEscape}
+                                  placeholder="500"
+                                  inputMode="numeric"
+                                />
+                              </label>
+                            </>
                           )}
                           {hasIssiPrefixes && (
                             <label className="field-code field-prefix">
@@ -839,6 +974,14 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                       {hasTelPrefixes && optionPrefixes(value).length > 0 && (
                         <span className="manage-item-code" title="Tel prefixes">
                           {optionPrefixes(value).join(' / ')}
+                        </span>
+                      )}
+                      {/* An arrow rather than a bare pair: the row has to say
+                          which of the two digits is typed and which is stored,
+                          and 107 → 109 says it without a legend. */}
+                      {hasStandIn && optionStandIn(value) && optionStandInReal(value) && (
+                        <span className="manage-item-code" title="Stand-in prefix, and what it is stored as">
+                          {optionStandIn(value)} → {optionStandInReal(value)}
                         </span>
                       )}
                       {/* Labelled, so the digits say which number they answer

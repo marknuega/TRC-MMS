@@ -30,15 +30,16 @@ export const DEFAULT_OPTIONS = {
 
   // `prefixes` are the leading digits of a Tel number that belong to this
   // model, so typing the number picks the model (see modelsForTel below).
-  // 109 is deliberately on all three SRG3900 builds: a number says SEPURA
-  // console, never which console.
   models: [
     { name: 'TH1N', prefixes: ['355', '06'] },
     'THR9', 'TMR 880i',
     { name: 'STP9000', prefixes: ['190'] },
-    { name: 'SRG3900 CARKIT', prefixes: ['109'] },
-    { name: 'SRG3900 DESKTOP', prefixes: ['109'] },
-    { name: 'SRG3900 BIKE', prefixes: ['109'] },
+    // One prefix per build. 109 used to be all three at once, which meant no
+    // Tel number could say which was on the bench; it is retired in favour of
+    // these (see RETIRED_TEL_PREFIXES below).
+    { name: 'SRG3900 CARKIT', prefixes: ['103'] },
+    { name: 'SRG3900 DESKTOP', prefixes: ['104'] },
+    { name: 'SRG3900 BIKE', prefixes: ['102'] },
     'PT580H', 'PT590', 'MT680',
     // Not a device: the Model a "no activity today" entry carries, so the day
     // is on the record without claiming a radio was worked on.
@@ -297,6 +298,190 @@ export function telPick(tel, list) {
 }
 
 /**
+ * A Tel number with its leading `from` prefix swapped for `to`, or unchanged
+ * when it does not start with `from`.
+ *
+ * Rewritten in place rather than rebuilt from digits: the record holds the
+ * number as it was TYPED (see displayNumber in report.js), so whatever spacing
+ * someone used survives and only the leading run of digits is touched. Finding
+ * the first digit rather than assuming position 0 also means a blank number and
+ * the '-' a blank one is stored as fall straight through.
+ *
+ * Shared by the two things that swap a prefix: the stand-in rule below, and the
+ * entry form offering a replacement for a retired one.
+ */
+export function replaceTelPrefix(tel, from, to) {
+  const raw = String(tel ?? '')
+  const at = raw.search(/\d/)
+  if (at < 0 || !from || !raw.slice(at).startsWith(from)) return raw
+  return raw.slice(0, at) + to + raw.slice(at + from.length)
+}
+
+// ---------------------------------------------------------------------------
+// Retired Tel prefixes — a prefix that no longer names anything
+//
+// 109 named the SRG3900 car kit, desktop AND bike at once, so no number
+// starting with it could say which device was on the bench. The three now hold
+// one prefix each — 102 the bike, 103 the car kit, 104 the desktop — and 109
+// names nothing.
+//
+// It is refused at the entry form rather than quietly accepted, because a 109
+// number is not a number with a wrong device attached: it is a number that
+// never said which device it was. Storing one would put that unanswered
+// question into the record, where nobody can answer it afterwards.
+//
+// Only the form refuses it. Entries already saved keep the numbers they have,
+// and the WhatsApp webhook does not check: a technician who texts a report
+// cannot be asked to pick again, and dropping their report to enforce a
+// numbering change would lose the work rather than correct it.
+//
+// A map rather than a list, so the refusal can say what to use instead. The
+// model each replacement names is read off the live models list, not written
+// down twice (see retiredTelReplacements).
+// ---------------------------------------------------------------------------
+export const RETIRED_TEL_PREFIXES = { 109: ['102', '103', '104'] }
+
+/** The retired prefix a Tel number starts with, or '' when it starts with none. */
+export function retiredTelPrefix(tel) {
+  const digits = telDigits(tel)
+  if (!digits) return ''
+  return Object.keys(RETIRED_TEL_PREFIXES).find((p) => digits.startsWith(p)) ?? ''
+}
+
+/**
+ * What to offer instead of a retired prefix: [{ prefix, model }], the model
+ * being whichever one now claims that prefix on the live list.
+ *
+ * A replacement no model claims is dropped rather than offered — an admin who
+ * has renumbered differently is not told to type a prefix that selects nothing.
+ */
+export function retiredTelReplacements(retired, models) {
+  return (RETIRED_TEL_PREFIXES[retired] ?? [])
+    .map((prefix) => ({ prefix, model: telPick(prefix, models) }))
+    .filter((r) => r.model)
+}
+
+// ---------------------------------------------------------------------------
+// Stand-in Tel prefixes — naming a device the real prefix cannot
+//
+// Where one prefix names several models, no Tel number can say which of them is
+// on the bench and the auto-select leads with whichever is listed first. A
+// model may take a stand-in prefix to be reached by instead: type it and that
+// model is selected, with no argument with the dropdown afterwards.
+//
+// A stand-in is a fiction of the entry form. The number on the radio begins
+// with the real prefix, so that is what the record must hold — the stand-in is
+// swapped back for it at the moment the entry is saved. Both halves are set on
+// the model in Manage inputs, and a model that needs no stand-in carries
+// neither, which is every model the app ships with: the three SRG3900 builds
+// were the case this existed for, and they now hold a prefix each.
+//
+// Gated on the Model, and only the model that declares it. The same digits
+// typed against another model are somebody's real number and are stored as
+// typed: a stand-in means "this is that device" or it means nothing at all, and
+// a blanket rewrite would quietly edit numbers nobody asked it to.
+//
+// Two stored fields rather than one, because the real prefix cannot be
+// inferred: a model may hold several Tel prefixes (TH1N holds 355 and 06) and
+// there is no non-arbitrary way to pick which of them a stand-in stands for.
+// Written out, the whole rule is on the row an admin is reading.
+// ---------------------------------------------------------------------------
+
+/** The prefix that is TYPED to select this model but never stored. */
+export const optionStandIn = (v) => (typeof v === 'string' ? '' : String(v?.standIn ?? '').replace(/\D/g, ''))
+/** The prefix a stand-in is stored AS — the one really on the radio. */
+export const optionStandInReal = (v) => (typeof v === 'string' ? '' : String(v?.standInReal ?? '').replace(/\D/g, ''))
+
+/** Both halves, or null when this model declares no usable stand-in. Half a
+ *  rule does nothing, so half a rule is no rule — the same call codeProblem
+ *  makes about a parts code with no variant. */
+export function optionStandInPair(v) {
+  const standIn = optionStandIn(v)
+  const real = optionStandInReal(v)
+  return standIn && real && standIn !== real ? { standIn, real } : null
+}
+
+/**
+ * The Tel number as it should be STORED for `model` — the stand-in prefix
+ * swapped for the real one, or the number untouched when no stand-in applies.
+ *
+ * Reads the live models list, so a stand-in added in Manage inputs takes effect
+ * without a release and a device that never needed one is unaffected. Matching
+ * the model by name is the same thing MODEL_TYPE does, past case and padding.
+ *
+ * Rewrites in place rather than rebuilding from digits: the record holds the
+ * number as it was TYPED (see displayNumber in report.js), so whatever spacing
+ * someone used survives and only the leading run of digits is touched.
+ *
+ * Called at the save boundary, not as the field is typed — the form still needs
+ * the stand-in to select the Model with.
+ */
+export function telForModel(tel, model, models) {
+  const raw = String(tel ?? '')
+  const want = String(model ?? '').trim().toUpperCase()
+  if (!want) return raw
+  const it = (models ?? []).find((m) => optionName(m).trim().toUpperCase() === want)
+  const swap = it && optionStandInPair(it)
+  return swap ? replaceTelPrefix(raw, swap.standIn, swap.real) : raw
+}
+
+// ---------------------------------------------------------------------------
+// Teaching the ISSI auto-select a range it has never seen
+//
+// An ISSI whose leading digits no agency claims selects nothing, so whoever
+// typed it picked the agency by hand — and the next number of that same range
+// will make them pick again. The pair they just entered is the mapping, so the
+// entry form offers to keep it.
+//
+// An OFFER, not an automatic write. The agency lists are admin-managed, and a
+// prefix that appeared because somebody saved an entry is a mapping nobody
+// chose — it would start selecting agencies for everyone, out of one person's
+// typing. Deciding is one click; undoing an unnoticed write is a hunt through
+// Manage inputs.
+//
+// Offered only when the range is genuinely unclaimed. An ISSI that already
+// selects the WRONG agency is a different question — the answer there is to
+// move the prefix, which is an admin's call and belongs in Manage inputs.
+// ---------------------------------------------------------------------------
+
+/** Digits of an ISSI prefix to offer. Three, matching the shipped 180/191/214. */
+const ISSI_OFFER_LEN = 3
+
+/**
+ * The { prefix, agency } worth offering to wire up, or null when there is
+ * nothing to offer: too few digits, no agency, the no-activity ISSI, an agency
+ * the list has never heard of, or a range something already claims.
+ */
+export function issiWireOffer(issi, agency, agencies) {
+  const digits = telDigits(issi)
+  const name = String(agency ?? '').trim()
+  if (digits.length < ISSI_OFFER_LEN || !name) return null
+  // 00 is not an agency range — it is the whole of "nothing happened today".
+  if (isNoActivityIssi(issi) || isNoActivityAgency(name)) return null
+  const known = (agencies ?? []).some((a) => optionName(a).trim().toUpperCase() === name.toUpperCase())
+  if (!known) return null
+  if (prefixOwners(digits, agencies, optionIssiPrefixes)) return null
+  return { prefix: digits.slice(0, ISSI_OFFER_LEN), agency: name }
+}
+
+/**
+ * The agencies list with `prefix` added to `agency`'s ISSI prefixes — what the
+ * offer above writes when it is taken up. Everything else is left exactly as it
+ * was, including an agency that already holds the prefix.
+ */
+export function withIssiPrefix(agencies, agency, prefix) {
+  const want = String(agency ?? '').trim().toUpperCase()
+  const p = String(prefix ?? '').replace(/\D/g, '')
+  if (!want || !PREFIX_RE.test(p)) return agencies ?? []
+  return (agencies ?? []).map((a) => {
+    if (optionName(a).trim().toUpperCase() !== want) return a
+    const have = optionIssiPrefixes(a)
+    if (have.includes(p)) return a
+    return { ...(typeof a === 'string' ? {} : a), name: optionName(a), issiPrefixes: [...have, p] }
+  })
+}
+
+/**
  * The Agency an ISSI selects, on the ISSI prefix list. telPick's twin, and
  * deliberately a separate function rather than a flag on it: the two read
  * different fields off different lists, and a caller must say which number it
@@ -384,6 +569,15 @@ export const isNoActivityModel = (model) => NO_ACTIVITY_MATCH.model.test(nameKey
  * off this rather than off how the row came to be filled in.
  */
 export const isNoActivityIssue = (issue) => NO_ACTIVITY_MATCH.issue.test(nameKey(issue))
+
+/**
+ * Whether an agency name is the "no activity" one rather than a real agency.
+ *
+ * Its twin above, for the field the ISSI fills in alongside them. Nothing about
+ * a day nobody worked is a range of numbers, so it is what issiWireOffer checks
+ * before offering to wire an ISSI up to it.
+ */
+export const isNoActivityAgency = (agency) => NO_ACTIVITY_MATCH.agency.test(nameKey(agency))
 
 /**
  * The entry an ISSI of 00 fills in: what each field becomes, resolved against

@@ -17,6 +17,16 @@ import {
   optionFullForm,
   NO_ACTIVITY_ISSUE,
   isServiceAction,
+  optionName,
+  telForModel,
+  optionStandIn,
+  optionStandInPair,
+  retiredTelPrefix,
+  retiredTelReplacements,
+  replaceTelPrefix,
+  issiWireOffer,
+  withIssiPrefix,
+  optionIssiPrefixes as issiPrefixesOf,
 } from './options.js'
 
 describe('mergeOptions', () => {
@@ -79,9 +89,10 @@ describe('mergeOptions', () => {
     assert.equal(out.models[2], 'PT590')
   })
 
-  test('all three SRG3900 builds are seeded the 109 they share', () => {
+  // 109 named all three at once and is retired; each build now has its own.
+  test('each SRG3900 build is seeded the one prefix that is now its own', () => {
     const out = mergeOptions({ models: ['SRG3900 CARKIT', 'SRG3900 DESKTOP', 'SRG3900 BIKE'] })
-    assert.deepEqual(out.models.map(optionPrefixes), [['109'], ['109'], ['109']])
+    assert.deepEqual(out.models.map(optionPrefixes), [['103'], ['104'], ['102']])
   })
 
   test("a model that already carries prefixes keeps exactly what the admin set", () => {
@@ -129,8 +140,7 @@ describe('mergeOptions', () => {
     assert.deepEqual(out.agencies.map(optionIssiPrefixes), [['180'], ['191'], ['191'], ['214'], []])
   })
 
-  // 191 is shipped to CD and to PRI both, and the seeding pass hands it to each
-  // — the same way all three SRG3900 builds are seeded the 109 they share.
+  // 191 is shipped to CD and to PRI both, and the seeding pass hands it to each.
   // Which of the two an ISSI actually lands on is list order (see issiPick), so
   // it stays the admin's to change by moving one above the other.
   test('an ISSI prefix two agencies share is seeded to both of them', () => {
@@ -226,10 +236,16 @@ describe('telPick', () => {
     assert.equal(telPick('0625455', MODELS), 'TH1N')
   })
 
-  // 109 is the car kit, the desktop AND the bike. A number cannot say which,
-  // but a model that is one dropdown away from right beats an empty field.
+  // Sharing is still legitimate — a number cannot say which of the sharers is
+  // on the bench, and a model one dropdown away from right beats an empty
+  // field. No SHIPPED prefix is shared any more (the three SRG3900 builds hold
+  // one each), so the rule is tested on a list of its own.
   test('a shared prefix selects the first of its owners in the list', () => {
-    assert.equal(telPick('1093324096', MODELS), 'SRG3900 CARKIT')
+    const shared = [
+      { name: 'FIRST', prefixes: ['109'] },
+      { name: 'SECOND', prefixes: ['109'] },
+    ]
+    assert.equal(telPick('1093324096', shared), 'FIRST')
   })
 
   test('list order is what decides a shared prefix, so Manage inputs controls it', () => {
@@ -503,5 +519,227 @@ describe('isServiceAction', () => {
     for (const a of ['REPAIR', 'PROGRAM', 'RE-PROGRAM', 'INSTALL', 'RE-INSTALL', 'DISMANTLE']) {
       assert.ok(offered.has(a), `${a} is not in the actions list`)
     }
+  })
+})
+
+
+
+// 109 named the SRG3900 car kit, desktop and bike all at once, so no number
+// starting with it could say which device was on the bench. The three now hold
+// one prefix each and 109 names nothing.
+describe('one Tel prefix per SRG3900 build', () => {
+  const models = mergeOptions({}).models
+
+  test('each build has its own prefix, and each selects only itself', () => {
+    assert.equal(telPick('102332645500', models), 'SRG3900 BIKE')
+    assert.equal(telPick('103332645500', models), 'SRG3900 CARKIT')
+    assert.equal(telPick('104400376200', models), 'SRG3900 DESKTOP')
+  })
+
+  test('no prefix is claimed by two models any more', () => {
+    const claimed = models.flatMap(optionPrefixes)
+    assert.equal(new Set(claimed).size, claimed.length, `collision in ${claimed.join(', ')}`)
+  })
+
+  test('109 selects nothing at all', () => {
+    assert.equal(telPick('109332645500', models), '')
+    assert.equal(prefixOwners('109332645500', models), null)
+  })
+
+  // The prefixes that were only ever a workaround for the shared 109.
+  test('nothing ships a stand-in any more, and none is needed', () => {
+    assert.deepEqual(models.filter((m) => optionStandInPair(m)).map(optionName), [])
+    assert.deepEqual(models.map(optionStandIn).filter(Boolean), [])
+  })
+})
+
+// A retired prefix is refused at the form rather than stored: a 109 number is
+// not a number with the wrong device attached, it is one that never said which
+// device it was, and nobody can answer that afterwards.
+describe('retired Tel prefixes', () => {
+  const models = mergeOptions({}).models
+
+  test('109 is recognised as retired, wherever the number goes on', () => {
+    assert.equal(retiredTelPrefix('109332645500'), '109')
+    assert.equal(retiredTelPrefix('109'), '109')
+    assert.equal(retiredTelPrefix('109 332 645500'), '109') // punctuation is not a defence
+  })
+
+  test('a number that merely contains 109 is not one that starts with it', () => {
+    assert.equal(retiredTelPrefix('102109645500'), '')
+    assert.equal(retiredTelPrefix('0501234567'), '')
+    assert.equal(retiredTelPrefix('102332645500'), '')
+  })
+
+  test('nothing to read is nothing retired', () => {
+    for (const v of ['', '   ', '-', null, undefined]) assert.equal(retiredTelPrefix(v), '')
+  })
+
+  // Refusing is half of it; the notice has to say what to use instead, and the
+  // model each replacement names is read off the live list, not written twice.
+  test('the replacements are offered with the model each one now names', () => {
+    assert.deepEqual(retiredTelReplacements('109', models), [
+      { prefix: '102', model: 'SRG3900 BIKE' },
+      { prefix: '103', model: 'SRG3900 CARKIT' },
+      { prefix: '104', model: 'SRG3900 DESKTOP' },
+    ])
+  })
+
+  // An admin who renumbers is not told to type a prefix that selects nothing.
+  test('a replacement no model claims is dropped rather than offered', () => {
+    const renamed = [{ name: 'ONLY ONE', prefixes: ['103'] }]
+    assert.deepEqual(retiredTelReplacements('109', renamed), [{ prefix: '103', model: 'ONLY ONE' }])
+    assert.deepEqual(retiredTelReplacements('109', []), [])
+    assert.deepEqual(retiredTelReplacements('', models), [])
+    assert.deepEqual(retiredTelReplacements('355', models), [], 'a live prefix is not retired')
+  })
+
+  // Taking up a replacement keeps every digit that identifies the radio — only
+  // the three that named the device change.
+  describe('replaceTelPrefix', () => {
+    test('swaps the leading run and nothing else', () => {
+      assert.equal(replaceTelPrefix('109332645500', '109', '102'), '102332645500')
+      assert.equal(replaceTelPrefix('109109109', '109', '104'), '104109109')
+    })
+
+    test('whatever spacing was typed survives', () => {
+      assert.equal(replaceTelPrefix('109 332 645500', '109', '103'), '103 332 645500')
+    })
+
+    test('a number that does not start with the prefix is untouched', () => {
+      assert.equal(replaceTelPrefix('102332645500', '109', '103'), '102332645500')
+      assert.equal(replaceTelPrefix('', '109', '102'), '')
+      assert.equal(replaceTelPrefix('-', '109', '102'), '-')
+      assert.equal(replaceTelPrefix('109332', '', '102'), '109332')
+    })
+  })
+})
+
+// The stand-in machinery stays as an admin-managed feature — any device whose
+// real prefix cannot name it can take one in Manage inputs — even though no
+// shipped model needs one now.
+describe('stand-in Tel prefixes remain available to any model', () => {
+  const custom = [
+    { name: 'WIDGET ONE', prefixes: ['500', '404'], standIn: '404', standInReal: '500' },
+    { name: 'WIDGET TWO', prefixes: ['500'] },
+    'PLAIN STRING MODEL',
+  ]
+
+  test('a model that declares one has its typed prefix swapped for the real one', () => {
+    assert.equal(telForModel('404123', 'WIDGET ONE', custom), '500123')
+  })
+
+  test('the same digits against another model are stored as typed', () => {
+    assert.equal(telForModel('404123', 'WIDGET TWO', custom), '404123')
+    assert.equal(telForModel('404123', 'PLAIN STRING MODEL', custom), '404123')
+    assert.equal(telForModel('404123', 'NEVER HEARD OF IT', custom), '404123')
+  })
+
+  test('the stand-in also selects the model, once it is a Tel prefix too', () => {
+    assert.equal(telPick('404123', custom), 'WIDGET ONE')
+  })
+
+  // Half a rule rewrites nothing, so half a rule is no rule.
+  test('a model missing either half of the pair swaps nothing', () => {
+    const half = [
+      { name: 'A', prefixes: ['107'], standIn: '107' },
+      { name: 'B', prefixes: ['107'], standInReal: '109' },
+      { name: 'C', prefixes: ['107'], standIn: '107', standInReal: '107' },
+    ]
+    for (const name of ['A', 'B', 'C']) assert.equal(telForModel('107332', name, half), '107332', name)
+    for (const name of ['A', 'B', 'C']) assert.equal(optionStandInPair(half.find((m) => m.name === name)), null)
+  })
+
+  test('a blank number and its stored placeholder come back as they went in', () => {
+    for (const v of ['', '-', null, undefined]) {
+      assert.equal(telForModel(v, 'WIDGET ONE', custom), v == null ? '' : v)
+    }
+  })
+
+  test('the model is matched past case and padding, and no list is no swap', () => {
+    assert.equal(telForModel('404123', ' widget one ', custom), '500123')
+    assert.equal(telForModel('404123', 'WIDGET ONE', []), '404123')
+    assert.equal(telForModel('404123', 'WIDGET ONE'), '404123')
+  })
+})
+
+// An ISSI whose leading digits no agency claims selects nothing, so whoever
+// typed it picked the agency by hand — and would have to again next time. The
+// pair they entered is the mapping, so the form offers to keep it.
+describe('offering to wire a new ISSI range to its agency', () => {
+  const agencies = mergeOptions({}).agencies
+
+  test('an unclaimed range and a real agency is an offer', () => {
+    assert.deepEqual(issiWireOffer('77712345', 'DOT', agencies), { prefix: '777', agency: 'DOT' })
+  })
+
+  // A range something already answers to is not new. An ISSI that selects the
+  // WRONG agency is a different question — moving a prefix is an admin's call.
+  test('a range an agency already claims is not offered', () => {
+    assert.equal(issiWireOffer('18012345', 'PSD', agencies), null)
+    assert.equal(issiWireOffer('18012345', 'DOT', agencies), null)
+    assert.equal(issiWireOffer('19112345', 'BG', agencies), null)
+  })
+
+  test('nothing is offered without both halves of the pair', () => {
+    assert.equal(issiWireOffer('', 'DOT', agencies), null)
+    assert.equal(issiWireOffer('77712345', '', agencies), null)
+    assert.equal(issiWireOffer('77712345', null, agencies), null)
+    assert.equal(issiWireOffer(null, 'DOT', agencies), null)
+  })
+
+  // Fewer digits than a prefix takes cannot name a range.
+  test('a number too short to hold a prefix is not offered', () => {
+    assert.equal(issiWireOffer('77', 'DOT', agencies), null)
+    assert.deepEqual(issiWireOffer('777', 'DOT', agencies), { prefix: '777', agency: 'DOT' })
+  })
+
+  // 00 is not an agency range — it is the whole of "nothing happened today".
+  test('the no-activity ISSI and agency are never offered', () => {
+    assert.equal(issiWireOffer('00', 'DOT', agencies), null)
+    assert.equal(issiWireOffer('77712345', 'No Activity', agencies), null)
+  })
+
+  // An agency the list has never heard of has no row to write the prefix onto.
+  test('an agency the list does not hold is not offered', () => {
+    assert.equal(issiWireOffer('77712345', 'NOT AN AGENCY', agencies), null)
+  })
+
+  test('the agency is matched past case and padding', () => {
+    assert.deepEqual(issiWireOffer('77712345', ' dot ', agencies), { prefix: '777', agency: 'dot' })
+  })
+
+  describe('taking the offer up', () => {
+    test('the prefix joins that agency, and only that agency', () => {
+      const out = withIssiPrefix(agencies, 'DOT', '777')
+      const dot = out.find((a) => optionName(a) === 'DOT')
+      assert.deepEqual(issiPrefixesOf(dot), ['777'])
+      // Everything else is exactly as it was — same names, same order.
+      assert.deepEqual(optionNames(out), optionNames(agencies))
+      assert.deepEqual(issiPrefixesOf(out.find((a) => optionName(a) === 'PSD')), ['180'])
+    })
+
+    test('an agency that already holds prefixes keeps them and gains this one', () => {
+      const out = withIssiPrefix(agencies, 'PSD', '777')
+      assert.deepEqual(issiPrefixesOf(out.find((a) => optionName(a) === 'PSD')), ['180', '777'])
+    })
+
+    test('adding a prefix an agency already holds changes nothing', () => {
+      const out = withIssiPrefix(agencies, 'PSD', '180')
+      assert.deepEqual(issiPrefixesOf(out.find((a) => optionName(a) === 'PSD')), ['180'])
+    })
+
+    test('a name or prefix that cannot be used leaves the list alone', () => {
+      assert.deepEqual(withIssiPrefix(agencies, '', '777'), agencies)
+      assert.deepEqual(withIssiPrefix(agencies, 'DOT', '7'), agencies, 'one digit is not a prefix')
+      assert.deepEqual(withIssiPrefix(agencies, 'NOT AN AGENCY', '777'), agencies)
+      assert.deepEqual(withIssiPrefix(undefined, 'DOT', '777'), [])
+    })
+
+    // The whole point: the next number of that range selects the agency itself.
+    test('the range selects the agency afterwards, and did not before', () => {
+      assert.equal(issiPick('77712345', agencies), '')
+      assert.equal(issiPick('77712345', withIssiPrefix(agencies, 'DOT', '777')), 'DOT')
+    })
   })
 })

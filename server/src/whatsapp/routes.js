@@ -80,7 +80,7 @@ function formatBatchSummary(batch, agencyCode) {
 
 /** Save one equipment group as a report entry. Returns nothing; throws on failure. */
 async function saveGroup(batch, group, agencyCode) {
-  const { data, error } = parseEntry({
+  const { data, error } = await parseEntry({
     reportDate: batch.timestamp.slice(0, 10),
     technician: batch.techName.toUpperCase(),
     agency: agencyCode,

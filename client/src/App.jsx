@@ -29,6 +29,8 @@ import {
   DEFAULT_OPTIONS, mergeOptions, MODEL_TYPE, BRANCHES, ALL_BRANCHES, ALL_REGIONS,
   materialName, materialDescMap, issueName, issueCode, technicianName, optionNames, telPick, isServiceAction,
   issiPick, isNoActivityIssi, isNoActivityIssue, noActivityFill,
+  retiredTelPrefix, retiredTelReplacements, replaceTelPrefix,
+  issiWireOffer, withIssiPrefix,
 } from './options'
 import ManageInputs from './ManageInputs'
 import Inventory from './Inventory'
@@ -471,6 +473,8 @@ function App({ user, onLogout }) {
   const [copied, setCopied] = useState(false)
   const [loading, setLoading] = useState(true)
   const [options, setOptions] = useState(DEFAULT_OPTIONS)
+  // The ISSI-to-agency mapping offered after a save, or null. { prefix, agency }
+  const [wire, setWire] = useState(null)
   const [savedAll, setSavedAll] = useState([]) // as fetched; read through `saved` below
   const [savedOpen, setSavedOpen] = useState(false)
   const [savedSearch, setSavedSearch] = useState('')
@@ -1107,6 +1111,16 @@ function App({ user, onLogout }) {
     })
   }
 
+  // Take up the offer above: the ISSI prefix joins that agency's own list, so
+  // the next number of the range selects it without anyone picking. Goes
+  // through setCategory, so it is saved and shown exactly like an edit made in
+  // Manage inputs — this is a shortcut to that screen, not a second way in.
+  function agreeWire() {
+    if (!wire) return
+    setCategory('agencies', withIssiPrefix(options.agencies, wire.agency, wire.prefix))
+    setWire(null)
+  }
+
   // Add a new selectable branch (persisted in the managed options list).
   function addBranch(name) {
     const v = String(name ?? '').trim()
@@ -1194,6 +1208,22 @@ function App({ user, onLogout }) {
       ...f,
       telNumber,
       ...(model && { model, type: MODEL_TYPE[model.toUpperCase()] ?? f.type }),
+    }))
+  }
+
+  // Taking up one of the replacements a retired prefix offers (see
+  // RetiredTelNotice). The number keeps everything after the prefix — the digits
+  // that identify the radio were never the problem — and the Model follows,
+  // because picking "102 · SRG3900 BIKE" IS saying which device it is. That
+  // makes it a device chosen by hand, so the flag goes up and nothing typed
+  // afterwards overwrites it.
+  const pickReplacementTel = (retired, choice) => {
+    devicePicked.current = true
+    setForm((f) => ({
+      ...f,
+      telNumber: replaceTelPrefix(f.telNumber, retired, choice.prefix),
+      model: choice.model,
+      type: MODEL_TYPE[choice.model.toUpperCase()] ?? f.type,
     }))
   }
 
@@ -1321,6 +1351,13 @@ function App({ user, onLogout }) {
           return
         }
       }
+      // A retired prefix names no device (see RetiredTelNotice), so the entry
+      // is not saved with one. Blocked here as well as shown under the field:
+      // the notice can be scrolled past, the save cannot.
+      if (!isTransmittal && retiredTelPrefix(form.telNumber)) {
+        setError(`Tel numbers starting ${retiredTelPrefix(form.telNumber)} are no longer accepted — pick the device's own prefix under the Tel field.`)
+        return
+      }
       const agency = agencyOverride ?? form.agency
       const payload = {
         ...form,
@@ -1338,6 +1375,10 @@ function App({ user, onLogout }) {
         return
       }
       await createEntry(payload)
+      // The ISSI just saved may name a range no agency answers to yet. Offered
+      // after the write, never before it: the entry is the user's business and
+      // teaching the auto-select is a separate, optional favour.
+      if (!isTransmittal) setWire(issiWireOffer(payload.issiNumber, payload.agency, options.agencies))
       // Remember Model/Type/Agency so the next entry pre-selects them.
       saveLast({ model: form.model, type: form.type, agency: payload.agency })
       // Mirrored into state so the Agency dropdown re-sorts straight away —
@@ -1444,6 +1485,18 @@ function App({ user, onLogout }) {
       ...(model && { model, type: MODEL_TYPE[model.toUpperCase()] ?? f.type }),
     }))
   }
+  // pickReplacementTel's half in the edit modal — see there. Same rule: taking
+  // up a replacement is choosing the device, so the flag goes up with it.
+  const ePickReplacementTel = (retired, choice) => {
+    eDevicePicked.current = true
+    setEditForm((f) => ({
+      ...f,
+      telNumber: replaceTelPrefix(f.telNumber, retired, choice.prefix),
+      model: choice.model,
+      type: MODEL_TYPE[choice.model.toUpperCase()] ?? f.type,
+    }))
+  }
+
   // The ISSI's half of the same job, on the same flag — see setIssi. No
   // no-activity fill here: 00 is how an entry is CREATED, and a saved one that
   // needs to become a no-activity record is a delete, not an edit.
@@ -1479,6 +1532,11 @@ function App({ user, onLogout }) {
       }
       if (!editForm.agency) {
         setError('Pick an Agency.')
+        return
+      }
+      // Same refusal as handleSubmit — an edit is not a way round it.
+      if (retiredTelPrefix(editForm.telNumber)) {
+        setError(`Tel numbers starting ${retiredTelPrefix(editForm.telNumber)} are no longer accepted — pick the device's own prefix under the Tel field.`)
         return
       }
     }
@@ -2151,6 +2209,7 @@ function App({ user, onLogout }) {
 
         <main className={`page-main app${WIDE_PAGES.has(page) ? ' wide' : ''}`}>
           {error && <p className="error">{error}</p>}
+          <WireIssiOffer wire={wire} onAgree={agreeWire} onDismiss={() => setWire(null)} />
 
           {page === 'report' && (
             <>
@@ -2305,6 +2364,7 @@ function App({ user, onLogout }) {
                 <label>
                   <span className="cap">Tel number <span className="opt">(optional)</span></span>
                   <input value={form.telNumber} onChange={setTel} placeholder="Full number, e.g. 0501234567" />
+                  <RetiredTelNotice tel={form.telNumber} models={options.models} onPick={pickReplacementTel} />
                 </label>
                 <label>
                   <span className="cap">ISSI number <span className="opt">(optional)</span></span>
@@ -2607,6 +2667,7 @@ function App({ user, onLogout }) {
                     <label>
                       <span className="cap">Tel number <span className="opt">(optional)</span></span>
                       <input value={editForm.telNumber} onChange={eSetTel} placeholder="Full number, e.g. 0501234567" />
+                      <RetiredTelNotice tel={editForm.telNumber} models={options.models} onPick={ePickReplacementTel} />
                     </label>
                     <label>
                       <span className="cap">ISSI number <span className="opt">(optional)</span></span>
@@ -3347,6 +3408,63 @@ function ReportPrint({ report }) {
         <Copyright />
       </p>
     </section>
+  )
+}
+
+// A Tel number starting with a retired prefix (109, which named all three
+// SRG3900 builds at once) cannot say which device it is, so the form refuses it
+// rather than storing the question. Refusing is only half of it: the notice
+// offers the prefixes that replaced it, each labelled with the model it now
+// names, and picking one rewrites the number and selects that model. Reading
+// the replacement models off the live list rather than naming them here means
+// an admin who renumbers differently gets their own names in the offer.
+function RetiredTelNotice({ tel, models, onPick }) {
+  const retired = retiredTelPrefix(tel)
+  const choices = retiredTelReplacements(retired, models)
+  if (!retired) return null
+  return (
+    // A span, not a paragraph: this sits inside the Tel field's <label>, whose
+    // content model is phrasing only.
+    <span className="retired-tel" role="status" aria-live="polite">
+      <span>
+        {/* The pills name the devices, so the sentence does not have to explain
+            what the old prefix failed to say — it only has to ask. Where there
+            are no pills there is nothing to read them off, so that branch still
+            names the prefix it is refusing. */}
+        {choices.length
+          ? 'Pick the one on the bench:'
+          : `${retired} has no replacement prefix set up yet — give each build its own Tel prefix in Manage inputs.`}
+      </span>
+      {choices.map((c) => (
+        <button
+          key={c.prefix}
+          type="button"
+          className="agree-pill"
+          onClick={() => onPick(retired, c)}
+          title={`Use ${c.prefix} and select ${c.model}`}
+        >
+          {c.prefix} · {c.model}
+        </button>
+      ))}
+    </span>
+  )
+}
+
+// Offered after a save whose ISSI no agency answers to yet: wiring it up means
+// the next number of that range selects the agency by itself. An offer rather
+// than an automatic write — the option lists are admin-managed, and a prefix
+// silently added by an entry is a mapping nobody chose.
+function WireIssiOffer({ wire, onAgree, onDismiss }) {
+  if (!wire) return null
+  return (
+    <p className="wire-issi" role="status" aria-live="polite">
+      <span>
+        No agency answers to ISSI <strong>{wire.prefix}</strong> yet. Wire it to{' '}
+        <strong>{wire.agency}</strong> so the next one selects it by itself?
+      </span>
+      <button type="button" className="agree-pill" onClick={onAgree}>Agree</button>
+      <button type="button" className="agree-pill agree-pill--quiet" onClick={onDismiss}>Not now</button>
+    </p>
   )
 }
 

@@ -17,6 +17,13 @@
 // route owns only what is request-shaped: which branch the caller may write to.
 
 import { prisma } from './db.js'
+// A stand-in Tel prefix is typed to select a model the real prefix cannot name
+// (107 the SRG3900 bike, 108 the desktop) and is swapped back for the real one
+// here, at the one point every entry passes through — the browser's POST and
+// PUT and the WhatsApp webhook alike. Imported rather than restated: the rule
+// is written down beside the prefix matcher it exists because of, and auth.js
+// already reads that module the same way.
+import { telForModel, mergeOptions } from '../../client/src/options.js'
 
 // Actions whose "fault" is the whole device — no component issue needed.
 const DEVICE_LEVEL = new Set(['PROGRAM', 'RE-PROGRAM', 'INSTALL', 'RE-INSTALL', 'DISMANTLE'])
@@ -34,7 +41,29 @@ export const repId = (seq) => `REP-${String(seq).padStart(4, '0')}`
 // Turn a Date/ISO into the YYYY-MM-DD key we group reports by.
 export const dateKey = (value) => new Date(value).toISOString().slice(0, 10)
 
-export function parseEntry(body) {
+/**
+ * The Tel number as it should be stored — see telForModel.
+ *
+ * Reads the admin's live models list, because a stand-in is set in Manage
+ * inputs and must take effect without a release. mergeOptions applies the same
+ * fallbacks the browser applies, so an install that has never saved the
+ * category still gets the shipped stand-ins.
+ *
+ * A failed read gives the number back untouched rather than failing the save:
+ * an entry stored with the prefix that was typed is a wrong prefix someone can
+ * correct, an entry that would not save is work lost.
+ */
+async function settledTel(tel, model) {
+  if (!tel || model === '-') return tel // nothing to swap, and no model to swap it for
+  try {
+    const row = await prisma.appOptions.findUnique({ where: { id: 1 } })
+    return telForModel(tel, model, mergeOptions(row?.data ?? {}).models)
+  } catch {
+    return tel
+  }
+}
+
+export async function parseEntry(body) {
   const reportDate = body?.reportDate
   const type = String(body?.type ?? '').trim()
 
@@ -48,7 +77,9 @@ export function parseEntry(body) {
 
   // Optional — fall back to the MOTECO placeholders when left blank.
   const technician = String(body?.technician ?? '').trim()
-  const telNumber = String(body?.telNumber ?? '').trim() || '-'
+  // Settled against the Model decided above, not the raw body: an entry saved
+  // with no model keeps whatever number it was given.
+  const telNumber = (await settledTel(String(body?.telNumber ?? '').trim(), model)) || '-'
   const issiNumber = String(body?.issiNumber ?? '').trim() || '*'
 
   const rawFaults = Array.isArray(body?.faults) ? body.faults : []

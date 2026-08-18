@@ -3895,3 +3895,59 @@ h2 {
 .ref-sec-body {
   padding: 0.2rem 0 0.4rem;
 }
+
+/* ---------------------------------------------------------------------------
+   Agree pills — the small, light, fully-rounded buttons the entry form offers a
+   choice with: the replacements for a retired Tel prefix, and the ISSI mapping
+   offered after a save. Deliberately quieter than a form button; these are
+   offers, and one that shouts reads like something has gone wrong.
+   --------------------------------------------------------------------------- */
+.agree-pill {
+  border: 1px solid var(--line, #d7dce5);
+  background: var(--card-2, #f4f7fb);
+  color: inherit;
+  border-radius: 999px; /* circled — a full pill at any text length */
+  padding: 2px 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.7;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s;
+}
+.agree-pill:hover {
+  background: var(--card, #fff);
+  border-color: var(--accent, #2f6fed);
+}
+.agree-pill:focus-visible {
+  outline: 2px solid var(--accent, #2f6fed);
+  outline-offset: 1px;
+}
+/* The decline half of a pair — same shape, no weight of its own. */
+.agree-pill--quiet {
+  font-weight: 500;
+  opacity: 0.75;
+}
+
+/* The notice each set of pills sits in. Wraps, so a narrow column stacks the
+   choices under the sentence rather than pushing the field out of the card. */
+.retired-tel,
+.wire-issi {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0 0;
+  padding: 6px 10px;
+  border: 1px solid var(--line, #d7dce5);
+  border-radius: 10px;
+  background: var(--card-2, #f4f7fb);
+  font-size: 0.78rem;
+  font-weight: 400;
+  line-height: 1.45;
+  text-transform: none; /* the label above is .cap; the sentence is not */
+  letter-spacing: normal;
+}
+.wire-issi {
+  margin: 0 0 10px;
+}
