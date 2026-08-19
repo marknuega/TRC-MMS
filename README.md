@@ -51,22 +51,22 @@ so there is no CORS setup in development.
 
 Useful:
 
-| Command | Where | What it does |
-| --- | --- | --- |
-| `npm run dev` | both | dev server with auto-reload |
-| `npm test` | server | run the API tests |
+| Command               | Where  | What it does                           |
+| --------------------- | ------ | -------------------------------------- |
+| `npm run dev`         | both   | dev server with auto-reload            |
+| `npm test`            | server | run the API tests                      |
 | `npm run migrate:dev` | server | create + apply a new migration locally |
-| `npm run studio` | server | browse the local database in a GUI |
-| `npm run build` | client | production build |
-| `npm run preview` | client | serve the production build locally |
+| `npm run studio`      | server | browse the local database in a GUI     |
+| `npm run build`       | client | production build                       |
+| `npm run preview`     | client | serve the production build locally     |
 
 ## Environments
 
-| | Local | Railway |
-| --- | --- | --- |
-| Database | local Postgres 17 | Railway Postgres service |
-| API URL | `http://localhost:3000` | Railway service URL |
-| Frontend | `http://localhost:5173` | Railway static site |
+|          | Local                   | Railway                  |
+| -------- | ----------------------- | ------------------------ |
+| Database | local Postgres 17       | Railway Postgres service |
+| API URL  | `http://localhost:3000` | Railway service URL      |
+| Frontend | `http://localhost:5173` | Railway static site      |
 
 **Never point your local `.env` at the Railway production database.** A stray
 `migrate` or delete against production is the fastest way to lose real data.
@@ -85,7 +85,7 @@ Useful:
 
 > Anything prefixed `VITE_` is compiled into the JavaScript bundle and is
 > **publicly readable in the browser**. Never put a secret there. Vite bakes
-> these in at *build* time, so on Railway it must be set as a build variable.
+> these in at _build_ time, so on Railway it must be set as a build variable.
 
 ## Railway deployment
 

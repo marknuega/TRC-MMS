@@ -3931,7 +3931,7 @@ h2 {
 
 /* The notice each set of pills sits in. Wraps, so a narrow column stacks the
    choices under the sentence rather than pushing the field out of the card. */
-.retired-tel,
+.stored-tel,
 .wire-issi {
   display: flex;
   flex-wrap: wrap;

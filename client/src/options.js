@@ -30,16 +30,29 @@ export const DEFAULT_OPTIONS = {
 
   // `prefixes` are the leading digits of a Tel number that belong to this
   // model, so typing the number picks the model (see modelsForTel below).
+  //
+  // `standIn` is the shorthand those numbers are TYPED as and `standInReal` the
+  // prefix each is stored as: 103332645500 selects the car kit and the record
+  // holds 109332645500, the number really on the radio (see the stand-in
+  // section below). Every stand-in is listed as a Tel prefix too, because the
+  // swap and the auto-select are two different lists and a shorthand that
+  // selected nothing would be half a rule.
   models: [
-    { name: 'TH1N', prefixes: ['355', '06'] },
-    'THR9', 'TMR 880i',
+    // 01 is the shorthand for the 35506 range, 09 for 20106, 08 for 7506 —
+    // five digits of the same thing on every entry, typed as two.
+    { name: 'TH1N', prefixes: ['355', '06', '01'], standIn: ['01'], standInReal: '35506' },
+    { name: 'THR9', prefixes: ['20106', '09'], standIn: ['09'], standInReal: '20106' },
+    { name: 'TMR 880i', prefixes: ['7506', '08'], standIn: ['08'], standInReal: '7506' },
     { name: 'STP9000', prefixes: ['190'] },
-    // One prefix per build. 109 used to be all three at once, which meant no
-    // Tel number could say which was on the bench; it is retired in favour of
-    // these (see RETIRED_TEL_PREFIXES below).
-    { name: 'SRG3900 CARKIT', prefixes: ['103'] },
-    { name: 'SRG3900 DESKTOP', prefixes: ['104'] },
-    { name: 'SRG3900 BIKE', prefixes: ['102'] },
+    // 109 is the number really on all three SRG3900 builds, so no Tel number
+    // says which one is on the bench and the auto-select leads with the car kit
+    // — first in this list, and list order is where that is decided. Each build
+    // takes shorthand of its own to be picked by instead: 102 or 02 the bike,
+    // 103 or 03 the car kit, 104 or 04 the desktop, each swapped back for the
+    // 109 when the entry is saved.
+    { name: 'SRG3900 CARKIT', prefixes: ['109', '103', '03'], standIn: ['103', '03'], standInReal: '109' },
+    { name: 'SRG3900 DESKTOP', prefixes: ['109', '104', '04'], standIn: ['104', '04'], standInReal: '109' },
+    { name: 'SRG3900 BIKE', prefixes: ['109', '102', '02'], standIn: ['102', '02'], standInReal: '109' },
     'PT580H', 'PT590', 'MT680',
     // Not a device: the Model a "no activity today" entry carries, so the day
     // is on the record without claiming a radio was worked on.
@@ -307,8 +320,8 @@ export function telPick(tel, list) {
  * the first digit rather than assuming position 0 also means a blank number and
  * the '-' a blank one is stored as fall straight through.
  *
- * Shared by the two things that swap a prefix: the stand-in rule below, and the
- * entry form offering a replacement for a retired one.
+ * The one thing that swaps a prefix is the stand-in rule below, so what a swap
+ * does to the spacing someone typed is settled here and in one place.
  */
 export function replaceTelPrefix(tel, from, to) {
   const raw = String(tel ?? '')
@@ -318,63 +331,27 @@ export function replaceTelPrefix(tel, from, to) {
 }
 
 // ---------------------------------------------------------------------------
-// Retired Tel prefixes — a prefix that no longer names anything
+// Stand-in Tel prefixes — the shorthand a number is typed as
 //
-// 109 named the SRG3900 car kit, desktop AND bike at once, so no number
-// starting with it could say which device was on the bench. The three now hold
-// one prefix each — 102 the bike, 103 the car kit, 104 the desktop — and 109
-// names nothing.
+// The number on the radio is not always the number worth typing. 109 is the
+// SRG3900 car kit, the desktop AND the bike, so no Tel number can say which is
+// on the bench and the auto-select lands on whichever is listed first; 35506 is
+// five digits of the same thing on every TH1N entry.
 //
-// It is refused at the entry form rather than quietly accepted, because a 109
-// number is not a number with a wrong device attached: it is a number that
-// never said which device it was. Storing one would put that unanswered
-// question into the record, where nobody can answer it afterwards.
+// A model may take stand-ins for that: prefixes typed in place of the real one
+// and swapped back for it at the moment the entry is saved. Type 103332645500
+// and the car kit is selected with no argument with the dropdown afterwards,
+// while 109332645500 — the number really on the radio — is what gets stored.
 //
-// Only the form refuses it. Entries already saved keep the numbers they have,
-// and the WhatsApp webhook does not check: a technician who texts a report
-// cannot be asked to pick again, and dropping their report to enforce a
-// numbering change would lose the work rather than correct it.
+// Several stand-ins, one real prefix. 102 and 02 are one rule written twice,
+// and a model that answers to both should not need two rows to say so. What
+// they stand for is single because the point of the whole rule is the ONE
+// number the radio really carries.
 //
-// A map rather than a list, so the refusal can say what to use instead. The
-// model each replacement names is read off the live models list, not written
-// down twice (see retiredTelReplacements).
-// ---------------------------------------------------------------------------
-export const RETIRED_TEL_PREFIXES = { 109: ['102', '103', '104'] }
-
-/** The retired prefix a Tel number starts with, or '' when it starts with none. */
-export function retiredTelPrefix(tel) {
-  const digits = telDigits(tel)
-  if (!digits) return ''
-  return Object.keys(RETIRED_TEL_PREFIXES).find((p) => digits.startsWith(p)) ?? ''
-}
-
-/**
- * What to offer instead of a retired prefix: [{ prefix, model }], the model
- * being whichever one now claims that prefix on the live list.
- *
- * A replacement no model claims is dropped rather than offered — an admin who
- * has renumbered differently is not told to type a prefix that selects nothing.
- */
-export function retiredTelReplacements(retired, models) {
-  return (RETIRED_TEL_PREFIXES[retired] ?? [])
-    .map((prefix) => ({ prefix, model: telPick(prefix, models) }))
-    .filter((r) => r.model)
-}
-
-// ---------------------------------------------------------------------------
-// Stand-in Tel prefixes — naming a device the real prefix cannot
-//
-// Where one prefix names several models, no Tel number can say which of them is
-// on the bench and the auto-select leads with whichever is listed first. A
-// model may take a stand-in prefix to be reached by instead: type it and that
-// model is selected, with no argument with the dropdown afterwards.
-//
-// A stand-in is a fiction of the entry form. The number on the radio begins
-// with the real prefix, so that is what the record must hold — the stand-in is
-// swapped back for it at the moment the entry is saved. Both halves are set on
-// the model in Manage inputs, and a model that needs no stand-in carries
-// neither, which is every model the app ships with: the three SRG3900 builds
-// were the case this existed for, and they now hold a prefix each.
+// A stand-in is a fiction of the entry form. The record holds the real number,
+// so every report, search and export downstream sees one numbering rather than
+// two — which is also why the swap runs at the save (see telForModel) and not
+// as the field is typed: the form still needs the shorthand to select the Model.
 //
 // Gated on the Model, and only the model that declares it. The same digits
 // typed against another model are somebody's real number and are stored as
@@ -387,23 +364,39 @@ export function retiredTelReplacements(retired, models) {
 // Written out, the whole rule is on the row an admin is reading.
 // ---------------------------------------------------------------------------
 
-/** The prefix that is TYPED to select this model but never stored. */
-export const optionStandIn = (v) => (typeof v === 'string' ? '' : String(v?.standIn ?? '').replace(/\D/g, ''))
+/** The prefixes that are TYPED to select this model but never stored. A list:
+ *  102 and 02 are one rule written twice. A lone string counts as a list of
+ *  one, which is how a stand-in saved before the field took several reads. */
+export const optionStandIns = (v) =>
+  typeof v === 'string' ? [] : digitPrefixes(Array.isArray(v?.standIn) ? v.standIn : [v?.standIn])
+
 /** The prefix a stand-in is stored AS — the one really on the radio. */
 export const optionStandInReal = (v) => (typeof v === 'string' ? '' : String(v?.standInReal ?? '').replace(/\D/g, ''))
 
-/** Both halves, or null when this model declares no usable stand-in. Half a
- *  rule does nothing, so half a rule is no rule — the same call codeProblem
- *  makes about a parts code with no variant. */
-export function optionStandInPair(v) {
-  const standIn = optionStandIn(v)
+/**
+ * This model's usable stand-in rules as [{ standIn, real }], longest stand-in
+ * first — the same "most specific wins" prefixOwners applies, so 102 is still
+ * reached on a model that also holds 10.
+ *
+ * Half a rule does nothing, so half a rule is no rule: a stand-in with nothing
+ * to be stored as, or a "stored as" that nothing is typed for, drops out here
+ * rather than being carried around as something that might swap. It is the call
+ * codeProblem makes about a parts code with no variant. A stand-in equal to the
+ * real prefix would rewrite a number to itself, and goes the same way.
+ */
+export function optionStandInRules(v) {
   const real = optionStandInReal(v)
-  return standIn && real && standIn !== real ? { standIn, real } : null
+  if (!real) return []
+  return optionStandIns(v)
+    .filter((standIn) => standIn !== real)
+    .sort((a, b) => b.length - a.length)
+    .map((standIn) => ({ standIn, real }))
 }
 
 /**
- * The Tel number as it should be STORED for `model` — the stand-in prefix
- * swapped for the real one, or the number untouched when no stand-in applies.
+ * The Tel number as it should be STORED for `model` — the stand-in it begins
+ * with swapped for the real prefix, or the number untouched when no stand-in
+ * applies.
  *
  * Reads the live models list, so a stand-in added in Manage inputs takes effect
  * without a release and a device that never needed one is unaffected. Matching
@@ -413,6 +406,9 @@ export function optionStandInPair(v) {
  * number as it was TYPED (see displayNumber in report.js), so whatever spacing
  * someone used survives and only the leading run of digits is touched.
  *
+ * The first stand-in the number actually starts with wins, longest first: one
+ * swap, never the swap of a swap.
+ *
  * Called at the save boundary, not as the field is typed — the form still needs
  * the stand-in to select the Model with.
  */
@@ -421,8 +417,11 @@ export function telForModel(tel, model, models) {
   const want = String(model ?? '').trim().toUpperCase()
   if (!want) return raw
   const it = (models ?? []).find((m) => optionName(m).trim().toUpperCase() === want)
-  const swap = it && optionStandInPair(it)
-  return swap ? replaceTelPrefix(raw, swap.standIn, swap.real) : raw
+  for (const { standIn, real } of optionStandInRules(it)) {
+    const swapped = replaceTelPrefix(raw, standIn, real)
+    if (swapped !== raw) return swapped
+  }
+  return raw
 }
 
 // ---------------------------------------------------------------------------
