@@ -9,6 +9,11 @@ Electronics License CLN-COC-***204
 
 React (Vite) frontend + Node/Express API + PostgreSQL, deployed on Railway.
 
+The executive presentation is a separate Vite application in `presentation/`.
+For a live presentation deployment, create a Railway static service using
+`presentation` as the root directory, `npm run build` as the build command,
+and `dist` as the output directory.
+
 ```
 client/   Vite + React 19 frontend
 server/   Express API + Prisma (PostgreSQL)
