@@ -1204,39 +1204,37 @@ describe("a PCB, a programming and an installation on one day", () => {
     });
   });
 
-  // -- Rule 2: INSTALLATION is its own category, never MAINTENANCE --
+  // -- Rule 2: an install absorbs the entry's ordinary maintenance faults --
   //
-  // An installation is not a repair and consumes no part.
-  describe("an installation is never counted as maintenance", () => {
+  // Fitting a fuse cover or a FUSE10 while mounting a car kit is part of doing
+  // the install, not a second repair — the install count already covers the
+  // device, so those faults contribute nothing further. Programming is not
+  // treated the same way (see "programming is kept out of maintenance in just
+  // the same way" below): a PCB changed alongside a re-program is two
+  // genuinely separate jobs, not one.
+  describe("an install absorbs the entry's maintenance faults", () => {
     test("it does not reach maintenanceCount", () => {
-      // 2 = the max quantity among the three parts. The installation's own 2
-      // is counted as an install and nowhere else.
+      // The three parts contribute nothing — the entry also has an install
+      // fault, so they are the install, not a repair on top of it. Only the
+      // installation's own 2 is counted.
       assert.deepEqual(entryCounts(carkit()), {
-        maintenance: 2,
+        maintenance: 0,
         programming: 0,
         install: 2,
         dismantle: 0,
       });
     });
 
-    test("the Device Summary splits the block into two categories", () => {
+    test("the Device Summary shows install only, not a maintenance line too", () => {
       const [block] = deviceBlocksByType(a011()).SEPURA;
       assert.equal(block.header, "SEPURA CARKIT");
-      assert.deepEqual(block.cats, [
-        ["MAINTENANCE", 2],
-        ["INSTALLATION", 2],
-      ]);
-      // The split moves nothing between the categories, so the block total is
-      // what it always was.
-      assert.equal(block.total, 4);
+      assert.deepEqual(block.cats, [["INSTALLATION", 2]]);
+      assert.equal(block.total, 2);
     });
 
-    test("the Agency Summary splits it the same way", () => {
-      assert.deepEqual(agencyOf(a011(), "PSD").cats, [
-        ["MAINTENANCE", 2],
-        ["INSTALLATION", 2],
-      ]);
-      assert.equal(agencyOf(a011(), "PSD").total, 4);
+    test("the Agency Summary reads the same way", () => {
+      assert.deepEqual(agencyOf(a011(), "PSD").cats, [["INSTALLATION", 2]]);
+      assert.equal(agencyOf(a011(), "PSD").total, 2);
     });
 
     // The rule INSTALLATION is being held to.
@@ -1305,7 +1303,7 @@ describe("a PCB, a programming and an installation on one day", () => {
       assert.deepEqual(agencyOf(a011(), "PSD").cats, devices.SEPURA[0].cats);
     });
 
-    test("it never absorbs one category into another", () => {
+    test("it never absorbs programming into maintenance", () => {
       assert.equal(
         agencyComment(a011()),
         [
@@ -1313,11 +1311,12 @@ describe("a PCB, a programming and an installation on one day", () => {
           DIVIDER,
           "PRI [MAIN 1] [PROG 1]",
           DIVIDER,
-          "PSD [MAIN 2] [INS 2]",
+          "PSD [INS 2]",
         ].join("\n"),
       );
-      // Not [MAIN 4] — the four are two maintenance units and two installations.
-      assert.ok(!agencyComment(a011()).includes("[MAIN 4]"));
+      // Not [MAIN 1] [PROG 1] merged into one, and PSD carries no MAIN at all
+      // — its three parts were the install, not a repair alongside it.
+      assert.ok(!agencyComment(a011()).includes("[MAIN 2]"));
     });
 
     test("a category with nothing in it is not shown", () => {
@@ -1343,9 +1342,8 @@ describe("a PCB, a programming and an installation on one day", () => {
           "       TOTAL = 2",
           DIVIDER,
           "SEPURA CARKIT",
-          "3. MAINTENANCE = 2",
-          "4. INSTALLATION = 2",
-          "       TOTAL = 4",
+          "3. INSTALLATION = 2",
+          "       TOTAL = 2",
         ].join("\n"),
       );
     });
@@ -1356,7 +1354,7 @@ describe("a PCB, a programming and an installation on one day", () => {
         .filter((l) => l.includes("TOTAL"));
       assert.equal(totals.length, 2); // one per block, not one for the report
       for (const line of totals) assert.match(line, /^ {7}TOTAL = \d+$/);
-      assert.deepEqual(totals, ["       TOTAL = 2", "       TOTAL = 4"]);
+      assert.deepEqual(totals, ["       TOTAL = 2", "       TOTAL = 2"]);
     });
   });
 
@@ -1390,15 +1388,14 @@ describe("a PCB, a programming and an installation on one day", () => {
         "       TOTAL = 2",
         DIVIDER,
         "SEPURA CARKIT",
-        "3. MAINTENANCE = 2",
-        "4. INSTALLATION = 2",
-        "       TOTAL = 4",
+        "3. INSTALLATION = 2",
+        "       TOTAL = 2",
         DIVIDER,
         "Agency Summary",
         DIVIDER,
         "PRI [MAIN 1] [PROG 1]",
         DIVIDER,
-        "PSD [MAIN 2] [INS 2]",
+        "PSD [INS 2]",
       ].join("\n"),
     );
   });

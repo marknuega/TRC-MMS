@@ -194,14 +194,25 @@ function isStandaloneItem(issue) {
 // Maintenance units on an entry = (sum of charger / power-supply-unit quantities)
 // + (max quantity among the remaining maintenance faults). A multi-component
 // repair still counts once; each charger/PSU adds on top.
+//
+// An ordinary (non-standalone) maintenance fault on an entry that ALSO has an
+// install fault contributes nothing: fitting a fuse cover or a FUSE10 while
+// mounting a car kit is part of doing the install, not a second, separate
+// repair — the install count already covers the device. Programming does not
+// get the same treatment: a PCB changed alongside a re-program is two
+// genuinely separate jobs on the bench, not one. A standalone charger/PSU
+// still adds on top either way — it is a unit physically handed out, which an
+// install happening on the same entry does not change.
 function maintenanceCount(faults) {
+  const list = faults ?? []
+  const hasInstall = list.some((f) => classify(f.action) === 'install')
   let standalone = 0
   let otherMax = 0
-  for (const f of faults ?? []) {
+  for (const f of list) {
     if (classify(f.action) !== 'maintenance') continue
     const q = Math.max(0, Number(f.quantity) || 0)
     if (isStandaloneItem(f.issue)) standalone += q
-    else otherMax = Math.max(otherMax, q)
+    else if (!hasInstall) otherMax = Math.max(otherMax, q)
   }
   return standalone + otherMax
 }
