@@ -97,6 +97,35 @@ function downloadCsv(filename, items) {
   URL.revokeObjectURL(url)
 }
 
+function exportInventoryPdf(items, branch, store) {
+  const w = window.open('', '_blank')
+  if (!w) return
+  const title = `TRC ${branch || 'All'} - Inventory`
+  const scope = store ? ` · ${store}` : ''
+  const head = ['SKU', 'Store', 'Shelf', 'Item Code', 'Begin', 'Out', 'Avail', 'Remarks']
+  const body = items
+    .map(
+      (i) =>
+        `<tr><td>${esc(i.sku)}</td><td>${esc(i.store)}</td><td>${esc(i.shelf)}</td><td>${esc(i.itemCode)}</td>` +
+        `<td class="c">${esc(i.begin)}</td><td class="c">${esc(i.out)}</td><td class="c">${esc(i.avail)}</td><td>${esc(i.remarks)}</td></tr>`,
+    )
+    .join('')
+  w.document.write(
+    `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title>` +
+      `<style>body{font-family:Arial,sans-serif;color:#111;margin:24px}h1{font-size:16px;margin:0 0 2px}p{margin:0 0 14px;color:#555;font-size:12px}` +
+      `table{border-collapse:collapse;width:100%;font-size:10.5px}th,td{border:1px solid #999;padding:4px 6px;text-align:left}` +
+      `th{background:#dfe3ee}td.c,th.c{text-align:center}tfoot{color:#777}` +
+      `@media print{tr{page-break-inside:avoid}}</style></head><body>` +
+      `<h1>${esc(title)}</h1><p>${esc(scope)} · ${items.length} item${items.length === 1 ? '' : 's'} · printed ${esc(stamp(Date.now()))}</p>` +
+      `<table><thead><tr>${head.map((x) => `<th>${esc(x)}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table>` +
+      `<p style="margin-top:14px">${COPYRIGHT_HTML}</p>` +
+      `</body></html>`,
+  )
+  w.document.close()
+  w.focus()
+  w.print()
+}
+
 const isLow = (i) => i.lowStock > 0 && i.avail <= i.lowStock
 
 export default function Inventory({ embedded = false, branch = '', region = '' }) {
@@ -325,6 +354,14 @@ export default function Inventory({ embedded = false, branch = '', region = '' }
               disabled={!filtered.length}
             >
               ⭳ Export CSV
+            </button>
+            <button
+              type="button"
+              className="btn-pdf"
+              onClick={() => exportInventoryPdf(filtered, branch, store)}
+              disabled={!filtered.length}
+            >
+              ⭳ Export PDF
             </button>
           </div>
 
