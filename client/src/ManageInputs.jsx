@@ -18,7 +18,7 @@ import {
   prefixIndex,
   optionPrefixes,
   optionIssiPrefixes,
-  optionStandIn,
+  optionStandIns,
   optionStandInReal,
   optionFullForm,
   technicianName,
@@ -256,7 +256,7 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
     // Another model's stand-in would rewrite the same digits to something else
     // as soon as that model were picked. Two rules for one prefix is not a
     // sharing decision like a Tel prefix is — it is two answers to one question.
-    const clash = list.findIndex((it, idx) => idx !== exceptIndex && optionStandIn(it) === a)
+    const clash = list.findIndex((it, idx) => idx !== exceptIndex && optionStandIns(it).includes(a))
     if (clash >= 0) return `${a} is already the stand-in for "${nameOf(list[clash])}".`
     return ''
   }
@@ -428,7 +428,7 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
     setEditVariant(isIssues ? issueVariant(list[i]) : '')
     setEditPrefixes(hasTelPrefixes ? optionPrefixes(list[i]).join(', ') : '')
     setEditIssiPrefixes(hasIssiPrefixes ? optionIssiPrefixes(list[i]).join(', ') : '')
-    setEditStandIn(hasStandIn ? optionStandIn(list[i]) : '')
+    setEditStandIn(hasStandIn ? optionStandIns(list[i])[0] ?? '' : '')
     setEditStandInReal(hasStandIn ? optionStandInReal(list[i]) : '')
     // Seeded from the code map when the option carries none of its own, so
     // opening an agency to edit it offers the full form rather than a blank box
@@ -979,9 +979,9 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                       {/* An arrow rather than a bare pair: the row has to say
                           which of the two digits is typed and which is stored,
                           and 107 → 109 says it without a legend. */}
-                      {hasStandIn && optionStandIn(value) && optionStandInReal(value) && (
+                      {hasStandIn && optionStandIns(value)[0] && optionStandInReal(value) && (
                         <span className="manage-item-code" title="Stand-in prefix, and what it is stored as">
-                          {optionStandIn(value)} → {optionStandInReal(value)}
+                          {optionStandIns(value)[0]} → {optionStandInReal(value)}
                         </span>
                       )}
                       {/* Labelled, so the digits say which number they answer

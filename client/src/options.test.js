@@ -19,8 +19,8 @@ import {
   isServiceAction,
   optionName,
   telForModel,
-  optionStandIn,
-  optionStandInPair,
+  optionStandIns,
+  optionStandInRules,
   retiredTelPrefix,
   retiredTelReplacements,
   replaceTelPrefix,
@@ -548,8 +548,8 @@ describe('one Tel prefix per SRG3900 build', () => {
 
   // The prefixes that were only ever a workaround for the shared 109.
   test('nothing ships a stand-in any more, and none is needed', () => {
-    assert.deepEqual(models.filter((m) => optionStandInPair(m)).map(optionName), [])
-    assert.deepEqual(models.map(optionStandIn).filter(Boolean), [])
+    assert.deepEqual(models.filter((m) => optionStandInRules(m).length).map(optionName), [])
+    assert.deepEqual(models.flatMap(optionStandIns), [])
   })
 })
 
@@ -647,7 +647,7 @@ describe('stand-in Tel prefixes remain available to any model', () => {
       { name: 'C', prefixes: ['107'], standIn: '107', standInReal: '107' },
     ]
     for (const name of ['A', 'B', 'C']) assert.equal(telForModel('107332', name, half), '107332', name)
-    for (const name of ['A', 'B', 'C']) assert.equal(optionStandInPair(half.find((m) => m.name === name)), null)
+    for (const name of ['A', 'B', 'C']) assert.deepEqual(optionStandInRules(half.find((m) => m.name === name)), [])
   })
 
   test('a blank number and its stored placeholder come back as they went in', () => {
