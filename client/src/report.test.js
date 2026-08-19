@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   classify,
   entryCounts,
+  entryQty,
   technicianTotals,
   agencyBlocks,
   activityTotals,
@@ -167,6 +168,28 @@ describe("chargers and power supplies count on top of the entry max", () => {
       entryCounts(entry([change("ANTENNA", 1), change("BCOVER", 1)]))
         .maintenance,
       1,
+    );
+  });
+
+  test("entry quantity collapses multiple ordinary maintenance parts to one", () => {
+    assert.equal(
+      entryQty(entry([
+        change("BELT CLIP", 1),
+        change("ANTENNA", 1),
+        change("SIDEGRIP", 1),
+      ])),
+      1,
+    );
+  });
+
+  test("entry quantity keeps charger units as additional devices", () => {
+    assert.equal(
+      entryQty(entry([
+        change("CHARGER12", 1),
+        change("LCD", 1),
+        change("BATTERY 3180", 1),
+      ])),
+      2,
     );
   });
 

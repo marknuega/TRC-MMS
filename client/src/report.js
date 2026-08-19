@@ -1009,8 +1009,10 @@ export function issueActionCell(entry) {
     .join(' + ')
 }
 
-export const entryQty = (entry) =>
-  entry.faults.reduce((s, f) => s + (Number(f.quantity) || 0), 0)
+export const entryQty = (entry) => {
+  const counts = entryCounts(entry)
+  return counts.maintenance + counts.programming + counts.install + counts.dismantle
+}
 
 // Group listed entries by report date (newest first), carrying the REP-#### id.
 // Entries are expected to have `reportDate` (ISO) and `reportId` from the API.
