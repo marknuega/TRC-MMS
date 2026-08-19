@@ -3,7 +3,7 @@
  * © 2026 Muhammad Amir. All rights reserved.
  *
  * Certified Electronics and Electrical Technician
- * Electrical License CLN-NQ-***6092 · Electronics License CLN-COC-***204
+ * Electrical License#: CLN-NQ-***6092 · Electronics License#: CLN-NQ-***6595
  */
 
 export const COPYRIGHT_TEXT =
@@ -19,7 +19,7 @@ export function Credit() {
       <div className="deck-footer-credentials">
         <div>Certified Electronics and Electrical Technician</div>
         <div>
-          Electrical License CLN-NQ-***6092 · Electronics License CLN-COC-***204
+          Electrical License#: CLN-NQ-***6092 · Electronics License#: CLN-NQ-***6595
         </div>
       </div>
     </footer>

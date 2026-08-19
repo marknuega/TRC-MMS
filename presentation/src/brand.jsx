@@ -3,7 +3,7 @@
  * © 2026 Muhammad Amir. All rights reserved.
  *
  * Certified Electronics and Electrical Technician
- * Electrical License CLN-NQ-***6092 · Electronics License CLN-COC-***204
+ * Electrical License#: CLN-NQ-***6092 · Electronics License#: CLN-NQ-***6595
  *
  * Single source of truth for the TRC brand marks, so the sidebar, the sign-in
  * card and the PWA icons never drift apart.
