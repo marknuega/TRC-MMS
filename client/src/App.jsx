@@ -4298,7 +4298,12 @@ function TransmittalPrint({
           <ul className="print-notes">
             {notes.map((n, i) => (
               <li key={i}>
-                <b>{n.label}</b> — {n.comment}
+                {n.label && (
+                  <>
+                    <b>{n.label}</b> —{" "}
+                  </>
+                )}
+                {n.comment}
               </li>
             ))}
           </ul>

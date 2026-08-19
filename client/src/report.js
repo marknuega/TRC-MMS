@@ -613,14 +613,22 @@ export function transmittalRows(entries) {
   return rows
 }
 
-// Per-entry notes for the print view: [{ label, comment }].
+// Per-entry notes for the print view: [{ label, comment }]. label is '' when
+// there is no real model to name — a bare "-" placeholder, or the no-activity
+// model — same call buildNotes makes for the TXT/WhatsApp text below, so the
+// two views do not disagree about what counts as nothing to label. Falling
+// back to the entry's Type (or the word "Entry") used to fill that gap, but a
+// comment-only entry's Type is exactly as likely to be an unset "-" as its
+// Model is, and printing that placeholder as a label is worse than leaving it
+// off.
 export function reportNotes(entries) {
   return (entries ?? [])
     .filter((e) => String(e.comment ?? '').trim())
-    .map((e) => ({
-      label: modelDisplay(e.model) && modelDisplay(e.model) !== '-' ? modelDisplay(e.model) : (up(e.type) || 'Entry'),
-      comment: String(e.comment).trim(),
-    }))
+    .map((e) => {
+      const model = modelDisplay(e.model)
+      const hasLabel = model && model !== '-' && !isNoActivityModel(e.model)
+      return { label: hasLabel ? model : '', comment: String(e.comment).trim() }
+    })
 }
 
 // ---- Device Summary (by TYPE then device-short model) ----
