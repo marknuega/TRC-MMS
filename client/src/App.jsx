@@ -90,11 +90,16 @@ import { PeriodPicker, makePeriod, periodLabel } from "./period";
 import "./App.css";
 
 // Actions whose "fault" is the whole device — no component issue needed.
+// INSTALLATION/RE-INSTALLATION alongside INSTALL/RE-INSTALL: Manage inputs
+// lets an admin rename the Actions list, and that's a renaming of the same
+// action, not a different one — see SERVICE_ACTIONS in options.js.
 const DEVICE_LEVEL = new Set([
   "PROGRAM",
   "RE-PROGRAM",
   "INSTALL",
+  "INSTALLATION",
   "RE-INSTALL",
+  "RE-INSTALLATION",
   "DISMANTLE",
 ]);
 const faultIsMeaningful = (f) =>

@@ -765,7 +765,12 @@ const REQUIRED_ACTIONS = ['RTO']
 // means something specific — the device went back untouched, which marks the
 // whole report reference-only at save time (see savedReports.js) — and it was
 // not among the actions asked for. Add it here if that turns out to be wanted.
-export const SERVICE_ACTIONS = ['REPAIR', 'PROGRAM', 'RE-PROGRAM', 'INSTALL', 'RE-INSTALL', 'DISMANTLE']
+// INSTALLATION/RE-INSTALLATION included alongside INSTALL/RE-INSTALL: Manage
+// inputs lets an admin rename the Actions list, and "Installation" is a
+// renaming of the same action, not a different one.
+export const SERVICE_ACTIONS = [
+  'REPAIR', 'PROGRAM', 'RE-PROGRAM', 'INSTALL', 'INSTALLATION', 'RE-INSTALL', 'RE-INSTALLATION', 'DISMANTLE',
+]
 
 /** Whether an action is work rather than a part — see SERVICE_ACTIONS. */
 export const isServiceAction = (action) => SERVICE_ACTIONS.includes(String(action ?? '').trim().toUpperCase())

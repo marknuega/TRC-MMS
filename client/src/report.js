@@ -26,6 +26,15 @@ const COMPANY_DISPLAY = {
 
 // RTO prints as its own three letters, like PCB — it is spelled out rather
 // than abbreviated to a single character (see ACTION_ALT in codes.js).
+//
+// INSTALL/RE-INSTALL are deliberately NOT joined here by INSTALLATION/
+// RE-INSTALLATION: this table doubles as the set of action NAMES that a plain
+// item name can collide with (see isActionNamedItem below, the same call PCB
+// is), and "Installation" is also the conventional ISSUE text an install
+// fault carries (see th1n()'s "PROGRAMMING" in report.test.js for the same
+// pattern on Program). Adding it here would flag every ordinary install fault
+// as ambiguous. INSTALL_ACTIONS, just below, is where the two spellings of
+// the ACTION are made to mean the same thing.
 const ACTION_CODE = {
   CHANGE: 'C', REPAIR: 'R', NEW: 'N', PCB: 'PCB',
   PROGRAM: 'P', 'RE-PROGRAM': 'RP', INSTALL: 'I', 'RE-INSTALL': 'RI', DISMANTLE: 'D',
@@ -34,7 +43,7 @@ const ACTION_CODE = {
 
 const MAINTENANCE_ACTIONS = new Set(['CHANGE', 'REPAIR', 'NEW', 'PCB'])
 const PROGRAM_ACTIONS = new Set(['PROGRAM', 'RE-PROGRAM'])
-const INSTALL_ACTIONS = new Set(['INSTALL', 'RE-INSTALL'])
+const INSTALL_ACTIONS = new Set(['INSTALL', 'INSTALLATION', 'RE-INSTALL', 'RE-INSTALLATION'])
 const DISMANTLE_ACTIONS = new Set(['DISMANTLE'])
 // RTO (Return to Owner) hands the device back untouched: no work was performed
 // and no part was consumed. It is its own category rather than a service one,
