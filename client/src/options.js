@@ -785,6 +785,14 @@ const seedPrefixesOf = (list, get = optionPrefixes) =>
 const SEED_MODEL_PREFIXES = seedPrefixesOf(DEFAULT_OPTIONS.models)
 const SEED_ISSI_PREFIXES = seedPrefixesOf(DEFAULT_OPTIONS.agencies, optionIssiPrefixes)
 
+// The shipped stand-in rules, keyed by name — read off the same defaults, so a
+// shorthand is still written down in exactly one place.
+const SEED_STAND_INS = Object.fromEntries(
+  DEFAULT_OPTIONS.models
+    .map((it) => [optionName(it).toUpperCase(), { standIn: optionStandIns(it), standInReal: optionStandInReal(it) }])
+    .filter(([, r]) => r.standIn.length > 0 && r.standInReal),
+)
+
 /**
  * Give a stored list the shipped prefixes it predates.
  *
@@ -816,6 +824,40 @@ function withSeededPrefixes(list, seeds, get = optionPrefixes, field = 'prefixes
   })
 }
 
+/**
+ * Give a stored models list the shipped stand-in rules it predates.
+ *
+ * Seeding the prefixes alone is half the rule: it hands the car kit back 109,
+ * 103 and 03, so typing 103 selects it again, but with nothing to say those
+ * digits are shorthand the entry saves as 103 — a number no radio carries. The
+ * swap has to come back with the prefixes or the prefixes mean the wrong thing.
+ *
+ * Gap-filling on the same two rules the prefixes follow, plus the one that
+ * makes a shorthand a shorthand:
+ *
+ *   - a model that already declares a stand-in keeps exactly what was set.
+ *   - a shorthand some OTHER stored model already declares is skipped, so an
+ *     admin who moved 103 does not have it handed back here.
+ *   - only a shorthand this model actually claims as a Tel prefix is seeded.
+ *     One it does not claim selects nothing, and seeding it would leave a rule
+ *     that rewrites a number the admin never routed here.
+ *
+ * Runs after the prefix pass, so a model seeded its prefixes a moment ago is
+ * read as claiming them.
+ */
+function withSeededStandIns(list) {
+  const declared = new Set(list.flatMap(optionStandIns))
+  return list.map((it) => {
+    if (optionStandIns(it).length > 0) return it
+    const seed = SEED_STAND_INS[optionName(it).trim().toUpperCase()]
+    if (!seed) return it
+    const claimed = optionPrefixes(it)
+    const standIn = seed.standIn.filter((p) => claimed.includes(p) && !declared.has(p) && p !== seed.standInReal)
+    if (!standIn.length) return it
+    return { ...(typeof it === 'string' ? {} : it), name: optionName(it), standIn, standInReal: seed.standInReal }
+  })
+}
+
 // Merge stored lists over the defaults (a saved category fully replaces its
 // default), then re-add anything the app itself depends on that is missing.
 export function mergeOptions(stored) {
@@ -832,6 +874,8 @@ export function mergeOptions(stored) {
     if (!claimedCodes[issueCode(it)]) out.issueTypes.push({ ...it })
   }
   out.models = withSeededPrefixes(out.models, SEED_MODEL_PREFIXES)
+  // Then the swap that makes the shorthand among them mean anything.
+  out.models = withSeededStandIns(out.models)
   // Agencies are seeded their ISSI prefixes only. Any `prefixes` a stored
   // agency still carries is left where it is — inert now that a Tel number
   // selects nothing but the Model, and not worth rewriting saved data over.

@@ -19,10 +19,9 @@ import {
   isServiceAction,
   optionName,
   telForModel,
-  optionStandIn,
-  optionStandInPair,
-  retiredTelPrefix,
-  retiredTelReplacements,
+  optionStandIns,
+  optionStandInReal,
+  optionStandInRules,
   replaceTelPrefix,
   issiWireOffer,
   withIssiPrefix,
@@ -83,16 +82,85 @@ describe('mergeOptions', () => {
   // pass the shipped Tel prefixes would reach nobody.
   test('the shipped Tel prefixes are attached to a stored models list that predates them', () => {
     const out = mergeOptions({ models: ['TH1N', 'STP9000', 'PT590'] })
-    assert.deepEqual(optionPrefixes(out.models[0]), ['355', '06'])
+    // The shorthand 01 comes back with the range it stands for — it is one of
+    // this model's prefixes, not a separate thing bolted on afterwards.
+    assert.deepEqual(optionPrefixes(out.models[0]), ['355', '06', '01'])
     assert.deepEqual(optionPrefixes(out.models[1]), ['190'])
     assert.deepEqual(optionPrefixes(out.models[2]), [], 'a model with no shipped prefix stays a plain string')
     assert.equal(out.models[2], 'PT590')
   })
 
-  // 109 named all three at once and is retired; each build now has its own.
-  test('each SRG3900 build is seeded the one prefix that is now its own', () => {
+  // 109 is really on all three, so each is seeded that plus the shorthand it
+  // is picked by — and the stand-in rule that swaps one back for the other.
+  test('each SRG3900 build is seeded the shared 109 and shorthand of its own', () => {
     const out = mergeOptions({ models: ['SRG3900 CARKIT', 'SRG3900 DESKTOP', 'SRG3900 BIKE'] })
-    assert.deepEqual(out.models.map(optionPrefixes), [['103'], ['104'], ['102']])
+    assert.deepEqual(out.models.map(optionPrefixes), [
+      ['109', '103', '03'],
+      ['109', '104', '04'],
+      ['109', '102', '02'],
+    ])
+    // The prefixes alone would be the wrong rule: 103 would select the car kit
+    // and then save as 103, a number no radio carries. The swap comes back too.
+    assert.deepEqual(out.models.map(optionStandIns), [
+      ['103', '03'],
+      ['104', '04'],
+      ['102', '02'],
+    ])
+    for (const m of out.models) assert.equal(optionStandInReal(m), '109')
+    assert.equal(telForModel('103332645500', 'SRG3900 CARKIT', out.models), '109332645500')
+    assert.equal(telForModel('03332645500', 'SRG3900 CARKIT', out.models), '109332645500')
+    assert.equal(telForModel('04400376200', 'SRG3900 DESKTOP', out.models), '109400376200')
+    assert.equal(telForModel('02332645500', 'SRG3900 BIKE', out.models), '109332645500')
+  })
+
+  // The shorthand models that are not an SRG3900 get their rule back by the
+  // same pass — 01 is five digits of 35506 typed as two.
+  test('the other shorthand models are seeded their swap as well', () => {
+    const out = mergeOptions({ models: ['TH1N', 'THR9', 'TMR 880i'] })
+    assert.deepEqual(out.models.map(optionStandIns), [['01'], ['09'], ['08']])
+    assert.deepEqual(out.models.map(optionStandInReal), ['35506', '20106', '7506'])
+    assert.equal(telForModel('01332645500', 'TH1N', out.models), '35506332645500')
+  })
+
+  test('a model that already declares a stand-in keeps exactly what the admin set', () => {
+    const out = mergeOptions({
+      models: [{ name: 'SRG3900 CARKIT', prefixes: ['109', '777'], standIn: ['777'], standInReal: '109' }],
+    })
+    assert.deepEqual(optionStandIns(out.models[0]), ['777'])
+  })
+
+  // Moving a shorthand onto another model is a decision an upgrade must not
+  // undo — the same rule the prefixes are seeded under.
+  test('a shorthand another stored model claims is not handed back', () => {
+    const out = mergeOptions({
+      models: [{ name: 'OTHER RADIO', prefixes: ['103'], standIn: ['103'], standInReal: '500' }, 'SRG3900 CARKIT'],
+    })
+    assert.deepEqual(optionStandIns(out.models[0]), ['103'], "the admin's own rule stands")
+    assert.deepEqual(optionStandIns(out.models[1]), ['03'], 'the car kit keeps only the shorthand still free')
+  })
+
+  // A shorthand the model does not claim as a Tel prefix selects nothing, so
+  // seeding it would leave a rule rewriting a number nobody routed here.
+  test('only a shorthand the model actually claims is seeded', () => {
+    const partial = mergeOptions({ models: [{ name: 'SRG3900 CARKIT', prefixes: ['109', '103'] }] })
+    assert.deepEqual(optionStandIns(partial.models[0]), ['103'])
+    assert.equal(optionStandInReal(partial.models[0]), '109')
+
+    const renumbered = mergeOptions({ models: [{ name: 'SRG3900 BIKE', prefixes: ['777'] }] })
+    assert.deepEqual(optionStandIns(renumbered.models[0]), [], 'nothing is invented for a renumbered model')
+    assert.equal(optionStandInReal(renumbered.models[0]), '')
+  })
+
+  // The shipped defaults carry the swap rule that makes the shorthand mean
+  // anything: 103 selects the car kit, and 109 is what the entry stores.
+  test('the shipped builds carry the stand-in rule, not just the prefixes', () => {
+    const shipped = DEFAULT_OPTIONS.models.filter((m) => optionName(m).startsWith('SRG3900'))
+    assert.deepEqual(shipped.map(optionStandIns), [
+      ['103', '03'],
+      ['104', '04'],
+      ['102', '02'],
+    ])
+    for (const m of shipped) assert.equal(optionStandInReal(m), '109')
   })
 
   test("a model that already carries prefixes keeps exactly what the admin set", () => {
@@ -524,100 +592,83 @@ describe('isServiceAction', () => {
 
 
 
-// 109 named the SRG3900 car kit, desktop and bike all at once, so no number
-// starting with it could say which device was on the bench. The three now hold
-// one prefix each and 109 names nothing.
-describe('one Tel prefix per SRG3900 build', () => {
+// 109 is really on the SRG3900 car kit, desktop and bike alike, so no number
+// starting with it can say which device is on the bench. Each build takes
+// shorthand of its own to be picked by, swapped back for the 109 on save.
+describe('shorthand picks the SRG3900 build, 109 is what gets stored', () => {
   const models = mergeOptions({}).models
 
-  test('each build has its own prefix, and each selects only itself', () => {
+  test('each build has shorthand of its own, and each selects only itself', () => {
     assert.equal(telPick('102332645500', models), 'SRG3900 BIKE')
     assert.equal(telPick('103332645500', models), 'SRG3900 CARKIT')
     assert.equal(telPick('104400376200', models), 'SRG3900 DESKTOP')
+    // The two-digit form of each reaches the same build.
+    assert.equal(telPick('02332645500', models), 'SRG3900 BIKE')
+    assert.equal(telPick('03332645500', models), 'SRG3900 CARKIT')
+    assert.equal(telPick('04400376200', models), 'SRG3900 DESKTOP')
   })
 
-  test('no prefix is claimed by two models any more', () => {
+  // Whichever shorthand was typed, the record holds the number really on the
+  // radio — that is the whole point of the swap.
+  test('every shorthand is stored as the 109 really on the radio', () => {
+    assert.equal(telForModel('103332645500', 'SRG3900 CARKIT', models), '109332645500')
+    assert.equal(telForModel('03332645500', 'SRG3900 CARKIT', models), '109332645500')
+    assert.equal(telForModel('102332645500', 'SRG3900 BIKE', models), '109332645500')
+    assert.equal(telForModel('04400376200', 'SRG3900 DESKTOP', models), '109400376200')
+  })
+
+  // 109 is the one prefix three models share, and that is deliberate: it is
+  // what is on all three. Every other prefix still names exactly one model.
+  test('109 is the only shared prefix, and it names all three builds', () => {
     const claimed = models.flatMap(optionPrefixes)
-    assert.equal(new Set(claimed).size, claimed.length, `collision in ${claimed.join(', ')}`)
+    const shared = [...new Set(claimed.filter((p, i) => claimed.indexOf(p) !== i))]
+    assert.deepEqual(shared, ['109'])
+    assert.deepEqual(prefixOwners('109332645500', models), {
+      prefix: '109',
+      names: ['SRG3900 CARKIT', 'SRG3900 DESKTOP', 'SRG3900 BIKE'],
+    })
   })
 
-  test('109 selects nothing at all', () => {
-    assert.equal(telPick('109332645500', models), '')
-    assert.equal(prefixOwners('109332645500', models), null)
+  // Typing the 109 itself cannot say which build it is, so the auto-select
+  // leads with the car kit — first in the list, and list order is where that
+  // is decided. Said out loud here so a reordering does not pass unnoticed.
+  test('a bare 109 falls to whichever build is first in the list', () => {
+    assert.equal(telPick('109332645500', models), 'SRG3900 CARKIT')
   })
 
-  // The prefixes that were only ever a workaround for the shared 109.
-  test('nothing ships a stand-in any more, and none is needed', () => {
-    assert.deepEqual(models.filter((m) => optionStandInPair(m)).map(optionName), [])
-    assert.deepEqual(models.map(optionStandIn).filter(Boolean), [])
+  test('every shipped stand-in is a Tel prefix too, or it would select nothing', () => {
+    for (const m of models) {
+      const claimed = optionPrefixes(m)
+      for (const { standIn } of optionStandInRules(m)) {
+        assert.ok(claimed.includes(standIn), `${optionName(m)} does not claim its stand-in ${standIn}`)
+      }
+    }
   })
 })
 
-// A retired prefix is refused at the form rather than stored: a 109 number is
-// not a number with the wrong device attached, it is one that never said which
-// device it was, and nobody can answer that afterwards.
-describe('retired Tel prefixes', () => {
-  const models = mergeOptions({}).models
-
-  test('109 is recognised as retired, wherever the number goes on', () => {
-    assert.equal(retiredTelPrefix('109332645500'), '109')
-    assert.equal(retiredTelPrefix('109'), '109')
-    assert.equal(retiredTelPrefix('109 332 645500'), '109') // punctuation is not a defence
+// The swap the stand-in rules are built on: it keeps every digit that
+// identifies the radio, and changes only the leading run that named the device.
+describe('replaceTelPrefix', () => {
+  test('swaps the leading run and nothing else', () => {
+    assert.equal(replaceTelPrefix('109332645500', '109', '102'), '102332645500')
+    assert.equal(replaceTelPrefix('109109109', '109', '104'), '104109109')
   })
 
-  test('a number that merely contains 109 is not one that starts with it', () => {
-    assert.equal(retiredTelPrefix('102109645500'), '')
-    assert.equal(retiredTelPrefix('0501234567'), '')
-    assert.equal(retiredTelPrefix('102332645500'), '')
+  test('whatever spacing was typed survives', () => {
+    assert.equal(replaceTelPrefix('109 332 645500', '109', '103'), '103 332 645500')
   })
 
-  test('nothing to read is nothing retired', () => {
-    for (const v of ['', '   ', '-', null, undefined]) assert.equal(retiredTelPrefix(v), '')
-  })
-
-  // Refusing is half of it; the notice has to say what to use instead, and the
-  // model each replacement names is read off the live list, not written twice.
-  test('the replacements are offered with the model each one now names', () => {
-    assert.deepEqual(retiredTelReplacements('109', models), [
-      { prefix: '102', model: 'SRG3900 BIKE' },
-      { prefix: '103', model: 'SRG3900 CARKIT' },
-      { prefix: '104', model: 'SRG3900 DESKTOP' },
-    ])
-  })
-
-  // An admin who renumbers is not told to type a prefix that selects nothing.
-  test('a replacement no model claims is dropped rather than offered', () => {
-    const renamed = [{ name: 'ONLY ONE', prefixes: ['103'] }]
-    assert.deepEqual(retiredTelReplacements('109', renamed), [{ prefix: '103', model: 'ONLY ONE' }])
-    assert.deepEqual(retiredTelReplacements('109', []), [])
-    assert.deepEqual(retiredTelReplacements('', models), [])
-    assert.deepEqual(retiredTelReplacements('355', models), [], 'a live prefix is not retired')
-  })
-
-  // Taking up a replacement keeps every digit that identifies the radio — only
-  // the three that named the device change.
-  describe('replaceTelPrefix', () => {
-    test('swaps the leading run and nothing else', () => {
-      assert.equal(replaceTelPrefix('109332645500', '109', '102'), '102332645500')
-      assert.equal(replaceTelPrefix('109109109', '109', '104'), '104109109')
-    })
-
-    test('whatever spacing was typed survives', () => {
-      assert.equal(replaceTelPrefix('109 332 645500', '109', '103'), '103 332 645500')
-    })
-
-    test('a number that does not start with the prefix is untouched', () => {
-      assert.equal(replaceTelPrefix('102332645500', '109', '103'), '102332645500')
-      assert.equal(replaceTelPrefix('', '109', '102'), '')
-      assert.equal(replaceTelPrefix('-', '109', '102'), '-')
-      assert.equal(replaceTelPrefix('109332', '', '102'), '109332')
-    })
+  test('a number that does not start with the prefix is untouched', () => {
+    assert.equal(replaceTelPrefix('102332645500', '109', '103'), '102332645500')
+    assert.equal(replaceTelPrefix('', '109', '102'), '')
+    assert.equal(replaceTelPrefix('-', '109', '102'), '-')
+    assert.equal(replaceTelPrefix('109332', '', '102'), '109332')
   })
 })
 
-// The stand-in machinery stays as an admin-managed feature — any device whose
-// real prefix cannot name it can take one in Manage inputs — even though no
-// shipped model needs one now.
+// The stand-in machinery is admin-managed: any device whose real prefix cannot
+// name it can take one in Manage inputs, and a lone string is still read as a
+// list of one so a stand-in saved before the field took several still works.
 describe('stand-in Tel prefixes remain available to any model', () => {
   const custom = [
     { name: 'WIDGET ONE', prefixes: ['500', '404'], standIn: '404', standInReal: '500' },
@@ -647,7 +698,27 @@ describe('stand-in Tel prefixes remain available to any model', () => {
       { name: 'C', prefixes: ['107'], standIn: '107', standInReal: '107' },
     ]
     for (const name of ['A', 'B', 'C']) assert.equal(telForModel('107332', name, half), '107332', name)
-    for (const name of ['A', 'B', 'C']) assert.equal(optionStandInPair(half.find((m) => m.name === name)), null)
+    for (const name of ['A', 'B', 'C']) assert.deepEqual(optionStandInRules(half.find((m) => m.name === name)), [])
+  })
+
+  test('several stand-ins can share one stored prefix, longest first', () => {
+    const many = [{ name: 'WIDGET', prefixes: ['500', '404', '04'], standIn: ['404', '04'], standInReal: '500' }]
+    assert.deepEqual(optionStandIns(many[0]), ['404', '04'])
+    // Longest first, so 404 is still reached on a model that also holds 04.
+    assert.deepEqual(optionStandInRules(many[0]), [
+      { standIn: '404', real: '500' },
+      { standIn: '04', real: '500' },
+    ])
+    assert.equal(telForModel('404123', 'WIDGET', many), '500123')
+    assert.equal(telForModel('04123', 'WIDGET', many), '500123')
+  })
+
+  // Written as one string rather than a list — the shape a stand-in saved
+  // before the field took several is still stored in.
+  test('a lone string is read as a list of one', () => {
+    assert.deepEqual(optionStandIns({ name: 'X', standIn: '404', standInReal: '500' }), ['404'])
+    assert.deepEqual(optionStandIns('PLAIN STRING MODEL'), [])
+    assert.deepEqual(optionStandIns({ name: 'X' }), [])
   })
 
   test('a blank number and its stored placeholder come back as they went in', () => {
