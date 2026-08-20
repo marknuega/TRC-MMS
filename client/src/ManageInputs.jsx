@@ -163,14 +163,14 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
       // Both halves or neither — half a stand-in rewrites nothing, so storing
       // one on its own is a trap (the call codeProblem makes about a parts code
       // with no variant). validated by standInProblem before we get here.
-      const standIn = hasStandIn ? f.standIn.replace(/\D/g, '') : ''
+      const standIn = hasStandIn ? parsePrefixes(f.standIn) : []
       const standInReal = hasStandIn ? f.standInReal.replace(/\D/g, '') : ''
-      const pair = standIn && standInReal ? { standIn, standInReal } : {}
+      const pair = standIn.length && standInReal ? { standIn, standInReal } : {}
       // A model with no prefixes stays a plain string, exactly as it was
       // before this field existed — nothing to store, so nothing stored. An
       // agency given only some of its three optional fields stores only those,
       // for the same reason.
-      if (!prefixes.length && !issiPrefixes.length && !fullForm && !pair.standIn) return name
+      if (!prefixes.length && !issiPrefixes.length && !fullForm && !pair.standIn?.length) return name
       return {
         name,
         ...(prefixes.length && { prefixes }),
@@ -245,19 +245,25 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
   // code needs its variant: one on its own rewrites nothing.
   function standInProblem(standIn, real, exceptIndex = -1) {
     if (!hasStandIn) return ''
-    const a = String(standIn ?? '').replace(/\D/g, '')
+    // A list, like the Tel prefixes above: 103 and 03 are one rule written
+    // twice, and both are typed to reach the same model.
+    const standIns = parsePrefixes(standIn)
     const b = String(real ?? '').replace(/\D/g, '')
-    if (!a && !b) return ''
-    if (!a) return 'Add the Stand-in prefix, or clear "Stored as".'
-    if (!b) return 'Add what the stand-in is "Stored as", or clear it.'
-    if (!PREFIX_RE.test(a)) return `"${a}" is not a prefix — 2 to 6 digits, e.g. 404.`
+    if (!standIns.length && !b) return ''
+    if (!standIns.length) return 'Add a Stand-in prefix, or clear "Stored as".'
+    if (!b) return 'Add what the stand-ins are "Stored as", or clear them.'
+    const bad = standIns.find((a) => !PREFIX_RE.test(a))
+    if (bad) return `"${bad}" is not a prefix — 2 to 6 digits, e.g. 404.`
     if (!PREFIX_RE.test(b)) return `"${b}" is not a prefix — 2 to 6 digits, e.g. 500.`
-    if (a === b) return `${a} would be stored as itself — a stand-in has to differ from the number it stands in for.`
+    const itself = standIns.find((a) => a === b)
+    if (itself) return `${itself} would be stored as itself — a stand-in has to differ from the number it stands in for.`
     // Another model's stand-in would rewrite the same digits to something else
     // as soon as that model were picked. Two rules for one prefix is not a
     // sharing decision like a Tel prefix is — it is two answers to one question.
-    const clash = list.findIndex((it, idx) => idx !== exceptIndex && optionStandIns(it).includes(a))
-    if (clash >= 0) return `${a} is already the stand-in for "${nameOf(list[clash])}".`
+    for (const a of standIns) {
+      const clash = list.findIndex((it, idx) => idx !== exceptIndex && optionStandIns(it).includes(a))
+      if (clash >= 0) return `${a} is already the stand-in for "${nameOf(list[clash])}".`
+    }
     return ''
   }
 
@@ -267,10 +273,15 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
   // than enforced: rewriting without auto-selecting is a legitimate thing to
   // want, and silently adding the prefix would edit a field nobody typed in.
   function standInHint(standIn, prefixes) {
-    const a = String(standIn ?? '').replace(/\D/g, '')
-    if (!a || !PREFIX_RE.test(a)) return ''
-    if (parsePrefixes(prefixes).includes(a)) return `Typing ${a} selects this model, and saves as the real prefix.`
-    return `${a} is not one of this model's Tel prefixes, so typing it selects nothing — add it above to have it select this model too.`
+    const standIns = parsePrefixes(standIn).filter((a) => PREFIX_RE.test(a))
+    if (!standIns.length) return ''
+    const claimed = parsePrefixes(prefixes)
+    const orphans = standIns.filter((a) => !claimed.includes(a))
+    if (!orphans.length) return `Typing ${standIns.join(' or ')} selects this model, and saves as the real prefix.`
+    const one = orphans.length === 1
+    return `${orphans.join(' and ')} ${one ? 'is not one of' : 'are not'} this model's Tel prefixes, so typing ${
+      one ? 'it' : 'them'
+    } selects nothing — add ${one ? 'it' : 'them'} above to have ${one ? 'it' : 'them'} select this model too.`
   }
 
   // What is wrong with a parts + variant pair, or '' when it is usable. Both
@@ -428,7 +439,7 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
     setEditVariant(isIssues ? issueVariant(list[i]) : '')
     setEditPrefixes(hasTelPrefixes ? optionPrefixes(list[i]).join(', ') : '')
     setEditIssiPrefixes(hasIssiPrefixes ? optionIssiPrefixes(list[i]).join(', ') : '')
-    setEditStandIn(hasStandIn ? optionStandIns(list[i])[0] ?? '' : '')
+    setEditStandIn(hasStandIn ? optionStandIns(list[i]).join(', ') : '')
     setEditStandInReal(hasStandIn ? optionStandInReal(list[i]) : '')
     // Seeded from the code map when the option carries none of its own, so
     // opening an agency to edit it offers the full form rather than a blank box
@@ -575,16 +586,16 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
             )}
             {hasStandIn && (
               <>
-                <label className="field-code">
-                  Stand-in prefix
+                <label className="field-code field-prefix">
+                  Stand-in prefixes
                   <input
                     value={newStandIn}
-                    onChange={(e) => setNewStandIn(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    placeholder="404"
+                    onChange={(e) => setNewStandIn(e.target.value.replace(/[^\d,\s]/g, ''))}
+                    placeholder="103, 03"
                     aria-invalid={noticeField === 'standIn' || undefined}
                     className={noticeField === 'standIn' ? 'invalid' : undefined}
                     inputMode="numeric"
-                    title="A prefix typed to select this model but never stored — for a device whose real prefix is shared with another model and so cannot name it. Optional."
+                    title="Prefixes typed to select this model but never stored — for a device whose real prefix is shared with another model and so cannot name it. Several separated by commas, e.g. 103, 03. Optional."
                   />
                 </label>
                 <label className="field-code">
@@ -592,11 +603,11 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                   <input
                     value={newStandInReal}
                     onChange={(e) => setNewStandInReal(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    placeholder="500"
+                    placeholder="109"
                     aria-invalid={noticeField === 'standIn' || undefined}
                     className={noticeField === 'standIn' ? 'invalid' : undefined}
                     inputMode="numeric"
-                    title="The prefix really on the radio — what the stand-in is swapped for when the entry is saved."
+                    title="The prefix really on the radio — the one every stand-in above is swapped for when the entry is saved."
                   />
                 </label>
               </>
@@ -748,13 +759,15 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
             <p className="manage-hint">
               A <strong>Stand-in prefix</strong> is for a device the real prefix cannot name on its own. Where two
               models share a prefix, a Tel number cannot say which is on the bench and the auto-select lands on
-              whichever is higher in this list. Give one of them a stand-in — say <code>404</code>{' '}
-              <strong>Stored as</strong> <code>500</code> — add <code>404</code> to its Tel prefixes, and typing{' '}
-              <code>404…</code> selects that model while the entry saves with the <code>500…</code> really on the
-              radio. The swap happens once, at save, and only for the model that declares it: the same digits typed
-              against another model are somebody's real number and are stored untouched. Both boxes or neither;
-              leave them blank for a device that needs no stand-in, which is every one the app ships with — the
-              SRG3900 builds were the case this existed for, and they now hold a prefix each.
+              whichever is higher in this list. Give each of them stand-ins — say <code>103, 03</code>{' '}
+              <strong>Stored as</strong> <code>109</code> — add those to its Tel prefixes, and typing{' '}
+              <code>103…</code> selects that model while the entry saves with the <code>109…</code> really on the
+              radio. Several stand-ins are one rule written more than once: separate them with commas, and each is
+              swapped for the same stored prefix. The swap happens once, at save, and only for the model that
+              declares it: the same digits typed against another model are somebody's real number and are stored
+              untouched. Both boxes or neither; leave them blank for a device that needs no stand-in. The three
+              SRG3900 builds are the case this exists for — <code>109</code> is really on all of them, so each
+              takes shorthand of its own to be picked by.
               {newStandIn.trim() && (
                 <span className="manage-code-hint"> {standInHint(newStandIn, newPrefixes)}</span>
               )}
@@ -854,14 +867,14 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                           )}
                           {hasStandIn && (
                             <>
-                              <label className="field-code">
-                                Stand-in prefix
+                              <label className="field-code field-prefix">
+                                Stand-in prefixes
                                 <input
                                   className="edit-input"
                                   value={editStandIn}
-                                  onChange={(e) => setEditStandIn(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                                  onChange={(e) => setEditStandIn(e.target.value.replace(/[^\d,\s]/g, ''))}
                                   onKeyDown={cancelOnEscape}
-                                  placeholder="404"
+                                  placeholder="103, 03"
                                   inputMode="numeric"
                                 />
                               </label>
@@ -872,7 +885,7 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                                   value={editStandInReal}
                                   onChange={(e) => setEditStandInReal(e.target.value.replace(/\D/g, '').slice(0, 6))}
                                   onKeyDown={cancelOnEscape}
-                                  placeholder="500"
+                                  placeholder="109"
                                   inputMode="numeric"
                                 />
                               </label>
@@ -979,9 +992,9 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                       {/* An arrow rather than a bare pair: the row has to say
                           which of the two digits is typed and which is stored,
                           and 107 → 109 says it without a legend. */}
-                      {hasStandIn && optionStandIns(value)[0] && optionStandInReal(value) && (
-                        <span className="manage-item-code" title="Stand-in prefix, and what it is stored as">
-                          {optionStandIns(value)[0]} → {optionStandInReal(value)}
+                      {hasStandIn && optionStandIns(value).length > 0 && optionStandInReal(value) && (
+                        <span className="manage-item-code" title="Stand-in prefixes, and what they are stored as">
+                          {optionStandIns(value).join(' / ')} → {optionStandInReal(value)}
                         </span>
                       )}
                       {/* Labelled, so the digits say which number they answer
