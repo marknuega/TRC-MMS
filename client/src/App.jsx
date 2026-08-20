@@ -61,6 +61,7 @@ import SearchSelect from './SearchSelect'
 import IssueInput from './IssueInput'
 import { Credit, Copyright, COPYRIGHT_HTML } from './copyright'
 import { BrandMark } from './brand'
+import InstallApp from './InstallApp.jsx'
 import {
   groupReports,
   buildDateReport,
@@ -2384,6 +2385,7 @@ function App({ user, onLogout }) {
               </div>
             )
           )}
+          <InstallApp />
           <div className="side-user">
             <span
               className="side-user-info"
