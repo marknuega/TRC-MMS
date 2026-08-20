@@ -14,13 +14,14 @@
  */
 
 import { createServer } from 'node:http'
-import { copyFileSync, mkdtempSync, rmSync } from 'node:fs'
+import { copyFileSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const desktop = dirname(here)
+const repoRoot = dirname(desktop)
 const work = mkdtempSync(join(tmpdir(), 'trc-smoke-'))
 const db = join(work, 'trc-mms.db')
 
@@ -150,6 +151,21 @@ await check('report entry writes and reads back on the right date', async () => 
   must(
     String(mine.reportDate).slice(0, 10) === reportDate,
     `date drifted: stored ${mine.reportDate}, expected ${reportDate}`,
+  )
+})
+
+// The stale-bundle guard. If this fails, the packaged client is not the one the
+// current source builds — which is precisely the bug where the app keeps using
+// yesterday's calculation rules and nothing looks wrong until a total is
+// disputed.
+await check('packaged client build is the current one', async () => {
+  const served = await fetch(`${base}/api/version`).then((r) => r.json())
+  must(served.buildId, 'the server could not report a build id (dist/build.json missing)')
+
+  const fresh = JSON.parse(readFileSync(join(repoRoot, 'client/dist/build.json'), 'utf8'))
+  must(
+    served.buildId === fresh.buildId,
+    `packaged build ${served.buildId} != freshly built ${fresh.buildId} — desktop/app is stale, re-run prepare`,
   )
 })
 

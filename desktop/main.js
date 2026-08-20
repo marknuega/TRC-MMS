@@ -205,6 +205,17 @@ async function listenOn(expressApp, config) {
   return `http://127.0.0.1:${port}`
 }
 
+// Which client bundle this install actually contains. The calculation rules ship
+// inside that bundle, so when a total is disputed this is the first fact worth
+// having — it says whether the machine is running the code you think it is.
+function clientBuildId() {
+  try {
+    return JSON.parse(readFileSync(join(here, 'app/client/dist/build.json'), 'utf8')).buildId || 'unknown'
+  } catch {
+    return 'unknown'
+  }
+}
+
 // ── Window ───────────────────────────────────────────────────────
 function createWindow() {
   const win = new BrowserWindow({
@@ -358,6 +369,7 @@ function buildMenu(win, config) {
                 detail:
                   'Software Developed by Muhammad Amir · MT# MT1063\n' +
                   '© 2026 Muhammad Amir. All rights reserved.\n\n' +
+                  `Build:  ${clientBuildId()}\n` +
                   `Installation ID:  ${config.deviceTag}\n` +
                   `Data folder:  ${userData}\n\n` +
                   'This copy runs entirely on this computer. It stores its reports in ' +

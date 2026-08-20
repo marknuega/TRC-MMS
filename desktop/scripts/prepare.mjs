@@ -44,11 +44,23 @@ const run = (cmd, args, cwd, env) => {
   })
 }
 
-// ── 1. The client must be built before it can be copied ──────────
+// ── 1. Always rebuild the client ─────────────────────────────────
+// ALWAYS, not "if dist/ is missing". That earlier shortcut was the source of a
+// genuinely nasty class of bug: an existing-but-stale client/dist passed the
+// check and got packaged as-is, so editing client/src/report.js and building the
+// installer shipped the PREVIOUS calculation rules. Nothing looks broken when
+// that happens — the app just quietly produces different totals from the same
+// data, and the only symptom is someone noticing a number is wrong days later.
+//
+// A Vite build of this client takes about a second. There is no version of that
+// trade worth taking.
 const clientDist = resolve(repo, 'client/dist')
+console.log('prepare: building the client (always, so a stale dist can never ship)')
+run('npm', ['run', 'build'], resolve(repo, 'client'))
+
 if (!existsSync(resolve(clientDist, 'index.html'))) {
-  console.log('prepare: client/dist is missing — running the client build first')
-  run('npm', ['run', 'build'], resolve(repo, 'client'))
+  console.error('prepare: the client build produced no index.html — refusing to package.')
+  process.exit(1)
 }
 
 // ── 2. Fresh app/ every time ─────────────────────────────────────

@@ -61,6 +61,7 @@ import SearchSelect from './SearchSelect'
 import IssueInput from './IssueInput'
 import { Credit, Copyright, COPYRIGHT_HTML } from './copyright'
 import { BrandMark } from './brand'
+import { BUILD_ID, UpdateBanner } from './version.jsx'
 import InstallApp from './InstallApp.jsx'
 import {
   groupReports,
@@ -2416,6 +2417,7 @@ function App({ user, onLogout }) {
         </aside>
 
         <main className={`page-main app${WIDE_PAGES.has(page) ? ' wide' : ''}`}>
+          <UpdateBanner />
           {error && <p className="error">{error}</p>}
           <WireIssiOffer wire={wire} onAgree={agreeWire} onDismiss={() => setWire(null)} />
 
@@ -3528,6 +3530,12 @@ function App({ user, onLogout }) {
 
           <footer className="app-footer">
             <Credit />
+            {/* Which bundle this is. Dull until the day a total looks wrong —
+                then it is the first thing to check, and the difference between
+                "the rules changed" and "this tab is running last week's code". */}
+            <span className="build-id" title="Build identifier — quote this when reporting a problem">
+              build {BUILD_ID}
+            </span>
           </footer>
         </main>
       </div>

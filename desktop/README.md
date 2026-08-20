@@ -50,6 +50,36 @@ Writes themselves were never at risk — they always try the network first, and
 
 The expired-session pill still shows, because that one is real and actionable.
 
+## Stale bundles: why every build rebuilds the client
+
+The report calculation rules live in `client/src/report.js`, which means they
+ship **inside the client bundle**. A stale bundle therefore does not look
+broken — the app quietly computes different totals from the same data, and the
+only symptom is somebody noticing a number is wrong, often days later.
+
+`prepare.mjs` used to build the client only when `client/dist` was missing, so
+an existing-but-stale `dist/` was packaged as-is. Editing `report.js` and
+building the installer shipped the *previous* rules. It now rebuilds the client
+every single time; a Vite build of this client takes about a second.
+
+Three defences, so this cannot come back quietly:
+
+1. **`prepare.mjs` always rebuilds** — the stale input is gone at the source.
+2. **Every build is stamped.** `vite.config.js` bakes a `BUILD_ID`
+   (`<timestamp>-<git sha>`, plus `-dirty` for an uncommitted tree) into the
+   bundle, writes it to `dist/build.json`, and the server reports it at
+   `/api/version`. It shows in the app footer and under `Help → About`, so
+   "which code is this actually running" is a thing you read, not deduce.
+3. **`scripts/smoke.mjs` fails if the packaged client is not the current one** —
+   it compares what the packaged server serves against a freshly built
+   `client/dist/build.json`.
+
+The live web app has a different failure mode — Railway always rebuilds, so the
+*deployed* bundle is current, but a tab left open across a deploy keeps running
+the code it loaded. `UpdateBanner` in `client/src/version.jsx` polls
+`/api/version` (every five minutes and on window focus) and offers a reload when
+the running build no longer matches the server's.
+
 ## Building the installer
 
 ```bash

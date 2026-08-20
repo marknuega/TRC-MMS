@@ -8,6 +8,7 @@ import helmet from 'helmet'
 import rateLimit from 'express-rate-limit'
 import cookieParser from 'cookie-parser'
 import path from 'node:path'
+import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { prisma } from './db.js'
 import { loadUser, authRequired } from './auth.js'
@@ -104,6 +105,23 @@ app.use(
 // Keep it cheap and dependency-free so a slow DB never fails the deploy.
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', uptime: process.uptime() })
+})
+
+// Which client build this server is serving, written into dist/build.json by
+// the Vite build. Public and unauthenticated on purpose: a tab whose session has
+// lapsed still needs to be able to notice it is running stale code.
+//
+// Read per request rather than cached at boot so a redeploy that swaps the files
+// under a running process is still reported honestly.
+app.get('/api/version', (req, res) => {
+  try {
+    const stamp = JSON.parse(readFileSync(path.join(clientDist, 'build.json'), 'utf8'))
+    res.set('Cache-Control', 'no-store').json({ ...stamp, edition: process.env.APP_EDITION || 'server' })
+  } catch {
+    // A dev server has no dist/ at all. Unknown is the honest answer, and the
+    // client treats it as "nothing to compare" rather than as an update.
+    res.set('Cache-Control', 'no-store').json({ buildId: null, edition: process.env.APP_EDITION || 'server' })
+  }
 })
 
 // Separate check for when you actually want to know the DB is reachable.
