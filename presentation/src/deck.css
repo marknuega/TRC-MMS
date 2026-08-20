@@ -490,6 +490,20 @@ button {
   background: var(--cyan);
   opacity: 0.5;
 }
+.deck-output-attachment {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.8rem;
+  color: var(--cyan);
+  border-bottom: 1px solid transparent;
+  font-size: 0.65rem;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+}
+.deck-output-attachment:hover {
+  border-bottom-color: var(--cyan);
+}
 .deck-governance {
   align-items: center;
 }

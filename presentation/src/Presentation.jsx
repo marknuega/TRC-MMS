@@ -285,19 +285,62 @@ function ParserSlide() {
 
 function OutputsSlide() {
   const outputs = [
-    ['01', 'Daily PDF field log', 'Work performed, variants, timestamps'],
-    ['02', 'Inventory deduction', 'Regional hub stock, updated instantly'],
-    ['03', 'Transmittal slips', 'Serials, ISSIs, handover receipts'],
-    ['04', 'Spare parts ledger', 'Consumption, PCB returns, RTO history'],
+    {
+      num: '01',
+      title: 'Daily PDF field log',
+      copy: 'Work performed, variants, timestamps',
+      attachment: {
+        href: '/attachments/TRC-Maintenance-Report-MAK-REP-A013.pdf',
+        label: 'MAK-REP-A013.pdf',
+      },
+    },
+    {
+      num: '02',
+      title: 'Inventory deduction',
+      copy: 'Regional hub stock, updated instantly',
+      attachment: {
+        href: '/attachments/TRC-Makkah-Inventory-MAK-INV-A001.pdf',
+        label: 'MAK-INV-A001.pdf',
+      },
+    },
+    {
+      num: '03',
+      title: 'Transmittal slips',
+      copy: 'Serials, ISSIs, handover receipts',
+      attachment: {
+        href: '/attachments/TRC-Transmittal-Report-MAK-TRA-A002.pdf',
+        label: 'MAK-TRA-A002.pdf',
+      },
+    },
+    {
+      num: '04',
+      title: 'Spare parts ledger',
+      copy: 'Consumption, PCB returns, RTO history',
+      attachment: {
+        href: '/attachments/MAK-PAR-A001.pdf',
+        label: 'MAK-PAR-A001.pdf',
+      },
+    },
   ]
   return (
     <div className="deck-output-grid">
-      {outputs.map(([num, title, copy]) => (
+      {outputs.map(({ num, title, copy, attachment }) => (
         <div className="deck-output" key={num}>
           <span>{num}</span>
           <div className="deck-output-icon">{num === '01' ? '▤' : num === '02' ? '▦' : num === '03' ? '⇄' : '◫'}</div>
           <h3>{title}</h3>
           <p>{copy}</p>
+          {attachment && (
+            <a
+              className="deck-output-attachment"
+              href={attachment.href}
+              target="_blank"
+              rel="noreferrer"
+              {...(attachment.href.endsWith('.pdf') ? {} : { download: true })}
+            >
+              <span aria-hidden="true">{attachment.href.endsWith('.pdf') ? '↗' : '⬇'}</span> {attachment.label}
+            </a>
+          )}
           <div className="deck-output-line" />
         </div>
       ))}
