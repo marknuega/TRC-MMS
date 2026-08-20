@@ -2247,12 +2247,16 @@ button.sync-pill {
   width: 100%;
 }
 .issue-menu {
+  --issue-opt-row-h: 2.15rem;
   position: absolute;
   z-index: 40;
   top: calc(100% + 2px);
   left: 0;
   right: 0;
-  max-height: 17rem;
+  /* Capped at exactly 6 rows (plus the menu's own padding) so a 7th+
+     suggestion scrolls instead of growing the menu — same idea as
+     .search-select-menu. */
+  max-height: calc(var(--issue-opt-row-h) * 6 + 0.5rem);
   overflow-y: auto;
   /* No horizontal scrollbar: the menu is exactly as wide as the field, and a
      name too long for it is ellipsised rather than pushing the row out of view.

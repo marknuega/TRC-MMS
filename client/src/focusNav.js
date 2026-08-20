@@ -85,3 +85,18 @@ export function advanceOnEnter(e, onLast) {
   else if (onLast) onLast()
   else fields[0]?.focus()
 }
+
+// Two single-key shortcuts for the fault-entry row, guarded the same way
+// advanceOnEnter guards Enter: never inside the Comment textarea, where
+// '+' and '*' are ordinary note text rather than a command.
+const isShortcutKey = (e, key) => e.key === key && !e.defaultPrevented && e.target?.tagName !== 'TEXTAREA'
+
+/** The '+' key stands in for the "+ Add fault" / "+ Add material" button. */
+export function isAddFaultShortcut(e) {
+  return isShortcutKey(e, '+')
+}
+
+/** The '*' key stands in for filing the entry under the Agency already showing. */
+export function isSaveShortcut(e) {
+  return isShortcutKey(e, '*')
+}

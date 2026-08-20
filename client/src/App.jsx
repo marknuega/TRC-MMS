@@ -24,7 +24,7 @@ import {
   syncNow,
 } from './api'
 import { onSyncChange } from './offline'
-import { advanceOnEnter } from './focusNav'
+import { advanceOnEnter, isAddFaultShortcut, isSaveShortcut } from './focusNav'
 import {
   DEFAULT_OPTIONS,
   mergeOptions,
@@ -760,6 +760,28 @@ function App({ user, onLogout }) {
     return out
   }, [options.issueTypes, options.actions, inventoryNames])
 
+  // The 4 most-used issues float to the top of the menu — same idea as the
+  // Agency quick-picks below, counted the same way: from saved reports plus
+  // the working set, so it can never drift out of step with the data.
+  const rankedIssueSuggestions = useMemo(() => {
+    const counts = new Map()
+    const bump = (v) => {
+      const key = String(v ?? '')
+        .trim()
+        .toUpperCase()
+      if (key) counts.set(key, (counts.get(key) ?? 0) + 1)
+    }
+    for (const r of saved ?? []) for (const e of r.entries ?? []) for (const f of e.faults ?? []) bump(f.issue)
+    for (const e of entries ?? []) for (const f of e.faults ?? []) bump(f.issue)
+    const uses = (s) => counts.get(s.name.trim().toUpperCase()) ?? 0
+    const top = issueSuggestions
+      .filter((s) => uses(s) > 0)
+      .sort((a, b) => uses(b) - uses(a))
+      .slice(0, 4)
+    const topNames = new Set(top.map((s) => s.name.trim().toUpperCase()))
+    return [...top, ...issueSuggestions.filter((s) => !topNames.has(s.name.trim().toUpperCase()))]
+  }, [issueSuggestions, saved, entries])
+
   /**
    * Drop a suggestion from the admin-managed list it belongs to.
    *
@@ -1225,6 +1247,9 @@ function App({ user, onLogout }) {
   // its own flag, because Model and Agency are separate questions about the
   // number and answering one is no statement about the other.
   const agencyPicked = useRef(false)
+  // Scopes the '+' shortcut's "focus the new row's Issue field" — the DOM is
+  // searched rather than tracking a per-row ref, since rows come and go.
+  const cardRef = useRef(null)
 
   // The agency a number selected on its own, or '' when none has.
   //
@@ -2486,7 +2511,29 @@ function App({ user, onLogout }) {
              in the row the cursor is already in, again because that is DOM
              order. Enter stops at the Comment textarea, where it is a
              newline. */
-                  <div className="form-card" onKeyDown={advanceOnEnter}>
+                  <div
+                    className="form-card"
+                    ref={cardRef}
+                    onKeyDown={(e) => {
+                      advanceOnEnter(e)
+                      if (isAddFaultShortcut(e)) {
+                        e.preventDefault()
+                        addFault()
+                        // The row isn't in the DOM yet on this tick — wait a
+                        // frame, then focus its first field (the
+                        // Issue/Material input).
+                        requestAnimationFrame(() => {
+                          const rows = cardRef.current?.querySelectorAll('.faults .fault-row:not(.fault-head)')
+                          rows?.[rows.length - 1]?.querySelector('input')?.focus()
+                        })
+                      } else if (isSaveShortcut(e) && !isTransmittal && form.agency) {
+                        e.preventDefault()
+                        agencyPicked.current = true
+                        setAutoAgency('')
+                        handleSubmit(undefined, form.agency)
+                      }
+                    }}
+                  >
                     <button
                       type="button"
                       className="manage-toggle"
@@ -2620,7 +2667,7 @@ function App({ user, onLogout }) {
                                   <IssueInput
                                     value={fault.issue}
                                     onChange={setFault(i, 'issue')}
-                                    suggestions={issueSuggestions}
+                                    suggestions={rankedIssueSuggestions}
                                     onAssignCode={assignIssueCode}
                                     onRemove={removeIssueSuggestion}
                                     placeholder="e.g. A COVER"
@@ -2711,7 +2758,18 @@ function App({ user, onLogout }) {
                         {/* The footer is outside the Enter walk. Enter on Agency submits
                 the entry — that is the point of the field — so the card's
                 handler must not see it and turn it into a focus move. */}
-                        <div className="faults-footer" onKeyDown={(e) => e.stopPropagation()}>
+                        <div
+                          className="faults-footer"
+                          onKeyDown={(e) => {
+                            if (isSaveShortcut(e) && form.agency) {
+                              e.preventDefault()
+                              agencyPicked.current = true
+                              setAutoAgency('')
+                              handleSubmit(undefined, form.agency)
+                            }
+                            e.stopPropagation()
+                          }}
+                        >
                           <button type="button" className="add-fault" onClick={addFault}>
                             {isTransmittal ? '+ Add material' : '+ Add fault'}
                           </button>
@@ -2950,7 +3008,7 @@ function App({ user, onLogout }) {
                                 <IssueInput
                                   value={fault.issue}
                                   onChange={eSetFault(i, 'issue')}
-                                  suggestions={issueSuggestions}
+                                  suggestions={rankedIssueSuggestions}
                                   onAssignCode={assignIssueCode}
                                   onRemove={removeIssueSuggestion}
                                   placeholder="e.g. A COVER"

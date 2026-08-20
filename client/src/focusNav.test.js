@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
-import { advanceOnEnter, isReachableField, nextFieldIndex } from './focusNav.js'
+import { advanceOnEnter, isAddFaultShortcut, isReachableField, isSaveShortcut, nextFieldIndex } from './focusNav.js'
 
 // A field stub: only the properties focusNav actually reads.
 const field = (props = {}) => ({
@@ -143,5 +143,25 @@ describe('advanceOnEnter', () => {
     advanceOnEnter(e, () => (ran += 1))
     assert.equal(e.defaultPrevented, false)
     assert.equal(ran, 0)
+  })
+})
+
+describe('isAddFaultShortcut / isSaveShortcut', () => {
+  const key = (k, extra = {}) => ({ key: k, target: field(), defaultPrevented: false, ...extra })
+
+  test("'+' is the add-fault shortcut, '*' is the save shortcut", () => {
+    assert.equal(isAddFaultShortcut(key('+')), true)
+    assert.equal(isSaveShortcut(key('*')), true)
+  })
+
+  test('neither fires for the other key, or once already handled', () => {
+    assert.equal(isAddFaultShortcut(key('*')), false)
+    assert.equal(isSaveShortcut(key('+')), false)
+    assert.equal(isAddFaultShortcut(key('+', { defaultPrevented: true })), false)
+  })
+
+  test('both are left to ordinary typing inside the Comment textarea', () => {
+    assert.equal(isAddFaultShortcut(key('+', { target: field({ tagName: 'TEXTAREA' }) })), false)
+    assert.equal(isSaveShortcut(key('*', { target: field({ tagName: 'TEXTAREA' }) })), false)
   })
 })
