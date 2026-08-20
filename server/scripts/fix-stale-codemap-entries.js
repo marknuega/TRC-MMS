@@ -73,7 +73,8 @@ async function main() {
   const issueTypes = [...(optsRow?.data?.issueTypes ?? [])]
   const alreadyClaimed = (parts, variant) =>
     issueTypes.some(
-      (it) => it && typeof it === 'object' && String(it.parts) === parts && String(it.variant).toUpperCase() === variant,
+      (it) =>
+        it && typeof it === 'object' && String(it.parts) === parts && String(it.variant).toUpperCase() === variant,
     )
 
   const added = []

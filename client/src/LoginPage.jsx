@@ -58,10 +58,24 @@ export default function LoginPage({ onAuthed }) {
         <p className="auth-sub">Tetra Repair Center · Maintenance Management System</p>
 
         <div className="auth-tabs">
-          <button type="button" className={tab === 'login' ? 'active' : ''} onClick={() => { setTab('login'); setError('') }}>
+          <button
+            type="button"
+            className={tab === 'login' ? 'active' : ''}
+            onClick={() => {
+              setTab('login')
+              setError('')
+            }}
+          >
             Sign in
           </button>
-          <button type="button" className={tab === 'request' ? 'active' : ''} onClick={() => { setTab('request'); setError('') }}>
+          <button
+            type="button"
+            className={tab === 'request' ? 'active' : ''}
+            onClick={() => {
+              setTab('request')
+              setError('')
+            }}
+          >
             Request access
           </button>
         </div>
@@ -72,7 +86,13 @@ export default function LoginPage({ onAuthed }) {
           <form onSubmit={doLogin} className="auth-form">
             <label>
               Username
-              <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" autoFocus required />
+              <input
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                autoComplete="username"
+                autoFocus
+                required
+              />
             </label>
             <label>
               Password
@@ -91,7 +111,14 @@ export default function LoginPage({ onAuthed }) {
         ) : sent ? (
           <div className="auth-form">
             <p className="auth-ok">✅ Request sent. An admin will review it and give you a username &amp; password.</p>
-            <button type="button" className="add-fault" onClick={() => { setSent(false); setTab('login') }}>
+            <button
+              type="button"
+              className="add-fault"
+              onClick={() => {
+                setSent(false)
+                setTab('login')
+              }}
+            >
               Back to sign in
             </button>
           </div>
@@ -120,7 +147,9 @@ export default function LoginPage({ onAuthed }) {
           </form>
         )}
       </div>
-      <footer className="app-footer"><Credit /></footer>
+      <footer className="app-footer">
+        <Credit />
+      </footer>
     </div>
   )
 }

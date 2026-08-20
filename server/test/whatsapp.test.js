@@ -19,8 +19,14 @@ const MAP = {
   components: { 19: 'Fistmic', 41: 'Rotary Knob' },
   variants: { A: '', B: '3D' },
   faults: {
-    '43A': 'Side Grip', '43B': 'Side Grip-3D', '99A': 'Charger', '99B': 'Charger-818',
-    '19A': 'Fistmic', '19B': 'Fistmic 3D', '41A': 'Rotary Knob', '26A': 'LCD',
+    '43A': 'Side Grip',
+    '43B': 'Side Grip-3D',
+    '99A': 'Charger',
+    '99B': 'Charger-818',
+    '19A': 'Fistmic',
+    '19B': 'Fistmic 3D',
+    '41A': 'Rotary Knob',
+    '26A': 'LCD',
   },
   // RTO is the one action written out in full — see ACTION_ALT in decoder.js.
   actions: { C: 'Change', R: 'Repair', RTO: 'RTO' },
@@ -250,7 +256,11 @@ describe('whatsapp shorthand', () => {
     for (const text of ['H43ACMT 19ACMI 1', 'H43ACT 19ACI 1', 'H43AC1MT 19ACI 1']) {
       const r = decodeBatch(text, MAP)
       assert.ok(r.ok, `${text}: ${r.reason}`)
-      assert.deepEqual(r.batch.groups.flatMap((g) => g.faults).map((f) => f.quantity), [1, 1], text)
+      assert.deepEqual(
+        r.batch.groups.flatMap((g) => g.faults).map((f) => f.quantity),
+        [1, 1],
+        text,
+      )
     }
   })
 })
@@ -288,6 +298,9 @@ describe('whatsapp RTO action', () => {
     const r = decodeBatch('H43AC1MT 43ARTOMT 1', MAP)
     assert.ok(r.ok, r.reason)
     const faults = r.batch.groups.flatMap((g) => g.faults)
-    assert.deepEqual(faults.map((f) => f.actionCode), ['C', 'RTO'])
+    assert.deepEqual(
+      faults.map((f) => f.actionCode),
+      ['C', 'RTO'],
+    )
   })
 })

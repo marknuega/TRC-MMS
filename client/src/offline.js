@@ -24,7 +24,8 @@ function db() {
     r.onupgradeneeded = () => {
       const d = r.result
       if (!d.objectStoreNames.contains(CACHE_STORE)) d.createObjectStore(CACHE_STORE)
-      if (!d.objectStoreNames.contains(QUEUE_STORE)) d.createObjectStore(QUEUE_STORE, { keyPath: 'id', autoIncrement: true })
+      if (!d.objectStoreNames.contains(QUEUE_STORE))
+        d.createObjectStore(QUEUE_STORE, { keyPath: 'id', autoIncrement: true })
     }
     r.onsuccess = () => resolve(r.result)
     r.onerror = () => reject(r.error)
@@ -147,7 +148,9 @@ async function applyOptimistic(op) {
   if (base === '/api/reports' && method === 'DELETE' && /\/api\/reports\/[^/]+$/.test(path)) {
     const id = decodeURIComponent(path.split('/').pop())
     for (const mode of ['report', 'transmittal']) {
-      await patch(reportsKey(mode), (list) => (Array.isArray(list) ? list.filter((e) => String(e.id) !== String(id)) : list))
+      await patch(reportsKey(mode), (list) =>
+        Array.isArray(list) ? list.filter((e) => String(e.id) !== String(id)) : list,
+      )
     }
     if (isTempId(id)) {
       // The entry never reached the server: cancel its queued create instead of
@@ -165,7 +168,8 @@ async function applyOptimistic(op) {
     for (const m of modes) {
       await patch(reportsKey(m), () => [])
       const q = await listQueue()
-      for (const o of q.filter((x) => x.tmpId && x.path === '/api/reports' && modeOf(x.body) === m)) await delQueue(o.id)
+      for (const o of q.filter((x) => x.tmpId && x.path === '/api/reports' && modeOf(x.body) === m))
+        await delQueue(o.id)
     }
     return { cleared: 0 }
   }
@@ -181,7 +185,10 @@ async function applyOptimistic(op) {
     const mode = modeOf(body)
     const entries = (await getCache(reportsKey(mode))) || []
     const cache = (await getCache('/api/saved-reports')) || {
-      nextReportId: 'REP-0001', nextReferenceId: 'REF-0001', nextTransmittalId: 'TRANS-0001', reports: [],
+      nextReportId: 'REP-0001',
+      nextReferenceId: 'REF-0001',
+      nextTransmittalId: 'TRANS-0001',
+      reports: [],
     }
     // Same three decisions the server makes on a real save, so an offline save
     // lands in the same list under the same series and does not jump between
@@ -189,11 +196,22 @@ async function applyOptimistic(op) {
     // routes/savedReports.js and isCountable() in report.js.
     const isReferenceOnly =
       body?.isReferenceOnly == null
-        ? entries.some((e) => (e.faults ?? []).some((f) => String(f.action ?? '').trim().toUpperCase() === 'RTO'))
+        ? entries.some((e) =>
+            (e.faults ?? []).some(
+              (f) =>
+                String(f.action ?? '')
+                  .trim()
+                  .toUpperCase() === 'RTO',
+            ),
+          )
         : Boolean(body.isReferenceOnly)
     const series = mode === 'transmittal' ? 'TRANS' : isReferenceOnly ? 'REF' : 'REP'
     const autoId =
-      series === 'TRANS' ? cache.nextTransmittalId : series === 'REF' ? cache.nextReferenceId ?? 'REF-0001' : cache.nextReportId
+      series === 'TRANS'
+        ? cache.nextTransmittalId
+        : series === 'REF'
+          ? (cache.nextReferenceId ?? 'REF-0001')
+          : cache.nextReportId
     // A date and number chosen by hand travel with the queued request, so the
     // row shown while offline is the row the server will write when it drains.
     // The number is honoured optimistically and re-checked on sync: another
@@ -248,7 +266,12 @@ async function applyOptimistic(op) {
 
   // ---- Inventory ----
   if (base === '/api/inventory' && method === 'POST') {
-    const item = { id: tmpId(), avail: Math.max(0, (Number(body.begin) || 0) - (Number(body.out) || 0)), ...body, _pending: true }
+    const item = {
+      id: tmpId(),
+      avail: Math.max(0, (Number(body.begin) || 0) - (Number(body.out) || 0)),
+      ...body,
+      _pending: true,
+    }
     await patch('/api/inventory', (list) => [...(Array.isArray(list) ? list : []), item])
     op.tmpId = item.id
     return item
@@ -257,7 +280,9 @@ async function applyOptimistic(op) {
     const id = base.split('/').pop()
     await patch('/api/inventory', (list) =>
       (Array.isArray(list) ? list : []).map((it) =>
-        String(it.id) === String(id) ? { ...it, ...body, avail: Math.max(0, (Number(body.begin) || 0) - (Number(body.out) || 0)) } : it,
+        String(it.id) === String(id)
+          ? { ...it, ...body, avail: Math.max(0, (Number(body.begin) || 0) - (Number(body.out) || 0)) }
+          : it,
       ),
     )
     if (isTempId(id)) {
@@ -273,7 +298,9 @@ async function applyOptimistic(op) {
   }
   if (/^\/api\/inventory\/[^/]+$/.test(base) && method === 'DELETE') {
     const id = base.split('/').pop()
-    await patch('/api/inventory', (list) => (Array.isArray(list) ? list.filter((it) => String(it.id) !== String(id)) : list))
+    await patch('/api/inventory', (list) =>
+      Array.isArray(list) ? list.filter((it) => String(it.id) !== String(id)) : list,
+    )
     if (isTempId(id)) {
       const q = await listQueue()
       const create = q.find((o) => o.tmpId === id)
@@ -285,7 +312,10 @@ async function applyOptimistic(op) {
 
   // ---- Monthly ----
   if (base === '/api/monthly' && method === 'PUT') {
-    await putCache(`/api/monthly?month=${encodeURIComponent(body.month)}&branch=${encodeURIComponent(body.branch ?? '')}`, body.data)
+    await putCache(
+      `/api/monthly?month=${encodeURIComponent(body.month)}&branch=${encodeURIComponent(body.branch ?? '')}`,
+      body.data,
+    )
     return body
   }
 

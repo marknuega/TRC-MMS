@@ -22,7 +22,7 @@ export const dmy = (value) => {
 // Branch-prefixed id, e.g. "MAKKAH-REP-0001" — mirrors the client's repLabel()
 // so the WhatsApp-bound text matches what the Report page displayed.
 export const repLabel = (id, branch, mode) =>
-  `${branch ? `${branch.toUpperCase()}-` : ''}${mode === 'transmittal' ? String(id ?? '-').replace('REP-', 'TRANS-') : id ?? '-'}`
+  `${branch ? `${branch.toUpperCase()}-` : ''}${mode === 'transmittal' ? String(id ?? '-').replace('REP-', 'TRANS-') : (id ?? '-')}`
 
 /**
  * @param {object} opts

@@ -3,7 +3,13 @@ import assert from 'node:assert/strict'
 import { advanceOnEnter, isReachableField, nextFieldIndex } from './focusNav.js'
 
 // A field stub: only the properties focusNav actually reads.
-const field = (props = {}) => ({ tagName: 'INPUT', focus() { this.focused = true }, ...props })
+const field = (props = {}) => ({
+  tagName: 'INPUT',
+  focus() {
+    this.focused = true
+  },
+  ...props,
+})
 
 describe('isReachableField', () => {
   test('an ordinary field is reachable', () => {
@@ -62,7 +68,9 @@ const enterOn = (target, fields, extra = {}) => {
     target,
     currentTarget: scopeOf(fields),
     defaultPrevented: false,
-    preventDefault() { this.defaultPrevented = true },
+    preventDefault() {
+      this.defaultPrevented = true
+    },
     ...extra,
   }
   return e

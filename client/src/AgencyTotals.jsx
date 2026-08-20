@@ -9,7 +9,10 @@ import { ALL_BRANCHES } from './options'
 import SearchSelect from './SearchSelect'
 
 const today = () => new Date().toISOString().slice(0, 10)
-const up = (v) => String(v ?? '').trim().toUpperCase()
+const up = (v) =>
+  String(v ?? '')
+    .trim()
+    .toUpperCase()
 
 // yyyy-mm-dd (an entry's own service date) -> Date (local midnight), or null.
 function parseIso(v) {
@@ -21,10 +24,12 @@ function parseIso(v) {
 function periodRange(refDate, period) {
   const d = new Date(refDate)
   if (period === 'year') return [new Date(d.getFullYear(), 0, 1), new Date(d.getFullYear(), 11, 31)]
-  if (period === 'month') return [new Date(d.getFullYear(), d.getMonth(), 1), new Date(d.getFullYear(), d.getMonth() + 1, 0)]
+  if (period === 'month')
+    return [new Date(d.getFullYear(), d.getMonth(), 1), new Date(d.getFullYear(), d.getMonth() + 1, 0)]
   // day: the single date itself — start and end are the same midnight, which the
   // caller's `d < start || d > end` test treats as inclusive.
-  if (period === 'day') return [new Date(d.getFullYear(), d.getMonth(), d.getDate()), new Date(d.getFullYear(), d.getMonth(), d.getDate())]
+  if (period === 'day')
+    return [new Date(d.getFullYear(), d.getMonth(), d.getDate()), new Date(d.getFullYear(), d.getMonth(), d.getDate())]
   // week: Sunday–Saturday containing refDate
   const start = new Date(d)
   start.setDate(d.getDate() - d.getDay())
@@ -35,7 +40,14 @@ function periodRange(refDate, period) {
 
 const fmt = (d) => d.toLocaleDateString('en-GB')
 
-export default function AgencyTotals({ saved, branches, embedded = false, lockBranch = null, branchSel = '', onBranch }) {
+export default function AgencyTotals({
+  saved,
+  branches,
+  embedded = false,
+  lockBranch = null,
+  branchSel = '',
+  onBranch,
+}) {
   const [openState, setOpen] = useState(false)
   const open = embedded || openState
   const [period, setPeriod] = useState('month')
@@ -79,7 +91,11 @@ export default function AgencyTotals({ saved, branches, embedded = false, lockBr
     const head = ['Agency', 'Maintenance', 'Programming', 'Installation', 'Dismantle', 'Total']
     const lines = [head.map(esc).join(',')]
     for (const b of rows) {
-      lines.push([b.agency, get(b, 'MAINTENANCE'), get(b, 'PROGRAMMING'), get(b, 'INSTALLATION'), get(b, 'DISMANTLE'), b.total].map(esc).join(','))
+      lines.push(
+        [b.agency, get(b, 'MAINTENANCE'), get(b, 'PROGRAMMING'), get(b, 'INSTALLATION'), get(b, 'DISMANTLE'), b.total]
+          .map(esc)
+          .join(','),
+      )
     }
     lines.push(['TOTAL', grand.m, grand.p, grand.i, grand.d, grand.t].map(esc).join(','))
     const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
@@ -127,7 +143,11 @@ export default function AgencyTotals({ saved, branches, embedded = false, lockBr
               {lockBranch != null ? (
                 <input value={branch} readOnly aria-label="Branch" />
               ) : (
-                <SearchSelect value={branchSel} onChange={(e) => onBranch?.(e.target.value)} options={[...branches, ALL_BRANCHES]} />
+                <SearchSelect
+                  value={branchSel}
+                  onChange={(e) => onBranch?.(e.target.value)}
+                  options={[...branches, ALL_BRANCHES]}
+                />
               )}
             </label>
             <button type="button" className="btn-txt" onClick={exportCsv} disabled={!rows.length}>
@@ -136,7 +156,13 @@ export default function AgencyTotals({ saved, branches, embedded = false, lockBr
           </div>
           <p className="saved-hint">
             Action counts per agency across saved <strong>reports</strong>,{' '}
-            {period === 'day' ? 'for' : period === 'week' ? 'for the week of' : period === 'year' ? 'for the year of' : 'for the month of'}{' '}
+            {period === 'day'
+              ? 'for'
+              : period === 'week'
+                ? 'for the week of'
+                : period === 'year'
+                  ? 'for the year of'
+                  : 'for the month of'}{' '}
             <strong>{fmt(start)}</strong>
             {period !== 'day' && (
               <>

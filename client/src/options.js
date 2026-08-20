@@ -11,17 +11,56 @@ export const DEFAULT_OPTIONS = {
   agencies: [
     { name: 'PSD', issiPrefixes: ['180'] },
     { name: 'CD', issiPrefixes: ['191'] },
-    'DOT', 'BG', 'PASS',
+    'DOT',
+    'BG',
+    'PASS',
     // 191 is deliberately claimed by CD as well. Two agencies may hold one
     // prefix (see the note under PREFIX_RE); CD is higher in this list, so an
     // ISSI starting 191 selects CD and PRI stays one dropdown away. Move PRI
     // above CD in Manage inputs to reverse that.
     { name: 'PRI', issiPrefixes: ['191'] },
-    'FSF', 'SSF', 'TA', 'KFSC',
-    'VIP', 'MJ', 'NA', 'GIP', 'GDCSS', 'NIC', 'AVS', 'RA', 'SFH', 'SA',
-    'AFW', 'MOH', 'IS', 'EMH', { name: 'SRCA', issiPrefixes: ['214'] }, 'GPH', 'MOD', 'NG', 'GSA', 'PSS',
-    'MEWA', 'TM', 'Kingdom', 'MOF', 'MOMRA', 'MCIT', 'NCA', 'MEIM', 'MEDIA', 'CAI',
-    'MCI', 'SFES', 'SFSP', 'GACA', 'CC', 'MOFA', 'SFOC', 'SPL',
+    'FSF',
+    'SSF',
+    'TA',
+    'KFSC',
+    'VIP',
+    'MJ',
+    'NA',
+    'GIP',
+    'GDCSS',
+    'NIC',
+    'AVS',
+    'RA',
+    'SFH',
+    'SA',
+    'AFW',
+    'MOH',
+    'IS',
+    'EMH',
+    { name: 'SRCA', issiPrefixes: ['214'] },
+    'GPH',
+    'MOD',
+    'NG',
+    'GSA',
+    'PSS',
+    'MEWA',
+    'TM',
+    'Kingdom',
+    'MOF',
+    'MOMRA',
+    'MCIT',
+    'NCA',
+    'MEIM',
+    'MEDIA',
+    'CAI',
+    'MCI',
+    'SFES',
+    'SFSP',
+    'GACA',
+    'CC',
+    'MOFA',
+    'SFOC',
+    'SPL',
     // The agency a "no activity today" entry is filed under — see NO_ACTIVITY_ISSI.
     'No Activity',
   ],
@@ -53,7 +92,9 @@ export const DEFAULT_OPTIONS = {
     { name: 'SRG3900 CARKIT', prefixes: ['109', '103', '03'], standIn: ['103', '03'], standInReal: '109' },
     { name: 'SRG3900 DESKTOP', prefixes: ['109', '104', '04'], standIn: ['104', '04'], standInReal: '109' },
     { name: 'SRG3900 BIKE', prefixes: ['109', '102', '02'], standIn: ['102', '02'], standInReal: '109' },
-    'PT580H', 'PT590', 'MT680',
+    'PT580H',
+    'PT590',
+    'MT680',
     // Not a device: the Model a "no activity today" entry carries, so the day
     // is on the record without claiming a radio was worked on.
     'For Record Purpose Only.',
@@ -67,15 +108,56 @@ export const DEFAULT_OPTIONS = {
     // The one "fault" that says no work was done — 00 being the parts number
     // that claims nothing. It is what an ISSI of 00 puts on the row.
     { name: 'No Activity', parts: '00', variant: 'A' },
-    'A COVER', 'ANTENNA', 'ANTENNA BASE', 'ANTENNA CABLE', 'ANTENNA STICK',
-    'B COVER', 'BATTERY 1590', 'BATTERY 1880', 'BATTERY 3180', 'BATTERY CONNECTOR',
-    'BELT CLIP', 'CAPACITOR', 'CHARGER', 'DESK MIC', 'DIODE', 'DV15 CONNECTOR', 'FIST MIC',
-    'HAND MICRO LOUD SPEAKER', 'HANDSET', 'HANDSET BASE', 'I/O PORT', 'KEYMATE',
-    'INDUCTOR', 'LCD', 'LCD BASE', 'LCD CABLE', 'LEATHER CASE', 'MIC', 'MIC BOTTOM', 'MIC TOP',
-    'NO TRANSMIT MODE', 'NOT AVAILABLE', 'POWER', 'POWER SUPPLY', 'PROGRAM ISSUE',
-    'PTT', 'RESISTOR', 'ROT KNOB', 'ROT SWITCH', 'SIDE GRIP', 'SIDE GRIP 3D', 'SIGNAL',
-    'SPEAKER BASE', 'SPEAKER HIGH', 'SPEAKER LOUD', 'SPEAKER LOW', 'SPEAKER MID',
-    'TEMPORARY DISABLED', 'TOP BOARD', 'UI FRAME',
+    'A COVER',
+    'ANTENNA',
+    'ANTENNA BASE',
+    'ANTENNA CABLE',
+    'ANTENNA STICK',
+    'B COVER',
+    'BATTERY 1590',
+    'BATTERY 1880',
+    'BATTERY 3180',
+    'BATTERY CONNECTOR',
+    'BELT CLIP',
+    'CAPACITOR',
+    'CHARGER',
+    'DESK MIC',
+    'DIODE',
+    'DV15 CONNECTOR',
+    'FIST MIC',
+    'HAND MICRO LOUD SPEAKER',
+    'HANDSET',
+    'HANDSET BASE',
+    'I/O PORT',
+    'KEYMATE',
+    'INDUCTOR',
+    'LCD',
+    'LCD BASE',
+    'LCD CABLE',
+    'LEATHER CASE',
+    'MIC',
+    'MIC BOTTOM',
+    'MIC TOP',
+    'NO TRANSMIT MODE',
+    'NOT AVAILABLE',
+    'POWER',
+    'POWER SUPPLY',
+    'PROGRAM ISSUE',
+    'PTT',
+    'RESISTOR',
+    'ROT KNOB',
+    'ROT SWITCH',
+    'SIDE GRIP',
+    'SIDE GRIP 3D',
+    'SIGNAL',
+    'SPEAKER BASE',
+    'SPEAKER HIGH',
+    'SPEAKER LOUD',
+    'SPEAKER LOW',
+    'SPEAKER MID',
+    'TEMPORARY DISABLED',
+    'TOP BOARD',
+    'UI FRAME',
   ],
 
   // The report engine knows the codes for these built-ins (C/R/N/PCB/P/RP/I/RI/D).
@@ -221,8 +303,7 @@ export const MODEL_TYPE = {
 // 2-6 digits. One digit would claim a tenth of every number in existence.
 export const PREFIX_RE = /^\d{2,6}$/
 export const optionName = (v) => (typeof v === 'string' ? v : String(v?.name ?? ''))
-const digitPrefixes = (v) =>
-  (Array.isArray(v) ? v : []).map((p) => String(p).replace(/\D/g, '')).filter(Boolean)
+const digitPrefixes = (v) => (Array.isArray(v) ? v : []).map((p) => String(p).replace(/\D/g, '')).filter(Boolean)
 export const optionPrefixes = (v) => (typeof v === 'string' ? [] : digitPrefixes(v?.prefixes))
 
 // ---------------------------------------------------------------------------
@@ -414,7 +495,9 @@ export function optionStandInRules(v) {
  */
 export function telForModel(tel, model, models) {
   const raw = String(tel ?? '')
-  const want = String(model ?? '').trim().toUpperCase()
+  const want = String(model ?? '')
+    .trim()
+    .toUpperCase()
   if (!want) return raw
   const it = (models ?? []).find((m) => optionName(m).trim().toUpperCase() === want)
   for (const { standIn, real } of optionStandInRules(it)) {
@@ -469,7 +552,9 @@ export function issiWireOffer(issi, agency, agencies) {
  * was, including an agency that already holds the prefix.
  */
 export function withIssiPrefix(agencies, agency, prefix) {
-  const want = String(agency ?? '').trim().toUpperCase()
+  const want = String(agency ?? '')
+    .trim()
+    .toUpperCase()
   const p = String(prefix ?? '').replace(/\D/g, '')
   if (!want || !PREFIX_RE.test(p)) return agencies ?? []
   return (agencies ?? []).map((a) => {
@@ -540,7 +625,10 @@ export const NO_ACTIVITY_ISSUE = 'No Activity'
 // Matched on the name with case and punctuation stripped, so "Other/s:",
 // "OTHER" and "Others" are all the one type, and the trailing full stop on
 // "For Record Purpose Only." is not something anyone has to type exactly.
-const nameKey = (v) => String(v ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '')
+const nameKey = (v) =>
+  String(v ?? '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
 const NO_ACTIVITY_MATCH = {
   model: /^FORRECORDPURPOSE/,
   type: /^OTHER/,
@@ -712,7 +800,10 @@ export function technicianIdMap(technicians) {
 export const PARTS_RE = /^\d{2}$/
 export const VARIANT_RE = /^[A-Z]$/
 const asObj = (v) => (typeof v === 'string' ? null : v)
-const upTrim = (v) => String(v ?? '').trim().toUpperCase()
+const upTrim = (v) =>
+  String(v ?? '')
+    .trim()
+    .toUpperCase()
 
 export const issueName = (v) => (typeof v === 'string' ? v : String(v?.name ?? ''))
 // `base` is the superseded shape (a combined "43A" written alongside a device
@@ -769,11 +860,23 @@ const REQUIRED_ACTIONS = ['RTO']
 // inputs lets an admin rename the Actions list, and "Installation" is a
 // renaming of the same action, not a different one.
 export const SERVICE_ACTIONS = [
-  'REPAIR', 'PROGRAM', 'RE-PROGRAM', 'INSTALL', 'INSTALLATION', 'RE-INSTALL', 'RE-INSTALLATION', 'DISMANTLE',
+  'REPAIR',
+  'PROGRAM',
+  'RE-PROGRAM',
+  'INSTALL',
+  'INSTALLATION',
+  'RE-INSTALL',
+  'RE-INSTALLATION',
+  'DISMANTLE',
 ]
 
 /** Whether an action is work rather than a part — see SERVICE_ACTIONS. */
-export const isServiceAction = (action) => SERVICE_ACTIONS.includes(String(action ?? '').trim().toUpperCase())
+export const isServiceAction = (action) =>
+  SERVICE_ACTIONS.includes(
+    String(action ?? '')
+      .trim()
+      .toUpperCase(),
+  )
 
 // Fault codes the shorthand is documented to understand, so a stored
 // issueTypes list saved before they existed cannot make them undecodable.

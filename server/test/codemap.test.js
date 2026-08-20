@@ -10,7 +10,13 @@
 
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
-import { faultCodes, technicianCodes, sanitizeCodeMap, validateCodeMap, withRequiredActions } from '../src/routes/codemap.js'
+import {
+  faultCodes,
+  technicianCodes,
+  sanitizeCodeMap,
+  validateCodeMap,
+  withRequiredActions,
+} from '../src/routes/codemap.js'
 import { issueCode, issueName, technicianIdMap } from '../../client/src/options.js'
 
 // The same rows the app stores, in every shape it has ever written them.
@@ -131,19 +137,19 @@ describe('technicianCodes', () => {
 describe('sanitizeCodeMap', () => {
   test('drops stale 2-digit+suffix part codes that can never decode', () => {
     const cleaned = sanitizeCodeMap({
-      components: { '43': 'Side Grip', H43A: 'Legacy', '98A': 'Power Supply', '99B': 'Charger DC' },
-      componentCategories: { '43': 'Audio & Controls', H43A: 'Legacy' },
+      components: { 43: 'Side Grip', H43A: 'Legacy', '98A': 'Power Supply', '99B': 'Charger DC' },
+      componentCategories: { 43: 'Audio & Controls', H43A: 'Legacy' },
     })
 
-    assert.deepEqual(cleaned.components, { '43': 'Side Grip' })
-    assert.deepEqual(cleaned.componentCategories, { '43': 'Audio & Controls' })
+    assert.deepEqual(cleaned.components, { 43: 'Side Grip' })
+    assert.deepEqual(cleaned.componentCategories, { 43: 'Audio & Controls' })
   })
 })
 
 describe('validateCodeMap', () => {
   test('accepts a well-formed map', () => {
     assert.equal(
-      validateCodeMap({ components: { '43': 'Side Grip' }, componentCategories: { '43': 'Audio & Controls' } }),
+      validateCodeMap({ components: { 43: 'Side Grip' }, componentCategories: { 43: 'Audio & Controls' } }),
       null,
     )
   })
@@ -161,7 +167,7 @@ describe('validateCodeMap', () => {
   })
 
   test('componentCategories is a recognised category, not rejected as unknown', () => {
-    assert.equal(validateCodeMap({ componentCategories: { '43': 'Audio & Controls' } }), null)
+    assert.equal(validateCodeMap({ componentCategories: { 43: 'Audio & Controls' } }), null)
   })
 })
 

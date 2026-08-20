@@ -72,11 +72,16 @@ describe('parseEntry settles the Tel number that gets stored', () => {
 
   // Nothing else about the entry moves.
   test('the rest of the entry is untouched by the swap', async () => {
-    const { data } = await parseEntry(body({ model: 'SRG3900 BIKE', telNumber: '107332645500', issiNumber: '12346575' }))
+    const { data } = await parseEntry(
+      body({ model: 'SRG3900 BIKE', telNumber: '107332645500', issiNumber: '12346575' }),
+    )
     assert.equal(data.model, 'SRG3900 BIKE')
     assert.equal(data.type, 'SEPURA')
     assert.equal(data.issiNumber, '12346575')
-    assert.deepEqual(data.faults.create.map((f) => f.issue), ['ANTENNA'])
+    assert.deepEqual(
+      data.faults.create.map((f) => f.issue),
+      ['ANTENNA'],
+    )
   })
 
   // Validation still comes back without touching the database.

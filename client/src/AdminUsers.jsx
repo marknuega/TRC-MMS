@@ -14,8 +14,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import SearchSelect from './SearchSelect'
 import {
-  getUsers, createUser, updateUser, deleteUser,
-  getCredentialRequests, updateCredentialRequest, deleteCredentialRequest,
+  getUsers,
+  createUser,
+  updateUser,
+  deleteUser,
+  getCredentialRequests,
+  updateCredentialRequest,
+  deleteCredentialRequest,
 } from './api'
 import { BRANCHES } from './options'
 import { advanceOnEnter } from './focusNav'
@@ -38,7 +43,7 @@ export default function AdminUsers({ currentUser, embedded = false, branches = B
   // picks from the full branch list (branches prop already carries either
   // shape depending on who's logged in, but deriving from `regions` here too
   // keeps this component correct regardless of what the caller passes).
-  const branchOptions = isDirectorCaller ? regions?.[currentUser.region] ?? [] : branches
+  const branchOptions = isDirectorCaller ? (regions?.[currentUser.region] ?? []) : branches
   const regionOptions = useMemo(() => Object.keys(regions ?? {}), [regions])
 
   const [users, setUsers] = useState([])
@@ -123,7 +128,14 @@ export default function AdminUsers({ currentUser, embedded = false, branches = B
 
   function startEdit(u) {
     setEditId(u.id)
-    setEditForm({ username: u.username, role: u.role, branch: u.branch, region: u.region || '', active: u.active, password: '' })
+    setEditForm({
+      username: u.username,
+      role: u.role,
+      branch: u.branch,
+      region: u.region || '',
+      active: u.active,
+      password: '',
+    })
     setError('')
   }
   async function saveEdit(id) {
@@ -172,16 +184,32 @@ export default function AdminUsers({ currentUser, embedded = false, branches = B
     }
   }
   function makeAccountFrom(r) {
-    setForm({ username: r.name.replace(/\s+/g, '').toLowerCase(), password: '', role: 'user', branch: r.branch || branchOptions[0] || '', region: '' })
+    setForm({
+      username: r.name.replace(/\s+/g, '').toLowerCase(),
+      password: '',
+      role: 'user',
+      branch: r.branch || branchOptions[0] || '',
+      region: '',
+    })
     setError('')
     document.getElementById('admin-new-user')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
 
-  const eset = (k) => (e) => setEditForm((f) => ({ ...f, [k]: k === 'active' ? e.target.value === 'true' : e.target.value }))
+  const eset = (k) => (e) =>
+    setEditForm((f) => ({ ...f, [k]: k === 'active' ? e.target.value === 'true' : e.target.value }))
 
   return (
     <section className="admin">
-      {embedded && <h2 className="page-title">🔐 Users &amp; access {pendingCount > 0 && <span className="hint">· {pendingCount} pending request{pendingCount === 1 ? '' : 's'}</span>}</h2>}
+      {embedded && (
+        <h2 className="page-title">
+          🔐 Users &amp; access{' '}
+          {pendingCount > 0 && (
+            <span className="hint">
+              · {pendingCount} pending request{pendingCount === 1 ? '' : 's'}
+            </span>
+          )}
+        </h2>
+      )}
       {error && <p className="manage-notice">{error}</p>}
       {notice && <p className="saved-hint">✅ {notice}</p>}
 
@@ -195,7 +223,12 @@ export default function AdminUsers({ currentUser, embedded = false, branches = B
             <table className="inv-table sp-table">
               <thead>
                 <tr>
-                  <th>Name</th><th>Branch</th><th>Contact</th><th>Note</th><th>Status</th><th />
+                  <th>Name</th>
+                  <th>Branch</th>
+                  <th>Contact</th>
+                  <th>Note</th>
+                  <th>Status</th>
+                  <th />
                 </tr>
               </thead>
               <tbody>
@@ -205,12 +238,26 @@ export default function AdminUsers({ currentUser, embedded = false, branches = B
                     <td>{r.branch}</td>
                     <td className="nowrap">{r.contact}</td>
                     <td>{r.note}</td>
-                    <td><span className={`badge badge-${r.status}`}>{r.status}</span></td>
+                    <td>
+                      <span className={`badge badge-${r.status}`}>{r.status}</span>
+                    </td>
                     <td className="admin-actions">
-                      <button type="button" onClick={() => makeAccountFrom(r)}>Make account</button>
-                      {r.status !== 'approved' && <button type="button" onClick={() => setReqStatus(r, 'approved')}>Approve</button>}
-                      {r.status !== 'rejected' && <button type="button" className="ghost" onClick={() => setReqStatus(r, 'rejected')}>Reject</button>}
-                      <button type="button" className="danger" onClick={() => removeReq(r)}>Delete</button>
+                      <button type="button" onClick={() => makeAccountFrom(r)}>
+                        Make account
+                      </button>
+                      {r.status !== 'approved' && (
+                        <button type="button" onClick={() => setReqStatus(r, 'approved')}>
+                          Approve
+                        </button>
+                      )}
+                      {r.status !== 'rejected' && (
+                        <button type="button" className="ghost" onClick={() => setReqStatus(r, 'rejected')}>
+                          Reject
+                        </button>
+                      )}
+                      <button type="button" className="danger" onClick={() => removeReq(r)}>
+                        Delete
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -225,19 +272,28 @@ export default function AdminUsers({ currentUser, embedded = false, branches = B
         <h3 className="sp-brand-h">Create login</h3>
         {/* Enter steps through the fields; the last one adds the user. */}
         <form className="admin-form" onSubmit={addUser} onKeyDown={(e) => advanceOnEnter(e, addUser)}>
-          <label>Username<input value={form.username} onChange={set('username')} required /></label>
-          <label>Password<input value={form.password} onChange={set('password')} required /></label>
+          <label>
+            Username
+            <input value={form.username} onChange={set('username')} required />
+          </label>
+          <label>
+            Password
+            <input value={form.password} onChange={set('password')} required />
+          </label>
           {isAdminCaller && (
-            <label>Role
+            <label>
+              Role
               <SearchSelect value={form.role} onChange={set('role')} options={ROLE_OPTIONS} />
             </label>
           )}
           {isAdminCaller && form.role === 'director' ? (
-            <label>Region
+            <label>
+              Region
               <SearchSelect value={form.region} onChange={set('region')} options={regionOptions} />
             </label>
           ) : (
-            <label>Branch
+            <label>
+              Branch
               <SearchSelect
                 value={form.branch}
                 onChange={set('branch')}
@@ -247,7 +303,8 @@ export default function AdminUsers({ currentUser, embedded = false, branches = B
             </label>
           )}
           {isAdminCaller && (
-            <label>New branch
+            <label>
+              New branch
               <div className="add-row">
                 <input
                   value={newBranch}
@@ -262,7 +319,9 @@ export default function AdminUsers({ currentUser, embedded = false, branches = B
               </div>
             </label>
           )}
-          <button type="submit" className="submit">Create</button>
+          <button type="submit" className="submit">
+            Create
+          </button>
         </form>
         <p className="saved-hint">
           {isAdminCaller
@@ -277,13 +336,21 @@ export default function AdminUsers({ currentUser, embedded = false, branches = B
         <div className="inv-scroll">
           <table className="inv-table sp-table">
             <thead>
-              <tr><th>Username</th><th>Role</th><th>Branch</th><th>Active</th><th /></tr>
+              <tr>
+                <th>Username</th>
+                <th>Role</th>
+                <th>Branch</th>
+                <th>Active</th>
+                <th />
+              </tr>
             </thead>
             <tbody>
-              {users.map((u) => (
+              {users.map((u) =>
                 editId === u.id ? (
                   <tr key={u.id}>
-                    <td><input value={editForm.username} onChange={eset('username')} /></td>
+                    <td>
+                      <input value={editForm.username} onChange={eset('username')} />
+                    </td>
                     <td>
                       {isAdminCaller ? (
                         <SearchSelect value={editForm.role} onChange={eset('role')} options={ROLE_OPTIONS} />
@@ -304,27 +371,48 @@ export default function AdminUsers({ currentUser, embedded = false, branches = B
                       )}
                     </td>
                     <td>
-                      <SearchSelect value={String(editForm.active)} onChange={eset('active')} options={ACTIVE_OPTIONS} />
+                      <SearchSelect
+                        value={String(editForm.active)}
+                        onChange={eset('active')}
+                        options={ACTIVE_OPTIONS}
+                      />
                     </td>
                     <td className="admin-actions">
-                      <input placeholder="New password (optional)" value={editForm.password} onChange={eset('password')} />
-                      <button type="button" onClick={() => saveEdit(u.id)}>Save</button>
-                      <button type="button" className="ghost" onClick={() => setEditId(null)}>Cancel</button>
+                      <input
+                        placeholder="New password (optional)"
+                        value={editForm.password}
+                        onChange={eset('password')}
+                      />
+                      <button type="button" onClick={() => saveEdit(u.id)}>
+                        Save
+                      </button>
+                      <button type="button" className="ghost" onClick={() => setEditId(null)}>
+                        Cancel
+                      </button>
                     </td>
                   </tr>
                 ) : (
                   <tr key={u.id}>
-                    <td className="nowrap">{u.username}{u.id === currentUser?.id && <span className="hint"> · you</span>}</td>
+                    <td className="nowrap">
+                      {u.username}
+                      {u.id === currentUser?.id && <span className="hint"> · you</span>}
+                    </td>
                     <td>{u.role}</td>
                     <td>{u.branch || (u.role === 'admin' ? 'all' : u.role === 'director' ? u.region : '—')}</td>
                     <td>{u.active ? 'Yes' : 'No'}</td>
                     <td className="admin-actions">
-                      <button type="button" onClick={() => startEdit(u)}>Edit</button>
-                      {u.id !== currentUser?.id && <button type="button" className="danger" onClick={() => removeUser(u)}>Delete</button>}
+                      <button type="button" onClick={() => startEdit(u)}>
+                        Edit
+                      </button>
+                      {u.id !== currentUser?.id && (
+                        <button type="button" className="danger" onClick={() => removeUser(u)}>
+                          Delete
+                        </button>
+                      )}
                     </td>
                   </tr>
-                )
-              ))}
+                ),
+              )}
             </tbody>
           </table>
         </div>

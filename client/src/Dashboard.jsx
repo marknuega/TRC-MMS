@@ -4,7 +4,15 @@
  */
 
 import { useMemo, useState } from 'react'
-import { periodEntries, dashboardSummary, technicianTotals, topParts, monthlyTrend, agencyTransactions, buildSparePartsReport } from './report'
+import {
+  periodEntries,
+  dashboardSummary,
+  technicianTotals,
+  topParts,
+  monthlyTrend,
+  agencyTransactions,
+  buildSparePartsReport,
+} from './report'
 import { Pie } from './Pie'
 import { toPie } from './chartUtils'
 import { ALL_BRANCHES } from './options'
@@ -13,19 +21,33 @@ import SearchSelect from './SearchSelect'
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 const monthShort = (mk) => {
-  const [y, m] = String(mk || '').split('-').map(Number)
+  const [y, m] = String(mk || '')
+    .split('-')
+    .map(Number)
   return y && m ? `${MONTHS[m - 1]} ${String(y).slice(2)}` : mk
 }
 const monthLong = (mk) => {
-  const [y, m] = String(mk || '').split('-').map(Number)
-  return y && m ? `${['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][m - 1]} ${y}` : ''
+  const [y, m] = String(mk || '')
+    .split('-')
+    .map(Number)
+  return y && m
+    ? `${['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'][m - 1]} ${y}`
+    : ''
 }
 
 // Does a 'YYYY-MM' month overlap a period key ('YYYY' | 'YYYY-MM' | 'YYYY-MM-DD')?
 // One of the two is always a prefix of the other, whichever way round.
 const inPeriod = (monthKey, key) => monthKey.startsWith(key) || key.startsWith(monthKey)
 
-export default function Dashboard({ saved, branches, embedded = false, lockBranch = null, charts = {}, branchSel = '', onBranch }) {
+export default function Dashboard({
+  saved,
+  branches,
+  embedded = false,
+  lockBranch = null,
+  charts = {},
+  branchSel = '',
+  onBranch,
+}) {
   const [openState, setOpen] = useState(false)
   const open = embedded || openState
   const [period, setPeriod] = useState(() => makePeriod('month'))
@@ -49,14 +71,30 @@ export default function Dashboard({ saved, branches, embedded = false, lockBranc
     { label: 'Installation', value: summary.install, color: '#059669' },
     { label: 'Dismantle', value: summary.dismantle, color: '#d97706' },
   ]
-  const techPie = toPie(techs, (t) => t.technician, (t) => t.total)
-  const agencyPie = toPie(agencies, (a) => a.agency, (a) => a.total)
-  const partsPie = toPie(parts, (p) => `${p.part}${p.company ? ` · ${p.company}` : ''}`, (p) => p.qty)
+  const techPie = toPie(
+    techs,
+    (t) => t.technician,
+    (t) => t.total,
+  )
+  const agencyPie = toPie(
+    agencies,
+    (a) => a.agency,
+    (a) => a.total,
+  )
+  const partsPie = toPie(
+    parts,
+    (p) => `${p.part}${p.company ? ` · ${p.company}` : ''}`,
+    (p) => p.qty,
+  )
   // Spare-parts breakdowns, duplicated from the Spare Parts page.
   const spReport = useMemo(() => buildSparePartsReport(entries), [entries])
   const companyPie = useMemo(() => spReport.companyTotals.map((c) => ({ label: c.company, value: c.qty })), [spReport])
   const brandPie = useMemo(
-    () => Object.keys(spReport.parts).map((type) => ({ label: type, value: spReport.parts[type].reduce((s, m) => s + m.total, 0) })),
+    () =>
+      Object.keys(spReport.parts).map((type) => ({
+        label: type,
+        value: spReport.parts[type].reduce((s, m) => s + m.total, 0),
+      })),
     [spReport],
   )
   const showTopTech = charts.dashTopTech !== false
@@ -84,7 +122,13 @@ export default function Dashboard({ saved, branches, embedded = false, lockBranc
   return (
     <section className="dashboard">
       {embedded ? (
-        <h2 className="page-title">📊 Dashboard <span className="hint">· {periodLabel(period)}{branch ? ` · ${branch}` : ' · all branches'}</span></h2>
+        <h2 className="page-title">
+          📊 Dashboard{' '}
+          <span className="hint">
+            · {periodLabel(period)}
+            {branch ? ` · ${branch}` : ' · all branches'}
+          </span>
+        </h2>
       ) : (
         <button type="button" className="manage-toggle" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
           <span>📊 Dashboard</span>
@@ -101,7 +145,11 @@ export default function Dashboard({ saved, branches, embedded = false, lockBranc
               {lockBranch != null ? (
                 <input value={lockBranch || 'Your branch'} readOnly aria-label="Branch" />
               ) : (
-                <SearchSelect value={branchSel} onChange={(e) => onBranch?.(e.target.value)} options={[...(branches ?? []), ALL_BRANCHES]} />
+                <SearchSelect
+                  value={branchSel}
+                  onChange={(e) => onBranch?.(e.target.value)}
+                  options={[...(branches ?? []), ALL_BRANCHES]}
+                />
               )}
             </label>
           </div>
@@ -128,7 +176,9 @@ export default function Dashboard({ saved, branches, embedded = false, lockBranc
 
                 {showTopTech && (
                   <div className="dash-card">
-                    <h3 className="sp-brand-h">Top technicians <span className="hint">by activity</span></h3>
+                    <h3 className="sp-brand-h">
+                      Top technicians <span className="hint">by activity</span>
+                    </h3>
                     <Pie data={techPie} />
                   </div>
                 )}
@@ -157,12 +207,21 @@ export default function Dashboard({ saved, branches, embedded = false, lockBranc
                 )}
 
                 <div className="dash-card dash-wide">
-                  <h3 className="sp-brand-h">Monthly trend <span className="hint">· devices serviced</span></h3>
+                  <h3 className="sp-brand-h">
+                    Monthly trend <span className="hint">· devices serviced</span>
+                  </h3>
                   <div className="dash-trend">
                     {trend.map((t) => (
-                      <div className="dash-col" key={t.monthKey} title={`${monthLong(t.monthKey)}: ${t.devices} devices`}>
+                      <div
+                        className="dash-col"
+                        key={t.monthKey}
+                        title={`${monthLong(t.monthKey)}: ${t.devices} devices`}
+                      >
                         <span className="dash-col-val">{t.devices}</span>
-                        <span className="dash-col-bar" style={{ height: `${Math.max(2, Math.round((t.devices / trendMax) * 120))}px` }} />
+                        <span
+                          className="dash-col-bar"
+                          style={{ height: `${Math.max(2, Math.round((t.devices / trendMax) * 120))}px` }}
+                        />
                         <span className="dash-col-x">{monthShort(t.monthKey)}</span>
                       </div>
                     ))}
@@ -207,7 +266,9 @@ export default function Dashboard({ saved, branches, embedded = false, lockBranc
               </div>
 
               <div className="dash-card">
-                <h3 className="sp-brand-h">Agency performance <span className="hint">· transactions · {periodLabel(period)}</span></h3>
+                <h3 className="sp-brand-h">
+                  Agency performance <span className="hint">· transactions · {periodLabel(period)}</span>
+                </h3>
                 <div className="inv-scroll">
                   <table className="inv-table sp-table">
                     <thead>
@@ -247,7 +308,10 @@ export default function Dashboard({ saved, branches, embedded = false, lockBranc
               </div>
 
               <div className="dash-card">
-                <h3 className="sp-brand-h">Service reports <span className="hint">· transactions per month{branch ? ` · ${branch}` : ' · all branches'}</span></h3>
+                <h3 className="sp-brand-h">
+                  Service reports{' '}
+                  <span className="hint">· transactions per month{branch ? ` · ${branch}` : ' · all branches'}</span>
+                </h3>
                 <div className="inv-scroll">
                   <table className="inv-table sp-table">
                     <thead>

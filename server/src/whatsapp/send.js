@@ -12,8 +12,7 @@ const GRAPH_BASE = 'https://graph.facebook.com'
 // room for the part marker.
 const MAX_BODY = 3900
 
-const apiUrl = () =>
-  `${GRAPH_BASE}/${process.env.WA_API_VERSION || 'v25.0'}/${process.env.WA_PHONE_NUMBER_ID}/messages`
+const apiUrl = () => `${GRAPH_BASE}/${process.env.WA_API_VERSION || 'v25.0'}/${process.env.WA_PHONE_NUMBER_ID}/messages`
 
 /**
  * Send a plain text WhatsApp message, splitting anything over Meta's limit.
@@ -56,7 +55,10 @@ export function splitBody(text) {
   let current = ''
   for (const line of text.split('\n')) {
     if (line.length > MAX_BODY) {
-      if (current) { parts.push(current); current = '' }
+      if (current) {
+        parts.push(current)
+        current = ''
+      }
       for (let i = 0; i < line.length; i += MAX_BODY) parts.push(line.slice(i, i + MAX_BODY))
       continue
     }

@@ -67,24 +67,54 @@ const POLL_MS = 4000
 // quietly resolves codes to parts they no longer mean.
 export const FALLBACK = {
   equipmentCodes: {
-    H: 'Airbus TH1n', R: 'Airbus THR9', M: 'Airbus TMR880i', T: 'Sepura STP9000',
-    C: 'Sepura SRG Carkit', D: 'Sepura SRG Desktop', B: 'Sepura SRG Bike',
-    S: 'Hytera MT680', E: 'Hytera PT580H', N: 'Hytera PT590',
+    H: 'Airbus TH1n',
+    R: 'Airbus THR9',
+    M: 'Airbus TMR880i',
+    T: 'Sepura STP9000',
+    C: 'Sepura SRG Carkit',
+    D: 'Sepura SRG Desktop',
+    B: 'Sepura SRG Bike',
+    S: 'Hytera MT680',
+    E: 'Hytera PT580H',
+    N: 'Hytera PT590',
   },
   components: {
-    10: 'Antenna', 11: 'Antenna Connector', 12: 'A Cover', 13: 'B Cover', 14: 'Belt Clip',
-    15: 'DV15', 17: 'Battery Connector', 19: 'Fistmic', 20: 'Programming', 21: 'Dismantle',
-    22: 'Installation', 23: 'PCB', 24: 'Handset', 25: 'Keypad', 26: 'LCD', 27: 'Keymate',
-    28: 'Micro-Loud Speaker', 29: 'Speaker Base', 30: 'Antenna Base', 31: 'LCD Base',
-    33: 'Fuse Cover', 41: 'Rotary Knob', 42: 'Rotary Switch', 43: 'Side Grip',
-    44: 'Microphone', 45: 'Speaker Low', 46: 'Speaker Mid', 95: 'Battery Pack',
+    10: 'Antenna',
+    11: 'Antenna Connector',
+    12: 'A Cover',
+    13: 'B Cover',
+    14: 'Belt Clip',
+    15: 'DV15',
+    17: 'Battery Connector',
+    19: 'Fistmic',
+    20: 'Programming',
+    21: 'Dismantle',
+    22: 'Installation',
+    23: 'PCB',
+    24: 'Handset',
+    25: 'Keypad',
+    26: 'LCD',
+    27: 'Keymate',
+    28: 'Micro-Loud Speaker',
+    29: 'Speaker Base',
+    30: 'Antenna Base',
+    31: 'LCD Base',
+    33: 'Fuse Cover',
+    41: 'Rotary Knob',
+    42: 'Rotary Switch',
+    43: 'Side Grip',
+    44: 'Microphone',
+    45: 'Speaker Low',
+    46: 'Speaker Mid',
+    95: 'Battery Pack',
     // 97 "Charging Pin" is retired — the item is gone from the listings. It is
     // dropped rather than kept as a dead entry because `components` is not
     // consulted by any decode (see parseCodeReport): it is the Code Reference's
     // vocabulary, so leaving 97 here would only offer a technician a part that
     // can no longer be filed. A 97 code saved before the retirement still
     // decodes, through whichever Issue type claims it.
-    98: 'Power Supply', 99: 'Charger',
+    98: 'Power Supply',
+    99: 'Charger',
   },
   // Variant letters. They no longer carry a suffix: B is not "the 3D build of
   // A" — 12A is A Cover and 12B is B Cover, a different part. A code's meaning
@@ -92,16 +122,39 @@ export const FALLBACK = {
   // own name rather than having 3D appended to 43A's.
   variants: { A: '', B: '' },
   // RTO is keyed by its full three letters — see ACTION_ALT below.
-  actions: { C: 'Change', N: 'New', R: 'Repair', I: 'Install/Re-Install', P: 'Program/Re-program', D: 'Dismantle', RTO: 'RTO' },
+  actions: {
+    C: 'Change',
+    N: 'New',
+    R: 'Repair',
+    I: 'Install/Re-Install',
+    P: 'Program/Re-program',
+    D: 'Dismantle',
+    RTO: 'RTO',
+  },
   companies: { MI: 'MOI', MT: 'MOTECO' },
   agencies: {
-    PSD: 'PUBLIC SECURITY DEPARTMENT', CD: 'CIVIL DEFENSE', PRI: 'PRISON',
-    MEWA: 'MINISTRY OF ENVIRONMENT WATER & AGRICULTURE', KINGDOM: 'KINGDOM',
+    PSD: 'PUBLIC SECURITY DEPARTMENT',
+    CD: 'CIVIL DEFENSE',
+    PRI: 'PRISON',
+    MEWA: 'MINISTRY OF ENVIRONMENT WATER & AGRICULTURE',
+    KINGDOM: 'KINGDOM',
   },
-  technicians: { 1: 'Amir', 2: 'Muhammad Rashid', 3: 'Imran', 4: 'Rasheedullah', 5: 'Maroof', 6: 'Baghdad', 7: 'Engr. Khalid', 8: 'Engr. Hamed' },
+  technicians: {
+    1: 'Amir',
+    2: 'Muhammad Rashid',
+    3: 'Imran',
+    4: 'Rasheedullah',
+    5: 'Maroof',
+    6: 'Baghdad',
+    7: 'Engr. Khalid',
+    8: 'Engr. Hamed',
+  },
 }
 
-const up = (v) => String(v ?? '').trim().toUpperCase()
+const up = (v) =>
+  String(v ?? '')
+    .trim()
+    .toUpperCase()
 // Comparison key: case and punctuation carry no meaning across the two lists.
 const norm = (v) => up(v).replace(/[^A-Z0-9]/g, '')
 
@@ -371,7 +424,9 @@ export function parseCodeReport(text, map = FALLBACK, options = {}) {
 
     const resolved = resolveCompany(company, companies)
     if (resolved?.ambiguous) {
-      errors.push(`"${company}" in ${whole} could be ${resolved.ambiguous.join(' or ')} — write the company code in full.`)
+      errors.push(
+        `"${company}" in ${whole} could be ${resolved.ambiguous.join(' or ')} — write the company code in full.`,
+      )
     }
     // Canonicalise, so a shorthand is stored and displayed as the full code.
     const companyCode = resolved?.code ?? company
@@ -459,7 +514,9 @@ export function parseCodeReport(text, map = FALLBACK, options = {}) {
     // ---- Otherwise whatever is left must be the tel / issi / technician tail ----
     const tail = TAIL_RE.exec(rest)
     if (!rest) {
-      errors.push('Missing the tail — expected the technician ID, with last 4 of tel + last 4 of ISSI in front if known.')
+      errors.push(
+        'Missing the tail — expected the technician ID, with last 4 of tel + last 4 of ISSI in front if known.',
+      )
     } else if (!tail) {
       errors.push(`Could not read "${rest}" as the technician ID, optionally preceded by tel(4) + ISSI(4).`)
     } else {
@@ -479,7 +536,9 @@ export function parseCodeReport(text, map = FALLBACK, options = {}) {
   // conflict rather than something to silently resolve.
   const distinct = [...new Set(faults.map((f) => f.code[0]))]
   if (distinct.length > 1) {
-    errors.push(`One report covers one device, but this has ${distinct.length} (${distinct.join(', ')}). Send them separately.`)
+    errors.push(
+      `One report covers one device, but this has ${distinct.length} (${distinct.join(', ')}). Send them separately.`,
+    )
   }
 
   const ok = errors.length === 0

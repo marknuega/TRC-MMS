@@ -17,7 +17,10 @@ const ALL = 'All Branches'
 
 const adminReq = { user: { role: 'admin' } }
 const userReq = { user: { role: 'user', branch: 'Makkah' } }
-const directorReq = { user: { role: 'director', region: 'Western Region' }, regionBranches: ['Makkah', 'Jeddah', 'Taif'] }
+const directorReq = {
+  user: { role: 'director', region: 'Western Region' },
+  regionBranches: ['Makkah', 'Jeddah', 'Taif'],
+}
 
 describe('isAdmin / isDirector', () => {
   test('identify the role correctly', () => {
@@ -151,7 +154,7 @@ describe('canAccessBranch', () => {
     assert.equal(canAccessBranch(adminReq, 'Dammam'), true)
   })
 
-  test('director: can access only their region\'s branches', () => {
+  test("director: can access only their region's branches", () => {
     assert.equal(canAccessBranch(directorReq, 'Makkah'), true)
     assert.equal(canAccessBranch(directorReq, 'Taif'), true)
     assert.equal(canAccessBranch(directorReq, 'Dammam'), false)

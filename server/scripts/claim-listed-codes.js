@@ -75,7 +75,10 @@ const CLAIMS = {
 }
 
 const APPLY = process.argv.includes('--apply')
-const up = (v) => String(v ?? '').trim().toUpperCase()
+const up = (v) =>
+  String(v ?? '')
+    .trim()
+    .toUpperCase()
 const norm = (v) => up(v).replace(/[^A-Z0-9]/g, '')
 
 async function main() {

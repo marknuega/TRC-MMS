@@ -59,7 +59,15 @@ function splitByCompany(models) {
     })
 }
 
-export default function SparePartsReport({ saved, branches, embedded = false, lockBranch = null, charts = {}, branchSel = '', onBranch }) {
+export default function SparePartsReport({
+  saved,
+  branches,
+  embedded = false,
+  lockBranch = null,
+  charts = {},
+  branchSel = '',
+  onBranch,
+}) {
   const [openState, setOpen] = useState(false)
   const open = embedded || openState
   const [period, setPeriod] = useState(() => makePeriod('month'))
@@ -90,7 +98,9 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
   const cards = useMemo(
     () =>
       grouped
-        .flatMap(({ type, groups }) => groups.flatMap((grp) => grp.models.map((model) => ({ type, company: grp.company, model }))))
+        .flatMap(({ type, groups }) =>
+          groups.flatMap((grp) => grp.models.map((model) => ({ type, company: grp.company, model }))),
+        )
         .sort((a, b) => companyRank(a.company) - companyRank(b.company)),
     [grouped],
   )
@@ -110,7 +120,11 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
     return order.map((company) => ({ company, items: byCompany.get(company) }))
   }, [cards])
   const brandPie = useMemo(
-    () => Object.keys(report.parts).map((type) => ({ label: type, value: report.parts[type].reduce((s, m) => s + m.total, 0) })),
+    () =>
+      Object.keys(report.parts).map((type) => ({
+        label: type,
+        value: report.parts[type].reduce((s, m) => s + m.total, 0),
+      })),
     [report],
   )
   const companyPie = report.companyTotals.map((c) => ({ label: c.company, value: c.qty }))
@@ -144,7 +158,11 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
   )
 
   function exportExcel() {
-    const esc = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    const esc = (v) =>
+      String(v ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
     const b = 'border:1px solid #999;padding:4px;'
     const hb = `${b}background:#dfe3ee;font-weight:bold;text-align:center;`
     const tot = `${b}background:#fff3bf;font-weight:bold;`
@@ -202,7 +220,11 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
   function exportPdf() {
     const w = window.open('', '_blank')
     if (!w) return
-    const e = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    const e = (v) =>
+      String(v ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
     let b = ''
     // Parts by brand -> company -> model
     for (const { type, groups } of grouped) {
@@ -224,14 +246,22 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
     if (report.companyTotals.length) {
       companyTbl =
         `<h2>Parts by company</h2><table><tbody>` +
-        report.companyTotals.map((c) => `<tr><td>TOTAL ${e(c.company)} PARTS</td><td class="c">${c.qty}</td></tr>`).join('') +
+        report.companyTotals
+          .map((c) => `<tr><td>TOTAL ${e(c.company)} PARTS</td><td class="c">${c.qty}</td></tr>`)
+          .join('') +
         `<tr><td class="tot">TOTAL PARTS</td><td class="tot c">${report.grandParts}</td></tr></tbody></table>`
     }
     const actRows = report.activity
-      .map((g) => `<tr><td>${e(g.type)} ${e(g.model)}</td><td class="c">${g.maintenance}</td><td class="c">${g.programming}</td><td class="c">${g.install}</td><td class="c">${g.dismantle}</td></tr>`)
+      .map(
+        (g) =>
+          `<tr><td>${e(g.type)} ${e(g.model)}</td><td class="c">${g.maintenance}</td><td class="c">${g.programming}</td><td class="c">${g.install}</td><td class="c">${g.dismantle}</td></tr>`,
+      )
       .join('')
     const agencyRows = report.agencies
-      .map((ag) => `<tr><td>${e(ag.agency)}</td><td class="c">${agencyGet(ag, 'MAINTENANCE')}</td><td class="c">${agencyGet(ag, 'PROGRAMMING')}</td><td class="c">${agencyGet(ag, 'INSTALLATION')}</td><td class="c">${agencyGet(ag, 'DISMANTLE')}</td></tr>`)
+      .map(
+        (ag) =>
+          `<tr><td>${e(ag.agency)}</td><td class="c">${agencyGet(ag, 'MAINTENANCE')}</td><td class="c">${agencyGet(ag, 'PROGRAMMING')}</td><td class="c">${agencyGet(ag, 'INSTALLATION')}</td><td class="c">${agencyGet(ag, 'DISMANTLE')}</td></tr>`,
+      )
       .join('')
     w.document.write(
       `<!doctype html><html><head><meta charset="utf-8"><title>${e(fileBase)}</title>` +
@@ -280,7 +310,11 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
               {lockBranch != null ? (
                 <input value={branch} readOnly aria-label="Branch" />
               ) : (
-                <SearchSelect value={branchSel} onChange={(e) => onBranch?.(e.target.value)} options={[...(branches ?? []), ALL_BRANCHES]} />
+                <SearchSelect
+                  value={branchSel}
+                  onChange={(e) => onBranch?.(e.target.value)}
+                  options={[...(branches ?? []), ALL_BRANCHES]}
+                />
               )}
             </label>
             <button type="button" className="submit" onClick={exportExcel} disabled={!hasData}>
@@ -291,8 +325,9 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
             </button>
           </div>
           <p className="saved-hint">
-            Spare parts used and activity for <strong>{branch || 'All branches'}</strong>, built from saved <strong>reports</strong> in{' '}
-            <strong>{rangeLabel}</strong>. Parts merge by name + company; totals are highlighted.
+            Spare parts used and activity for <strong>{branch || 'All branches'}</strong>, built from saved{' '}
+            <strong>reports</strong> in <strong>{rangeLabel}</strong>. Parts merge by name + company; totals are
+            highlighted.
           </p>
 
           {!hasData ? (
@@ -321,47 +356,49 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
                     const cardOpen = !collapsed.has(key)
                     return (
                       <div className={`sp-brand ${companyTheme(co)}`.trim()} key={key}>
-                      <button
-                        type="button"
-                        className="manage-toggle sp-card-toggle"
-                        onClick={() => toggleCard(key)}
-                        aria-expanded={cardOpen}
-                      >
-                        <span>
-                          {type} {model.model} ·{' '}
-                          <span className={`sp-co-badge ${companyTheme(co)}`.trim()}>{co}</span>{' '}
-                          <span className="hint">({model.total})</span>
-                        </span>
-                        <span className="chev">{cardOpen ? '▲' : '▼'}</span>
-                      </button>
-                      {cardOpen && (
-                        <div className="sp-model">
-                          <div className="sp-scroll">
-                            <table className="inv-table sp-table">
-                              <thead>
-                                <tr>
-                                  <th className="num">#</th>
-                                  <th>Part</th>
-                                  <th className="num">Qty</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {model.rows.map((r, i) => (
-                                  <tr key={r.part}>
-                                    <td className="num idx">{i + 1}</td>
-                                    <td className="nowrap">{r.part}</td>
-                                    <td className="num">{r.qty}</td>
+                        <button
+                          type="button"
+                          className="manage-toggle sp-card-toggle"
+                          onClick={() => toggleCard(key)}
+                          aria-expanded={cardOpen}
+                        >
+                          <span>
+                            {type} {model.model} ·{' '}
+                            <span className={`sp-co-badge ${companyTheme(co)}`.trim()}>{co}</span>{' '}
+                            <span className="hint">({model.total})</span>
+                          </span>
+                          <span className="chev">{cardOpen ? '▲' : '▼'}</span>
+                        </button>
+                        {cardOpen && (
+                          <div className="sp-model">
+                            <div className="sp-scroll">
+                              <table className="inv-table sp-table">
+                                <thead>
+                                  <tr>
+                                    <th className="num">#</th>
+                                    <th>Part</th>
+                                    <th className="num">Qty</th>
                                   </tr>
-                                ))}
-                                <tr className="totals">
-                                  <td colSpan={2}>TOTAL {type} {model.model}</td>
-                                  <td className="num">{model.total}</td>
-                                </tr>
-                              </tbody>
-                            </table>
+                                </thead>
+                                <tbody>
+                                  {model.rows.map((r, i) => (
+                                    <tr key={r.part}>
+                                      <td className="num idx">{i + 1}</td>
+                                      <td className="nowrap">{r.part}</td>
+                                      <td className="num">{r.qty}</td>
+                                    </tr>
+                                  ))}
+                                  <tr className="totals">
+                                    <td colSpan={2}>
+                                      TOTAL {type} {model.model}
+                                    </td>
+                                    <td className="num">{model.total}</td>
+                                  </tr>
+                                </tbody>
+                              </table>
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        )}
                       </div>
                     )
                   })}
@@ -377,7 +414,8 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
                         {report.companyTotals.map((c) => (
                           <tr key={c.company}>
                             <td className="nowrap">
-                              TOTAL <span className={`sp-co-badge ${companyTheme(c.company)}`.trim()}>{c.company}</span> PARTS
+                              TOTAL <span className={`sp-co-badge ${companyTheme(c.company)}`.trim()}>{c.company}</span>{' '}
+                              PARTS
                             </td>
                             <td className="num">{c.qty}</td>
                           </tr>
@@ -403,7 +441,9 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
                           <th>Brand</th>
                           <th>Model</th>
                           {ACT_COLS.map(([, l]) => (
-                            <th className="num" key={l}>{l}</th>
+                            <th className="num" key={l}>
+                              {l}
+                            </th>
                           ))}
                           <th className="num">Total</th>
                         </tr>
@@ -415,7 +455,9 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
                             <td className="nowrap">{g.type}</td>
                             <td className="nowrap">{g.model}</td>
                             {ACT_COLS.map(([k]) => (
-                              <td className="num" key={k}>{g[k] || ''}</td>
+                              <td className="num" key={k}>
+                                {g[k] || ''}
+                              </td>
                             ))}
                             <td className="num avail">{g.total}</td>
                           </tr>
@@ -423,7 +465,9 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
                         <tr className="totals">
                           <td colSpan={3}>TOTAL</td>
                           {ACT_COLS.map(([k]) => (
-                            <td className="num" key={k}>{actGrand[k]}</td>
+                            <td className="num" key={k}>
+                              {actGrand[k]}
+                            </td>
                           ))}
                           <td className="num">{actGrand.total}</td>
                         </tr>
@@ -443,7 +487,9 @@ export default function SparePartsReport({ saved, branches, embedded = false, lo
                           <th className="num">#</th>
                           <th>Agency</th>
                           {ACT_COLS.map(([, l]) => (
-                            <th className="num" key={l}>{l}</th>
+                            <th className="num" key={l}>
+                              {l}
+                            </th>
                           ))}
                           <th className="num">Total</th>
                         </tr>

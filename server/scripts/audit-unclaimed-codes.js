@@ -38,10 +38,14 @@ async function main() {
   const variants = map.variants ?? {}
   const claimed = faultCodes(optRow?.data?.issueTypes ?? [])
 
-  const variantLetters = Object.keys(variants).filter((v) => /^[A-Z]$/i.test(v)).map((v) => v.toUpperCase())
+  const variantLetters = Object.keys(variants)
+    .filter((v) => /^[A-Z]$/i.test(v))
+    .map((v) => v.toUpperCase())
   const partsNumbers = Object.keys(components).filter((p) => PARTS_RE.test(p))
 
-  console.log(`code map:      ${partsNumbers.length} usable parts numbers, variants ${variantLetters.join('/') || '(none)'}`)
+  console.log(
+    `code map:      ${partsNumbers.length} usable parts numbers, variants ${variantLetters.join('/') || '(none)'}`,
+  )
   console.log(`issue types:   ${Object.keys(claimed).length} codes claimed`)
   console.log('')
 
@@ -72,7 +76,9 @@ async function main() {
   const orphan = Object.keys(claimed).filter((c) => !partsNumbers.includes(c.slice(0, 2)))
   if (orphan.length) {
     console.log('')
-    console.log(`(${orphan.length} claimed code(s) have no code-map parts number, which is fine — a claim stands alone: ${orphan.join(', ')})`)
+    console.log(
+      `(${orphan.length} claimed code(s) have no code-map parts number, which is fine — a claim stands alone: ${orphan.join(', ')})`,
+    )
   }
 }
 

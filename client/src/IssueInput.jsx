@@ -60,7 +60,9 @@ export default function IssueInput({
     return () => document.removeEventListener('mousedown', onDoc)
   }, [open])
 
-  const q = String(value ?? '').trim().toLowerCase()
+  const q = String(value ?? '')
+    .trim()
+    .toLowerCase()
   // Filtered on what is typed, not on a separate query: this input's text IS
   // the value, so there is no selected label for a stale filter to hide behind.
   // Uncapped on purpose. A cap counts from the top of a list that is ordered
@@ -77,7 +79,11 @@ export default function IssueInput({
     const all = suggestions.filter((s) => s.name)
     if (!q) return all
     return all.filter(
-      (s) => s.name.toLowerCase().includes(q) || String(s.code ?? '').toLowerCase().startsWith(q),
+      (s) =>
+        s.name.toLowerCase().includes(q) ||
+        String(s.code ?? '')
+          .toLowerCase()
+          .startsWith(q),
     )
   }, [suggestions, q])
 
@@ -132,7 +138,9 @@ export default function IssueInput({
     e.preventDefault()
     e.stopPropagation()
     const parts = String(coding.parts ?? '').trim()
-    const variant = String(coding.variant ?? '').trim().toUpperCase()
+    const variant = String(coding.variant ?? '')
+      .trim()
+      .toUpperCase()
     if (!PARTS_RE.test(parts)) return setCoding((c) => ({ ...c, error: 'Parts is two digits, e.g. 72' }))
     if (!VARIANT_RE.test(variant)) return setCoding((c) => ({ ...c, error: 'Variant is one letter, e.g. A' }))
     // The parent owns the list, so it owns the clash check too — it is the only

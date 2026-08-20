@@ -103,7 +103,10 @@ export function decodeBatch(rawText, map) {
   // in the served map because the Code Reference page still lists them.
   const { equipmentCodes = {}, faults = {}, actions = {}, companies = {}, technicians = {} } = map ?? {}
 
-  const tokens = String(rawText ?? '').trim().split(/\s+/).filter(Boolean)
+  const tokens = String(rawText ?? '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
   if (tokens.length < 2) {
     return { ok: false, reason: 'Message is incomplete — needs at least 1 fault code + technician ID.' }
   }
@@ -268,7 +271,9 @@ export function decodeBatch(rawText, map) {
   // job — flag it instead of silently filing entries under the wrong brand.
   const brands = [...new Set(faultsRaw.map((f) => f.equipmentType))]
   if (brands.length > 1) {
-    const lines = faultsRaw.map((f) => `• "${f.componentCode}" (${f.componentName}) → ${f.equipmentType} ${f.equipmentModel}`)
+    const lines = faultsRaw.map(
+      (f) => `• "${f.componentCode}" (${f.componentName}) → ${f.equipmentType} ${f.equipmentModel}`,
+    )
     return {
       ok: false,
       reason:
@@ -307,7 +312,9 @@ export function decodeBatch(rawText, map) {
  * @returns {{agencyCode: string, agencyName: string} | null}
  */
 export function decodeAgencyOnly(rawText, map) {
-  const text = String(rawText ?? '').trim().toUpperCase()
+  const text = String(rawText ?? '')
+    .trim()
+    .toUpperCase()
   if (!/^[A-Z]+$/.test(text)) return null
 
   const agencyName = (map?.agencies ?? {})[text]

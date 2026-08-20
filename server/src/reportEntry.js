@@ -32,7 +32,12 @@ const DEVICE_LEVEL = new Set(['PROGRAM', 'RE-PROGRAM', 'INSTALL', 'RE-INSTALL', 
 // name. Matched the same way the client does (client/src/options.js) — name
 // with case and punctuation stripped, prefix rather than exact, so "No
 // Activity", "No-Activity" and "No Activity Today" are all the one thing.
-export const isNoActivityIssue = (issue) => /^NOACTIVITY/.test(String(issue ?? '').toUpperCase().replace(/[^A-Z0-9]/g, ''))
+export const isNoActivityIssue = (issue) =>
+  /^NOACTIVITY/.test(
+    String(issue ?? '')
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, ''),
+  )
 
 export const withFaults = { faults: { orderBy: { position: 'asc' } } }
 
@@ -89,9 +94,15 @@ export async function parseEntry(body) {
       // Floored at 1 — a row worth writing down is a row of at least one
       // thing — except "No Activity", where 0 is the whole point (see
       // client/src/App.jsx's withSavedQuantity, which this mirrors).
-      quantity: isNoActivityIssue(f?.issue) ? Math.max(0, Number(f?.quantity) || 0) : Math.max(1, Number(f?.quantity) || 1),
-      action: String(f?.action ?? '').trim().toUpperCase(),
-      company: String(f?.company ?? '').trim().toUpperCase(),
+      quantity: isNoActivityIssue(f?.issue)
+        ? Math.max(0, Number(f?.quantity) || 0)
+        : Math.max(1, Number(f?.quantity) || 1),
+      action: String(f?.action ?? '')
+        .trim()
+        .toUpperCase(),
+      company: String(f?.company ?? '')
+        .trim()
+        .toUpperCase(),
       status: String(f?.status ?? '').trim(),
     }))
     // Keep a fault if it names an issue, or is a device-level action (issue optional).
@@ -106,7 +117,12 @@ export async function parseEntry(body) {
   if (missingAction) return { error: 'each fault needs an action' }
 
   const comment = String(body?.comment ?? '').trim()
-  const mode = String(body?.mode ?? 'report').trim().toLowerCase() === 'transmittal' ? 'transmittal' : 'report'
+  const mode =
+    String(body?.mode ?? 'report')
+      .trim()
+      .toLowerCase() === 'transmittal'
+      ? 'transmittal'
+      : 'report'
 
   return {
     data: {

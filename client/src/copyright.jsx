@@ -30,7 +30,16 @@ export function Copyright() {
 // credentials/licenses. Shown in the live app only, never on exports.
 export function Credit() {
   return (
-    <span style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', width: '100%', textAlign: 'left' }}>
+    <span
+      style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        gap: 12,
+        flexWrap: 'wrap',
+        width: '100%',
+        textAlign: 'left',
+      }}
+    >
       <span>
         {DEVELOPED_BY}
         <br />

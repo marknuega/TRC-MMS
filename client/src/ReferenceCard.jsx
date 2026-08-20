@@ -52,16 +52,13 @@ const chunk = (rows, n) => {
 const asPairs = (obj) => Object.entries(obj || {}).map(([k, v]) => [String(k), String(v)])
 const sortedPairs = (obj) => asPairs(obj).sort(numericSort)
 
-
-const esc = (s) =>
-  String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
 
 // Build a clean, standalone printable document (independent of the app layout)
 // and print it through a hidden iframe — reliable for Chrome "Save as PDF".
 function printReference(data) {
   const { devices, claims, actions, companies, agencies, technicians } = data
-  const codeRows = (pairs) =>
-    pairs.map(([c, n]) => `<tr><td class="c">${esc(c)}</td><td>${esc(n)}</td></tr>`).join('')
+  const codeRows = (pairs) => pairs.map(([c, n]) => `<tr><td class="c">${esc(c)}</td><td>${esc(n)}</td></tr>`).join('')
   // Device rows bold the source char in the model name and add an explanation column.
   const deviceRows = (pairs) =>
     pairs
@@ -311,8 +308,7 @@ const CATS = [
     label: 'Variants',
     codeLabel: 'Letter',
     blankOk: true,
-    hint:
-      'The letter after the parts number. It belongs to the code itself, not to the part before it — 12A is an A Cover and 12B a B Cover. Nothing decodes through this list any more; a code means whatever the issue type claiming it says, so these entries are left blank.',
+    hint: 'The letter after the parts number. It belongs to the code itself, not to the part before it — 12A is an A Cover and 12B a B Cover. Nothing decodes through this list any more; a code means whatever the issue type claiming it says, so these entries are left blank.',
   },
   { key: 'actions', label: 'Actions', codeLabel: 'Letter', hint: 'What was done. C = Change.' },
   { key: 'companies', label: 'Companies', codeLabel: 'Code', hint: 'Who owns or funds the work. MT = MOTECO.' },
@@ -325,7 +321,10 @@ const CATS = [
   { key: 'technicians', label: 'Technician IDs', codeLabel: 'ID', hint: 'The last number in a report. 1 = Amir.' },
 ]
 
-const normCode = (v) => String(v ?? '').trim().toUpperCase()
+const normCode = (v) =>
+  String(v ?? '')
+    .trim()
+    .toUpperCase()
 
 function CodeMapEditor() {
   const [map, setMap] = useState(null)
@@ -369,7 +368,11 @@ function CodeMapEditor() {
   // has been assigned to them explicitly.
   const categoryChoices = useMemo(() => {
     if (!isComponents) return []
-    const used = new Set(Object.values(map?.componentCategories ?? {}).map((v) => String(v).trim()).filter(Boolean))
+    const used = new Set(
+      Object.values(map?.componentCategories ?? {})
+        .map((v) => String(v).trim())
+        .filter(Boolean),
+    )
     for (const b of COMPONENT_BUCKETS) used.add(b.title)
     return [...used].sort()
   }, [map, isComponents])
@@ -446,7 +449,10 @@ function CodeMapEditor() {
   }
 
   function remove(code) {
-    commit(entries.filter(([k]) => k !== code), categoryPatch(code, ''))
+    commit(
+      entries.filter(([k]) => k !== code),
+      categoryPatch(code, ''),
+    )
     setEditKey('')
   }
 
@@ -481,9 +487,9 @@ function CodeMapEditor() {
   return (
     <div className="manage-body">
       <p className="manage-hint">
-        The shared vocabulary a CDS code resolves through — <code>H43A</code> is a device letter, a parts number
-        and a variant looked up here. It is published at <code>/codemap</code> for the WhatsApp bot, so an edit
-        changes how every technician's codes decode. Changes are staged until you press Save.
+        The shared vocabulary a CDS code resolves through — <code>H43A</code> is a device letter, a parts number and a
+        variant looked up here. It is published at <code>/codemap</code> for the WhatsApp bot, so an edit changes how
+        every technician's codes decode. Changes are staged until you press Save.
       </p>
 
       {!map && !error && <p className="manage-hint">Loading…</p>}
@@ -503,7 +509,10 @@ function CodeMapEditor() {
                   setNewCategory('')
                   setError('')
                 }}
-                options={CATS.map((c) => ({ value: c.key, label: `${c.label} (${Object.keys(map[c.key] ?? {}).length})` }))}
+                options={CATS.map((c) => ({
+                  value: c.key,
+                  label: `${c.label} (${Object.keys(map[c.key] ?? {}).length})`,
+                }))}
               />
             </label>
             <label className="field-code">
@@ -552,9 +561,9 @@ function CodeMapEditor() {
           <p className="manage-hint">{meta.hint}</p>
           {isComponents && (
             <p className="manage-hint">
-              Category is optional — leave it blank and the part groups by its number (10–19 Housing &amp;
-              Antenna, 20–39 Electronics &amp; UI, 40–49 Audio &amp; Controls, 90–99 Power &amp; Charging, anything
-              else under Other). Set it to put a part under a different heading on the Code Reference page.
+              Category is optional — leave it blank and the part groups by its number (10–19 Housing &amp; Antenna,
+              20–39 Electronics &amp; UI, 40–49 Audio &amp; Controls, 90–99 Power &amp; Charging, anything else under
+              Other). Set it to put a part under a different heading on the Code Reference page.
             </p>
           )}
 
@@ -607,7 +616,11 @@ function CodeMapEditor() {
                           }
                           if (e.key === 'Escape') setEditKey('')
                         }}
-                        placeholder={meta.blankOk ? 'Leave empty — a variant carries no meaning of its own' : 'What this code means'}
+                        placeholder={
+                          meta.blankOk
+                            ? 'Leave empty — a variant carries no meaning of its own'
+                            : 'What this code means'
+                        }
                       />
                       {isComponents && (
                         <input
@@ -628,10 +641,16 @@ function CodeMapEditor() {
                       )}
                     </div>
                     <div className="manage-item-actions">
-                      <button type="button" onClick={saveEdit}>Apply</button>
-                      <button type="button" className="ghost" onClick={() => setEditKey('')}>Cancel</button>
+                      <button type="button" onClick={saveEdit}>
+                        Apply
+                      </button>
+                      <button type="button" className="ghost" onClick={() => setEditKey('')}>
+                        Cancel
+                      </button>
                       {/* Delete lives inside Edit so it can't be hit by accident. */}
-                      <button type="button" className="danger" onClick={() => remove(code)}>Delete</button>
+                      <button type="button" className="danger" onClick={() => remove(code)}>
+                        Delete
+                      </button>
                     </div>
                   </>
                 ) : (
@@ -703,10 +722,9 @@ export default function ReferenceCard({ isAdmin = false, issueTypes = [] }) {
       </div>
 
       <p className="muted ref-intro">
-        CDS fault-reporting short codes. A fault is{' '}
-        <strong>[Type][Parts][Variant]</strong> — the 4-character CDS code — followed by{' '}
-        <strong>[Action][Qty][Company]</strong>. Type, parts and variant are looked up separately, so
-        one type letter is reused across every part.
+        CDS fault-reporting short codes. A fault is <strong>[Type][Parts][Variant]</strong> — the 4-character CDS code —
+        followed by <strong>[Action][Qty][Company]</strong>. Type, parts and variant are looked up separately, so one
+        type letter is reused across every part.
       </p>
 
       <p className={`ref-status ${status}`}>
@@ -726,54 +744,43 @@ export default function ReferenceCard({ isAdmin = false, issueTypes = [] }) {
         <div className="ref-syntax">
           H · 43 · A &nbsp;·&nbsp; C · 1 · MT &nbsp;→&nbsp; <code>H43AC1MT</code>
         </div>
-        <div>
-          H (Airbus TH1n) + 43A (Side Grip) + C (Change) + 1 (qty) + MT (MOTECO)
-        </div>
+        <div>H (Airbus TH1n) + 43A (Side Grip) + C (Change) + 1 (qty) + MT (MOTECO)</div>
         <div className="muted">
-          Full report: <code>H43A C 1 MT 2221 6575 1</code> — code · action · qty · company · last 4
-          of tel · last 4 of ISSI · technician ID. Then send the agency code alone (e.g.{' '}
-          <code>PSD</code>) to verify.
+          Full report: <code>H43A C 1 MT 2221 6575 1</code> — code · action · qty · company · last 4 of tel · last 4 of
+          ISSI · technician ID. Then send the agency code alone (e.g. <code>PSD</code>) to verify.
         </div>
         <div className="muted">
           Separators are free — <code>H43AC1MT222165751</code>, <code>H43A-C-1-MT-2221-6575-1</code>,{' '}
-          <code>H43A_C_1_MT_2221_6575_1</code> and <code>H43A:C:1:MT:2221:6575:1</code> all read the
-          same.
+          <code>H43A_C_1_MT_2221_6575_1</code> and <code>H43A:C:1:MT:2221:6575:1</code> all read the same.
         </div>
         <div className="muted">
-          <strong>Short cuts.</strong> Leave the <strong>quantity</strong> out for 1 —{' '}
-          <code>H43ACMT</code>. Leave the <strong>type letter</strong> off every code after the
-          first; one report is one radio, so it carries down —{' '}
-          <code>H11AC1MT 11AC1MI 2221 6666 1</code>. Write the <strong>company</strong> with one
-          letter — <code>T</code> = MOTECO, <code>I</code> = MOI — so <code>H11AC1T</code>. All three
-          together: <code>H11ACT 11ACI 2221 6666 1</code>.
+          <strong>Short cuts.</strong> Leave the <strong>quantity</strong> out for 1 — <code>H43ACMT</code>. Leave the{' '}
+          <strong>type letter</strong> off every code after the first; one report is one radio, so it carries down —{' '}
+          <code>H11AC1MT 11AC1MI 2221 6666 1</code>. Write the <strong>company</strong> with one letter — <code>T</code>{' '}
+          = MOTECO, <code>I</code> = MOI — so <code>H11AC1T</code>. All three together:{' '}
+          <code>H11ACT 11ACI 2221 6666 1</code>.
         </div>
         <div className="muted">
-          <strong>Technician ID.</strong> A number or a 2/3-letter initials claim (Manage Inputs →
-          Technicians) — both work anywhere a technician ID is expected. Tel and ISSI are{' '}
-          <strong>optional</strong>: give the last 4 of both, together, right before the technician,
-          or leave both off if neither is known — <code>H43ACT MA</code> needs no tel/ISSI at all.
-          The technician only needs stating <strong>once</strong>: give it right after any fault's
-          company instead of waiting for the end — <code>H43ACT1 43BNI 48ACI</code> reads as
-          technician <code>1</code> for both faults, exactly the same as{' '}
-          <code>H43ACT 43BNI 48ACI 1</code>.
+          <strong>Technician ID.</strong> A number or a 2/3-letter initials claim (Manage Inputs → Technicians) — both
+          work anywhere a technician ID is expected. Tel and ISSI are <strong>optional</strong>: give the last 4 of
+          both, together, right before the technician, or leave both off if neither is known — <code>H43ACT MA</code>{' '}
+          needs no tel/ISSI at all. The technician only needs stating <strong>once</strong>: give it right after any
+          fault's company instead of waiting for the end — <code>H43ACT1 43BNI 48ACI</code> reads as technician{' '}
+          <code>1</code> for both faults, exactly the same as <code>H43ACT 43BNI 48ACI 1</code>.
         </div>
       </div>
 
       <details className="ref-sec">
-        <summary className="ref-section">
-          Parts Number Catalog ({data.claims.length})
-        </summary>
+        <summary className="ref-section">Parts Number Catalog ({data.claims.length})</summary>
         <div className="ref-sec-body">
           <p className="muted catalog-hint">
-            Parts numbers claimed by an <strong>Issue type</strong> in{' '}
-            <strong>Manage Inputs → Faulty / Parts</strong> — the parts+variant code (e.g.{' '}
-            <code>11A</code>) alongside what it names. This list updates the instant it changes in
-            Manage Inputs.
+            Parts numbers claimed by an <strong>Issue type</strong> in <strong>Manage Inputs → Faulty / Parts</strong> —
+            the parts+variant code (e.g. <code>11A</code>) alongside what it names. This list updates the instant it
+            changes in Manage Inputs.
           </p>
           {data.claims.length === 0 ? (
             <p className="muted">
-              No parts numbers yet — give an issue type a Parts Code + Variant in Manage Inputs →
-              Faulty / Parts.
+              No parts numbers yet — give an issue type a Parts Code + Variant in Manage Inputs → Faulty / Parts.
             </p>
           ) : (
             <div className="catalog-grid">

@@ -1,11 +1,22 @@
 import { useEffect, useMemo, useState } from 'react'
-import { getInventory, createInventory, updateInventory, deleteInventory, importInventory, getInventoryTxns } from './api'
+import {
+  getInventory,
+  createInventory,
+  updateInventory,
+  deleteInventory,
+  importInventory,
+  getInventoryTxns,
+} from './api'
 import { COPYRIGHT_HTML } from './copyright'
 import SearchSelect from './SearchSelect'
 import { advanceOnEnter } from './focusNav'
 
 const TYPE_LABEL = { usage: 'Usage', adjustment: 'Adjustment', import: 'Import' }
-const esc = (v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+const esc = (v) =>
+  String(v ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
 const signed = (n) => (n > 0 ? `+${n}` : String(n))
 const stamp = (d) => new Date(d).toLocaleString('en-GB')
 
@@ -154,7 +165,16 @@ export default function Inventory({ embedded = false, branch = '', region = '' }
   }
 
   function histRows(h) {
-    return (h.txns ?? []).map((t, i) => [i + 1, stamp(t.createdAt), TYPE_LABEL[t.type] || t.type, signed(t.change), t.availAfter, t.reference, t.branch, t.material])
+    return (h.txns ?? []).map((t, i) => [
+      i + 1,
+      stamp(t.createdAt),
+      TYPE_LABEL[t.type] || t.type,
+      signed(t.change),
+      t.availAfter,
+      t.reference,
+      t.branch,
+      t.material,
+    ])
   }
 
   function exportHistExcel(h) {
@@ -163,9 +183,11 @@ export default function Inventory({ embedded = false, branch = '', region = '' }
     const head = ['#', 'Date', 'Type', 'Change', 'Avail', 'Reference', 'Branch', 'Material']
     let html = `<meta charset="utf-8"><table style="border-collapse:collapse;font-family:Arial;font-size:11px;">`
     html += `<tr><td colspan="8" style="${b}background:#2563eb;color:#fff;font-weight:bold;font-size:14px;">Transaction history — ${esc(h.item.sku)} · ${esc(h.item.itemCode)}</td></tr>`
-    if (h.item.remarks) html += `<tr><td colspan="8" style="${b}background:#eef2ff;"><b>Remarks:</b> ${esc(h.item.remarks)}</td></tr>`
+    if (h.item.remarks)
+      html += `<tr><td colspan="8" style="${b}background:#eef2ff;"><b>Remarks:</b> ${esc(h.item.remarks)}</td></tr>`
     html += `<tr>${head.map((x) => `<th style="${hb}">${esc(x)}</th>`).join('')}</tr>`
-    for (const r of histRows(h)) html += `<tr>${r.map((c, i) => `<td style="${b}${i === 0 || (i >= 3 && i <= 4) ? 'text-align:center;' : ''}">${esc(c)}</td>`).join('')}</tr>`
+    for (const r of histRows(h))
+      html += `<tr>${r.map((c, i) => `<td style="${b}${i === 0 || (i >= 3 && i <= 4) ? 'text-align:center;' : ''}">${esc(c)}</td>`).join('')}</tr>`
     html += '</table>'
     const url = URL.createObjectURL(new Blob(['﻿', html], { type: 'application/vnd.ms-excel;charset=utf-8' }))
     const a = document.createElement('a')
@@ -180,7 +202,10 @@ export default function Inventory({ embedded = false, branch = '', region = '' }
     if (!w) return
     const head = ['#', 'Date', 'Type', 'Change', 'Avail', 'Reference', 'Branch', 'Material']
     const body = histRows(h)
-      .map((r) => `<tr>${r.map((c, i) => `<td class="${i === 0 || (i >= 3 && i <= 4) ? 'c' : ''}">${esc(c)}</td>`).join('')}</tr>`)
+      .map(
+        (r) =>
+          `<tr>${r.map((c, i) => `<td class="${i === 0 || (i >= 3 && i <= 4) ? 'c' : ''}">${esc(c)}</td>`).join('')}</tr>`,
+      )
       .join('')
     w.document.write(
       `<!doctype html><html><head><meta charset="utf-8"><title>Inventory History ${esc(h.item.sku)}</title>` +
@@ -238,7 +263,16 @@ export default function Inventory({ embedded = false, branch = '', region = '' }
     setError(null)
   }
   function openEdit(it) {
-    setForm({ sku: it.sku, store: it.store, shelf: it.shelf, itemCode: it.itemCode, begin: it.begin, out: it.out, lowStock: it.lowStock, remarks: it.remarks })
+    setForm({
+      sku: it.sku,
+      store: it.store,
+      shelf: it.shelf,
+      itemCode: it.itemCode,
+      begin: it.begin,
+      out: it.out,
+      lowStock: it.lowStock,
+      remarks: it.remarks,
+    })
     setEdit(it.id)
     setError(null)
   }
@@ -274,7 +308,9 @@ export default function Inventory({ embedded = false, branch = '', region = '' }
     }
     try {
       const r = await importInventory(rows, branch)
-      setNotice(`Imported ${rows.length} row${rows.length === 1 ? '' : 's'} from ${source}: ${r.created} new, ${r.updated} updated${r.skipped ? `, ${r.skipped} skipped` : ''}.`)
+      setNotice(
+        `Imported ${rows.length} row${rows.length === 1 ? '' : 's'} from ${source}: ${r.created} new, ${r.updated} updated${r.skipped ? `, ${r.skipped} skipped` : ''}.`,
+      )
       setPasteText('')
       setPasteOpen(false)
       setError(null)
@@ -304,12 +340,24 @@ export default function Inventory({ embedded = false, branch = '', region = '' }
     <section className="inventory">
       {embedded ? (
         <h2 className="page-title">
-          📦 Inventory {loaded && <span className="hint">({items.length}{lowCount ? ` · ${lowCount} low` : ''})</span>}
+          📦 Inventory{' '}
+          {loaded && (
+            <span className="hint">
+              ({items.length}
+              {lowCount ? ` · ${lowCount} low` : ''})
+            </span>
+          )}
         </h2>
       ) : (
         <button type="button" className="manage-toggle" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
           <span>
-            📦 Inventory {loaded && <span className="hint">({items.length}{lowCount ? ` · ${lowCount} low` : ''})</span>}
+            📦 Inventory{' '}
+            {loaded && (
+              <span className="hint">
+                ({items.length}
+                {lowCount ? ` · ${lowCount} low` : ''})
+              </span>
+            )}
           </span>
           <span className="chev">{open ? '▲' : '▼'}</span>
         </button>
@@ -350,7 +398,9 @@ export default function Inventory({ embedded = false, branch = '', region = '' }
             <button
               type="button"
               className="btn-txt"
-              onClick={() => downloadCsv(`inventory-${branch || 'all'}-${new Date().toISOString().slice(0, 10)}.csv`, filtered)}
+              onClick={() =>
+                downloadCsv(`inventory-${branch || 'all'}-${new Date().toISOString().slice(0, 10)}.csv`, filtered)
+              }
               disabled={!filtered.length}
             >
               ⭳ Export CSV
@@ -368,8 +418,9 @@ export default function Inventory({ embedded = false, branch = '', region = '' }
           {pasteOpen && (
             <div className="paste-box">
               <p className="saved-hint">
-                Paste rows (Excel = tab-separated): <strong>SKU, Store, Shelf, Item Code, Begin, Out, Avail, Remarks</strong>.
-                Existing SKUs are updated, new ones added.
+                Paste rows (Excel = tab-separated):{' '}
+                <strong>SKU, Store, Shelf, Item Code, Begin, Out, Avail, Remarks</strong>. Existing SKUs are updated,
+                new ones added.
               </p>
               <textarea
                 value={pasteText}
@@ -526,17 +577,30 @@ export default function Inventory({ embedded = false, branch = '', region = '' }
               >
                 ✎ Edit item
               </button>
-              <button type="button" className="btn-txt" onClick={() => exportHistExcel(hist)} disabled={!hist.txns?.length}>
+              <button
+                type="button"
+                className="btn-txt"
+                onClick={() => exportHistExcel(hist)}
+                disabled={!hist.txns?.length}
+              >
                 ⭳ Excel
               </button>
-              <button type="button" className="btn-pdf" onClick={() => exportHistPdf(hist)} disabled={!hist.txns?.length}>
+              <button
+                type="button"
+                className="btn-pdf"
+                onClick={() => exportHistPdf(hist)}
+                disabled={!hist.txns?.length}
+              >
                 ⭳ PDF
               </button>
             </div>
             {hist.txns === null ? (
               <p className="empty">Loading…</p>
             ) : hist.txns.length === 0 ? (
-              <p className="empty">No transactions yet — stock moves when a report/transmittal using this item is saved, or when you edit it.</p>
+              <p className="empty">
+                No transactions yet — stock moves when a report/transmittal using this item is saved, or when you edit
+                it.
+              </p>
             ) : (
               <div className="inv-scroll">
                 <table className="inv-table">

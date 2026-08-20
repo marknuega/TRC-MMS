@@ -7,7 +7,7 @@
  */
 
 export const COPYRIGHT_TEXT =
-  "Software Developed by Muhammad Amir · MT# MT1063 · © 2026 Muhammad Amir. All rights reserved.";
+  'Software Developed by Muhammad Amir · MT# MT1063 · © 2026 Muhammad Amir. All rights reserved.'
 
 export function Credit() {
   return (
@@ -18,14 +18,12 @@ export function Credit() {
       </div>
       <div className="deck-footer-credentials">
         <div>Certified Electronics and Electrical Technician</div>
-        <div>
-          Electrical License#: CLN-NQ-***6092 · Electronics License#: CLN-NQ-***6595
-        </div>
+        <div>Electrical License#: CLN-NQ-***6092 · Electronics License#: CLN-NQ-***6595</div>
       </div>
     </footer>
-  );
+  )
 }
 
 export function Copyright() {
-  return <div className="deck-export-copyright">{COPYRIGHT_TEXT}</div>;
+  return <div className="deck-export-copyright">{COPYRIGHT_TEXT}</div>
 }

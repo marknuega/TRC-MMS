@@ -15,7 +15,12 @@ const router = Router()
 // Human id per document type. Three series, each numbering itself per branch:
 // REP daily reports, TRANS transmittals, REF reference-only reports — the last
 // kept apart so the record-keeping numbers never interleave with real activity.
-const normMode = (m) => (String(m ?? 'report').trim().toLowerCase() === 'transmittal' ? 'transmittal' : 'report')
+const normMode = (m) =>
+  String(m ?? 'report')
+    .trim()
+    .toLowerCase() === 'transmittal'
+    ? 'transmittal'
+    : 'report'
 
 // The series a save mints. Reference-only is decided BEFORE the number, so the
 // badge and the number can never disagree at the moment of saving. Toggling the
@@ -32,7 +37,12 @@ const withFaults = { faults: { orderBy: { position: 'asc' } } }
 // client/src/report.js, which keeps it out of the service totals for the same
 // reason.
 const RTO_ACTIONS = new Set(['RTO'])
-export const isRtoAction = (action) => RTO_ACTIONS.has(String(action ?? '').trim().toUpperCase())
+export const isRtoAction = (action) =>
+  RTO_ACTIONS.has(
+    String(action ?? '')
+      .trim()
+      .toUpperCase(),
+  )
 
 // A snapshot containing an RTO is a reference/record-only document. Detected
 // here at save time; the saver can still override it either way, and the flag
@@ -53,7 +63,9 @@ async function applyInventoryUsage(tx, snapshot, reference, branch) {
   for (const e of snapshot) {
     for (const f of e.faults ?? []) {
       if (isRtoAction(f.action)) continue // returned, not consumed
-      const key = String(f.issue ?? '').trim().toUpperCase()
+      const key = String(f.issue ?? '')
+        .trim()
+        .toUpperCase()
       if (!key) continue
       used.set(key, (used.get(key) || 0) + Math.max(0, Number(f.quantity) || 0))
     }
@@ -65,7 +77,11 @@ async function applyInventoryUsage(tx, snapshot, reference, branch) {
     select: { id: true, sku: true, itemCode: true, begin: true, out: true },
   })
   for (const it of items) {
-    const qty = used.get(String(it.itemCode ?? '').trim().toUpperCase())
+    const qty = used.get(
+      String(it.itemCode ?? '')
+        .trim()
+        .toUpperCase(),
+    )
     if (!qty) continue
     const newOut = it.out + qty
     await tx.inventoryItem.update({ where: { id: it.id }, data: { out: newOut } })
@@ -172,8 +188,18 @@ router.get('/', async (req, res, next) => {
         where: branchWhere(req, req.query.branch, req.query.region),
         orderBy: { seq: 'desc' },
         select: {
-          id: true, seq: true, docNumber: true, reportId: true, branch: true, mode: true, series: true,
-          transmittedBy: true, receivedBy: true, savedAt: true, dateLabel: true, entryCount: true,
+          id: true,
+          seq: true,
+          docNumber: true,
+          reportId: true,
+          branch: true,
+          mode: true,
+          series: true,
+          transmittedBy: true,
+          receivedBy: true,
+          savedAt: true,
+          dateLabel: true,
+          entryCount: true,
           isReferenceOnly: true,
           entries: true, // snapshot, so the client can search inside report data
         },
@@ -217,7 +243,8 @@ router.get('/daily-text', async (req, res, next) => {
 router.get('/:id', async (req, res, next) => {
   try {
     const report = await prisma.savedReport.findUnique({ where: { id: Number(req.params.id) } })
-    if (!report || !canAccessBranch(req, report.branch)) return res.status(404).json({ error: 'Saved report not found' })
+    if (!report || !canAccessBranch(req, report.branch))
+      return res.status(404).json({ error: 'Saved report not found' })
     res.json(report)
   } catch (err) {
     next(err)
@@ -227,7 +254,12 @@ router.get('/:id', async (req, res, next) => {
 // POST /api/saved-reports - snapshot the current working entries under the next REP-####.
 router.post('/', async (req, res, next) => {
   try {
-    const mode = String(req.body?.mode ?? 'report').trim().toLowerCase() === 'transmittal' ? 'transmittal' : 'report'
+    const mode =
+      String(req.body?.mode ?? 'report')
+        .trim()
+        .toLowerCase() === 'transmittal'
+        ? 'transmittal'
+        : 'report'
     // Only snapshot the working entries for the branch being saved, so a
     // non-admin never sweeps up another branch's entries.
     const branch = writeBranch(req, req.body?.branch)
@@ -307,8 +339,18 @@ router.post('/', async (req, res, next) => {
     const saved = await prisma.$transaction(async (tx) => {
       const created = await tx.savedReport.create({
         data: {
-          seq, docNumber, reportId: docId(series, docNumber), branch, mode, series, transmittedBy, receivedBy,
-          dateLabel, entryCount: snapshot.length, isReferenceOnly, entries: snapshot,
+          seq,
+          docNumber,
+          reportId: docId(series, docNumber),
+          branch,
+          mode,
+          series,
+          transmittedBy,
+          receivedBy,
+          dateLabel,
+          entryCount: snapshot.length,
+          isReferenceOnly,
+          entries: snapshot,
         },
       })
       await applyInventoryUsage(tx, snapshot, created.reportId, branch) // auto stock deduction + ledger
@@ -334,7 +376,8 @@ router.post('/', async (req, res, next) => {
 router.post('/:id/load', async (req, res, next) => {
   try {
     const report = await prisma.savedReport.findUnique({ where: { id: Number(req.params.id) } })
-    if (!report || !canAccessBranch(req, report.branch)) return res.status(404).json({ error: 'Saved report not found' })
+    if (!report || !canAccessBranch(req, report.branch))
+      return res.status(404).json({ error: 'Saved report not found' })
 
     const snapshot = Array.isArray(report.entries) ? report.entries : []
     const mode = String(report.mode ?? 'report').toLowerCase() === 'transmittal' ? 'transmittal' : 'report'

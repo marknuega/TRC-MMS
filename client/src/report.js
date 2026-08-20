@@ -36,8 +36,15 @@ const COMPANY_DISPLAY = {
 // as ambiguous. INSTALL_ACTIONS, just below, is where the two spellings of
 // the ACTION are made to mean the same thing.
 const ACTION_CODE = {
-  CHANGE: 'C', REPAIR: 'R', NEW: 'N', PCB: 'PCB',
-  PROGRAM: 'P', 'RE-PROGRAM': 'RP', INSTALL: 'I', 'RE-INSTALL': 'RI', DISMANTLE: 'D',
+  CHANGE: 'C',
+  REPAIR: 'R',
+  NEW: 'N',
+  PCB: 'PCB',
+  PROGRAM: 'P',
+  'RE-PROGRAM': 'RP',
+  INSTALL: 'I',
+  'RE-INSTALL': 'RI',
+  DISMANTLE: 'D',
   RTO: 'RTO',
 }
 
@@ -62,22 +69,35 @@ const MODEL_DISPLAY = {
 // Fixed model order within each type (AIRBUS, then SEPURA, then HYTERA).
 const MODEL_ORDER = [
   // AIRBUS
-  'TH1N', 'THR9', 'TMR 880I',
+  'TH1N',
+  'THR9',
+  'TMR 880I',
   // SEPURA
-  'STP9000', 'SRG3900 CARKIT', 'SRG3900 DESKTOP', 'SRG3900 BIKE',
+  'STP9000',
+  'SRG3900 CARKIT',
+  'SRG3900 DESKTOP',
+  'SRG3900 BIKE',
   // HYTERA
-  'PT580H', 'PT590', 'MT680',
+  'PT580H',
+  'PT590',
+  'MT680',
 ]
 const MODEL_RANK = new Map(MODEL_ORDER.map((m, i) => [m, i]))
 
 const DIVIDER = '------------------------------' // 30 dashes
 const INDENT = '       ' // 7 spaces — continuation / total lines
 
-const up = (v) => String(v ?? '').trim().toUpperCase()
+const up = (v) =>
+  String(v ?? '')
+    .trim()
+    .toUpperCase()
 // A technician field may hold several comma-separated names -> ['IMRAN','AMIR'].
 // Empty -> ['-'] so unassigned entries still bucket together.
 const techNames = (v) => {
-  const list = up(v).split(',').map((s) => s.trim()).filter(Boolean)
+  const list = up(v)
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
   return list.length ? list : ['-']
 }
 
@@ -302,7 +322,12 @@ export function blockNumber(n) {
  * and blockNumber would render it A001 — silently the FIRST document.
  */
 export function parseBlockNumber(token) {
-  const seg = up(String(token ?? '').trim().split('-').pop()).replace(/[^A-Z0-9]/g, '')
+  const seg = up(
+    String(token ?? '')
+      .trim()
+      .split('-')
+      .pop(),
+  ).replace(/[^A-Z0-9]/g, '')
   if (!seg) return null
   const lettered = /^([A-Z])(\d{1,3})$/.exec(seg)
   if (lettered) {
@@ -344,8 +369,7 @@ const tailNumber = (id) => Number(String(id ?? '').match(/(\d+)\s*$/)?.[1] ?? 0)
  * docNumber yet, and now that the short form is the id on show, every such row
  * would otherwise read A001 and they would all read it together.
  */
-export const shortIdOf = (r) =>
-  shortDocId(r?.branch, seriesOf(r), Number(r?.docNumber) || tailNumber(r?.reportId))
+export const shortIdOf = (r) => shortDocId(r?.branch, seriesOf(r), Number(r?.docNumber) || tailNumber(r?.reportId))
 
 // ---------------------------------------------------------------------------
 // Finding a saved document by its id.
@@ -374,7 +398,10 @@ export const shortIdOf = (r) =>
 
 /** ['MAKKAHREP0018', 'REP0018', '0018'] — every trailing run of an id's segments. */
 function idSuffixKeys(id) {
-  const segments = String(id ?? '').split('-').map(alnumKey).filter(Boolean)
+  const segments = String(id ?? '')
+    .split('-')
+    .map(alnumKey)
+    .filter(Boolean)
   return segments.map((_, i) => segments.slice(i).join(''))
 }
 
@@ -435,7 +462,11 @@ export function displayNumber(value, mode = 'full') {
 }
 
 const modelDisplay = (m) => MODEL_DISPLAY[up(m)] ?? String(m ?? '').trim()
-const lastWord = (s) => String(s ?? '').trim().split(/\s+/).pop() || ''
+const lastWord = (s) =>
+  String(s ?? '')
+    .trim()
+    .split(/\s+/)
+    .pop() || ''
 const modelShort = (m) => lastWord(modelDisplay(m)) // "SRG CARKIT" -> "CARKIT", "TH1N" -> "TH1N"
 // Monthly description device tag: drop the leading "SRG " so Sepura car-kit /
 // desktop / bike read as "(SEPURA-CARKIT)", "(SEPURA-DESKTOP)", "(SEPURA-BIKE)".
@@ -797,8 +828,7 @@ export function periodEntries(savedReports, key, branch = '') {
 
 // Month-only shorthand, kept because monthKey reads clearer at the call sites
 // that genuinely mean "this month".
-export const monthEntries = (savedReports, monthKey, branch = '') =>
-  periodEntries(savedReports, monthKey, branch)
+export const monthEntries = (savedReports, monthKey, branch = '') => periodEntries(savedReports, monthKey, branch)
 
 // Parts consumed per brand -> device model. A "part" is a Change/New/PCB fault
 // with a named issue (Repair reuses the part, so it is excluded); same part + same company
@@ -913,7 +943,8 @@ export function technicianTotals(entries) {
       if (classify(f.action) === 'maintenance') parts += Math.max(0, Number(f.quantity) || 0)
     }
     for (const t of names) {
-      if (!by.has(t)) by.set(t, { technician: t, devices: 0, maintenance: 0, programming: 0, install: 0, dismantle: 0, parts: 0 })
+      if (!by.has(t))
+        by.set(t, { technician: t, devices: 0, maintenance: 0, programming: 0, install: 0, dismantle: 0, parts: 0 })
       const g = by.get(t)
       g.devices += 1
       g.maintenance += c.maintenance
@@ -1145,20 +1176,13 @@ export function buildTxt(report) {
     const { deviceSections, otherLines } = report.tx ?? { deviceSections: [], otherLines: [] }
     const parts = [...deviceSections]
     if (otherLines.length) parts.push(otherLines.join('\n'))
-    const body = parts.length
-      ? parts.reduce((acc, s, i) => (i ? [...acc, DIVIDER, s] : [s]), [])
-      : ['NO ENTRY']
+    const body = parts.length ? parts.reduce((acc, s, i) => (i ? [...acc, DIVIDER, s] : [s]), []) : ['NO ENTRY']
     const lines = [...header, ...body]
     if (notes.length) lines.push(DIVIDER, 'Notes', DIVIDER, ...notes)
     return lines.join('\n')
   }
 
-  const lines = [
-    ...header,
-    'Entry & Materials Summary',
-    DIVIDER,
-    ...join(report.materialsSummary),
-  ]
+  const lines = [...header, 'Entry & Materials Summary', DIVIDER, ...join(report.materialsSummary)]
   // A no-activity day has nothing for either section: every fault classifies
   // as maintenance at quantity 0, so no device block and no agency block ever
   // forms for it. Omitted rather than printed empty — same call the Agency
@@ -1176,8 +1200,20 @@ export function buildTxt(report) {
 // ---- Monthly activity matrix (dates × terminal columns) ----
 // savedReports: [{ dateLabel:'dd/mm/yyyy', branch, mode, seq, entries:[...] }]
 // opts: { year, month(0-11), branch, models:[...], modelType:{ MODELUPPER: TYPE } }
-const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December']
+const MONTH_NAMES = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+]
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
 // Fixed column layout that matches the MOTECO monthly activity sheet exactly.
@@ -1204,7 +1240,12 @@ const MONTHLY_GROUPS = [
     cols: [
       { key: 'stp9000', label: 'STP 9000', kind: 'model', models: ['STP9000'] },
       { key: 'srg_carkit', label: 'SRG 3900 Car Kit', kind: 'model', models: ['SRG3900 CARKIT', 'SRG CARKIT'] },
-      { key: 'srg_moto', label: 'SRG 3900 Motorcycle', kind: 'model', models: ['SRG3900 BIKE', 'SRG3900 MOTORCYCLE', 'SRG BIKE'] },
+      {
+        key: 'srg_moto',
+        label: 'SRG 3900 Motorcycle',
+        kind: 'model',
+        models: ['SRG3900 BIKE', 'SRG3900 MOTORCYCLE', 'SRG BIKE'],
+      },
       { key: 'srg_desktop', label: 'SRG 3900 Desktop', kind: 'model', models: ['SRG3900 DESKTOP', 'SRG DESKTOP'] },
       { key: 'sep_i', label: 'Installation', kind: 'install', types: ['SEPURA'] },
       { key: 'sep_d', label: 'Dismantling', kind: 'dismantle', types: ['SEPURA'] },
@@ -1306,7 +1347,11 @@ export function buildMonthlyMatrix(savedReports, opts = {}) {
         if (dKey && c.dismantle > 0) counts[dKey] += c.dismantle
         const faultItems = (e.faults ?? [])
           .filter((f) => up(f.issue))
-          .map((f) => ({ issue: up(f.issue), comp: companyDisplay(f.company), qty: Math.max(0, Number(f.quantity) || 0) }))
+          .map((f) => ({
+            issue: up(f.issue),
+            comp: companyDisplay(f.company),
+            qty: Math.max(0, Number(f.quantity) || 0),
+          }))
         if (faultItems.length) {
           const tag = mk && mk !== '-' ? `${t}-${descModel(e.model)}` : t
           if (!byDevice.has(tag)) {

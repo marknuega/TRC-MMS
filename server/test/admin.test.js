@@ -27,9 +27,15 @@ const IN_REGION_BRANCH = `TestMakkah-${randomBytes(4).toString('hex')}`
 const OUT_OF_REGION_BRANCH = `TestDammam-${randomBytes(4).toString('hex')}`
 
 const asAdmin = (path, opts = {}) =>
-  fetch(`${baseUrl}${path}`, { ...opts, headers: { 'Content-Type': 'application/json', Cookie: adminCookie, ...(opts.headers || {}) } })
+  fetch(`${baseUrl}${path}`, {
+    ...opts,
+    headers: { 'Content-Type': 'application/json', Cookie: adminCookie, ...(opts.headers || {}) },
+  })
 const asDirector = (path, opts = {}) =>
-  fetch(`${baseUrl}${path}`, { ...opts, headers: { 'Content-Type': 'application/json', Cookie: directorCookie, ...(opts.headers || {}) } })
+  fetch(`${baseUrl}${path}`, {
+    ...opts,
+    headers: { 'Content-Type': 'application/json', Cookie: directorCookie, ...(opts.headers || {}) },
+  })
 
 async function login(username, password) {
   const res = await fetch(`${baseUrl}/api/auth/login`, {
@@ -48,7 +54,12 @@ before(async () => {
 
   const adminPassword = randomBytes(12).toString('base64url')
   const admin = await prisma.user.create({
-    data: { username: `test-admin-${randomBytes(6).toString('hex')}`, passwordHash: await hashPassword(adminPassword), role: 'admin', branch: '' },
+    data: {
+      username: `test-admin-${randomBytes(6).toString('hex')}`,
+      passwordHash: await hashPassword(adminPassword),
+      role: 'admin',
+      branch: '',
+    },
   })
   adminId = admin.id
   adminCookie = await login(admin.username, adminPassword)
@@ -64,7 +75,13 @@ before(async () => {
 
   const directorPassword = randomBytes(12).toString('base64url')
   const director = await prisma.user.create({
-    data: { username: `test-director-${randomBytes(6).toString('hex')}`, passwordHash: await hashPassword(directorPassword), role: 'director', region: REGION, branch: '' },
+    data: {
+      username: `test-director-${randomBytes(6).toString('hex')}`,
+      passwordHash: await hashPassword(directorPassword),
+      role: 'director',
+      region: REGION,
+      branch: '',
+    },
   })
   directorId = director.id
   directorCookie = await login(director.username, directorPassword)
@@ -91,7 +108,12 @@ describe('director account management', () => {
   test('can create a user account within their region', async () => {
     const res = await asDirector('/api/admin/users', {
       method: 'POST',
-      body: JSON.stringify({ username: `dir-created-${randomBytes(4).toString('hex')}`, password: 'x', branch: IN_REGION_BRANCH, role: 'admin' }),
+      body: JSON.stringify({
+        username: `dir-created-${randomBytes(4).toString('hex')}`,
+        password: 'x',
+        branch: IN_REGION_BRANCH,
+        role: 'admin',
+      }),
     })
     assert.equal(res.status, 201)
     const created = await res.json()
@@ -104,12 +126,16 @@ describe('director account management', () => {
   test('cannot create an account outside their region', async () => {
     const res = await asDirector('/api/admin/users', {
       method: 'POST',
-      body: JSON.stringify({ username: `dir-oor-${randomBytes(4).toString('hex')}`, password: 'x', branch: OUT_OF_REGION_BRANCH }),
+      body: JSON.stringify({
+        username: `dir-oor-${randomBytes(4).toString('hex')}`,
+        password: 'x',
+        branch: OUT_OF_REGION_BRANCH,
+      }),
     })
     assert.equal(res.status, 400)
   })
 
-  test('lists only their own region\'s user accounts (plus themselves)', async () => {
+  test("lists only their own region's user accounts (plus themselves)", async () => {
     const res = await asDirector('/api/admin/users')
     assert.equal(res.status, 200)
     const users = await res.json()
@@ -120,7 +146,11 @@ describe('director account management', () => {
   test('can edit and delete a user account within their region', async () => {
     const created = await asDirector('/api/admin/users', {
       method: 'POST',
-      body: JSON.stringify({ username: `dir-edit-${randomBytes(4).toString('hex')}`, password: 'x', branch: IN_REGION_BRANCH }),
+      body: JSON.stringify({
+        username: `dir-edit-${randomBytes(4).toString('hex')}`,
+        password: 'x',
+        branch: IN_REGION_BRANCH,
+      }),
     }).then((r) => r.json())
 
     const edited = await asDirector(`/api/admin/users/${created.id}`, {
@@ -137,16 +167,26 @@ describe('director account management', () => {
   test('cannot escalate a target account to admin or director', async () => {
     const created = await asDirector('/api/admin/users', {
       method: 'POST',
-      body: JSON.stringify({ username: `dir-noesc-${randomBytes(4).toString('hex')}`, password: 'x', branch: IN_REGION_BRANCH }),
+      body: JSON.stringify({
+        username: `dir-noesc-${randomBytes(4).toString('hex')}`,
+        password: 'x',
+        branch: IN_REGION_BRANCH,
+      }),
     }).then((r) => r.json())
     cleanupUserIds.push(created.id)
 
-    const res = await asDirector(`/api/admin/users/${created.id}`, { method: 'PUT', body: JSON.stringify({ role: 'admin' }) })
+    const res = await asDirector(`/api/admin/users/${created.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ role: 'admin' }),
+    })
     assert.equal(res.status, 403)
   })
 
   test('cannot edit or delete the global admin account', async () => {
-    const editRes = await asDirector(`/api/admin/users/${adminId}`, { method: 'PUT', body: JSON.stringify({ active: false }) })
+    const editRes = await asDirector(`/api/admin/users/${adminId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ active: false }),
+    })
     assert.equal(editRes.status, 403)
 
     const delRes = await asDirector(`/api/admin/users/${adminId}`, { method: 'DELETE' })
@@ -158,7 +198,12 @@ describe('admin account management (unchanged)', () => {
   test('can create a director account with a region', async () => {
     const res = await asAdmin('/api/admin/users', {
       method: 'POST',
-      body: JSON.stringify({ username: `admin-mkdir-${randomBytes(4).toString('hex')}`, password: 'x', role: 'director', region: REGION }),
+      body: JSON.stringify({
+        username: `admin-mkdir-${randomBytes(4).toString('hex')}`,
+        password: 'x',
+        role: 'director',
+        region: REGION,
+      }),
     })
     assert.equal(res.status, 201)
     const created = await res.json()
@@ -168,7 +213,7 @@ describe('admin account management (unchanged)', () => {
     assert.equal(created.branch, '')
   })
 
-  test('sees every account, including the director\'s', async () => {
+  test("sees every account, including the director's", async () => {
     const res = await asAdmin('/api/admin/users')
     const users = await res.json()
     assert.ok(users.some((u) => u.id === directorId))
@@ -228,7 +273,10 @@ describe('data routes reject an out-of-region branch (never orphan a write)', ()
   test('POST /api/inventory/import with an out-of-region branch is rejected up front, not per-row skipped', async () => {
     const res = await asDirector('/api/inventory/import', {
       method: 'POST',
-      body: JSON.stringify({ branch: OUT_OF_REGION_BRANCH, items: [{ sku: `TEST-IMP-${randomBytes(4).toString('hex')}` }] }),
+      body: JSON.stringify({
+        branch: OUT_OF_REGION_BRANCH,
+        items: [{ sku: `TEST-IMP-${randomBytes(4).toString('hex')}` }],
+      }),
     })
     assert.equal(res.status, 400)
   })
@@ -236,7 +284,11 @@ describe('data routes reject an out-of-region branch (never orphan a write)', ()
   test('PUT /api/monthly with an out-of-region branch is rejected', async () => {
     const res = await asDirector('/api/monthly', {
       method: 'PUT',
-      body: JSON.stringify({ month: '2026-08', branch: OUT_OF_REGION_BRANCH, data: { 1: { counts: {}, description: '' } } }),
+      body: JSON.stringify({
+        month: '2026-08',
+        branch: OUT_OF_REGION_BRANCH,
+        data: { 1: { counts: {}, description: '' } },
+      }),
     })
     assert.equal(res.status, 400)
   })

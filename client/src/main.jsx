@@ -39,7 +39,15 @@ function Gate() {
   }
 
   if (status === 'loading') return <div className="auth-splash">Loading…</div>
-  if (status === 'anon') return <LoginPage onAuthed={(u) => { setUser(u); setStatus('authed') }} />
+  if (status === 'anon')
+    return (
+      <LoginPage
+        onAuthed={(u) => {
+          setUser(u)
+          setStatus('authed')
+        }}
+      />
+    )
   return <App user={user} onLogout={handleLogout} />
 }
 

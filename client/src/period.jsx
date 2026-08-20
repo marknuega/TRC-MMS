@@ -29,13 +29,31 @@ export const makePeriod = (kind = 'month', anchor = todayIso()) => ({ kind, anch
 
 // 'YYYY-MM-DD' | 'YYYY-MM' | 'YYYY' — the prefix an entry date must start with.
 export const periodValue = (p) =>
-  p?.kind === 'day' ? String(p.anchor) : p?.kind === 'year' ? String(p?.anchor).slice(0, 4) : String(p?.anchor).slice(0, 7)
+  p?.kind === 'day'
+    ? String(p.anchor)
+    : p?.kind === 'year'
+      ? String(p?.anchor).slice(0, 4)
+      : String(p?.anchor).slice(0, 7)
 
-const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December']
+const MONTH_NAMES = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+]
 
 export function periodLabel(p) {
-  const [y, m, d] = String(p?.anchor ?? '').split('-').map(Number)
+  const [y, m, d] = String(p?.anchor ?? '')
+    .split('-')
+    .map(Number)
   if (!y) return ''
   if (p.kind === 'year') return String(y)
   if (p.kind === 'month') return `${MONTH_NAMES[m - 1]} ${y}`

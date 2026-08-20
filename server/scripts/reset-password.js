@@ -50,7 +50,9 @@ async function main() {
   const user = await prisma.user.findUnique({ where: { username } })
   if (!user) {
     const all = await prisma.user.findMany({ select: { username: true }, orderBy: { id: 'asc' } })
-    console.error(`No user named "${username}". This database has: ${all.map((u) => u.username).join(', ') || '(none)'}`)
+    console.error(
+      `No user named "${username}". This database has: ${all.map((u) => u.username).join(', ') || '(none)'}`,
+    )
     process.exit(1)
   }
 

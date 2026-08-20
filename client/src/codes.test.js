@@ -397,10 +397,7 @@ test('a code with no description claims nothing — there is nothing to decode t
 })
 
 test('issueNames reads legacy strings and coded objects alike', () => {
-  assert.deepEqual(issueNames(['LCD', { name: 'CHARGER 818', parts: '99', variant: 'A' }]), [
-    'LCD',
-    'CHARGER 818',
-  ])
+  assert.deepEqual(issueNames(['LCD', { name: 'CHARGER 818', parts: '99', variant: 'A' }]), ['LCD', 'CHARGER 818'])
 })
 
 // ---------------------------------------------------------------------------
@@ -421,7 +418,10 @@ test('the device letter may be dropped from the second code onward', () => {
 test('the inherited device carries down a whole chain of codes', () => {
   const r = dec('H43AC1MT 11AC2MI 41ARMT 2221 6666 1')
   assert.ok(r.ok, r.errors.join('; '))
-  assert.deepEqual(r.faults.map((f) => f.code), ['H43A', 'H11A', 'H41A'])
+  assert.deepEqual(
+    r.faults.map((f) => f.code),
+    ['H43A', 'H11A', 'H41A'],
+  )
 })
 
 test('the first code must still name the device', () => {
@@ -438,7 +438,10 @@ test('a company may be written with one letter — I is MOI, T is MOTECO', () =>
   assert.deepEqual(short.faults, full.faults)
   // The shorthand is canonicalised, so what is stored never depends on how it
   // was typed.
-  assert.deepEqual(short.faults.map((f) => f.companyCode), ['MT', 'MI'])
+  assert.deepEqual(
+    short.faults.map((f) => f.companyCode),
+    ['MT', 'MI'],
+  )
 })
 
 test('a one-letter company does not swallow the next code’s device letter', () => {
@@ -446,19 +449,25 @@ test('a one-letter company does not swallow the next code’s device letter', ()
   // together as "...C1TH43A..." and the greedy company match grabs "TH".
   const r = dec('H11AC1T H43AC1MT 2221 6666 1')
   assert.ok(r.ok, r.errors.join('; '))
-  assert.deepEqual(r.faults.map((f) => f.code), ['H11A', 'H43A'])
-  assert.deepEqual(r.faults.map((f) => f.companyCode), ['MT', 'MT'])
+  assert.deepEqual(
+    r.faults.map((f) => f.code),
+    ['H11A', 'H43A'],
+  )
+  assert.deepEqual(
+    r.faults.map((f) => f.companyCode),
+    ['MT', 'MT'],
+  )
 })
 
 test('quantity stays optional in every shorthand combination', () => {
-  for (const text of [
-    'H11ACMT 11ACMI 2221 6666 1',
-    'H11ACT 11ACI 2221 6666 1',
-    'H11AC1MT 11ACI 2221 6666 1',
-  ]) {
+  for (const text of ['H11ACMT 11ACMI 2221 6666 1', 'H11ACT 11ACI 2221 6666 1', 'H11AC1MT 11ACI 2221 6666 1']) {
     const r = dec(text)
     assert.ok(r.ok, `${text}: ${r.errors.join('; ')}`)
-    assert.deepEqual(r.faults.map((f) => f.quantity), [1, 1], text)
+    assert.deepEqual(
+      r.faults.map((f) => f.quantity),
+      [1, 1],
+      text,
+    )
   }
 })
 
@@ -552,10 +561,13 @@ describe('RTO shorthand', () => {
   test('RTO works in the device-less shorthand from the second code on', () => {
     const r = parseCodeReport('H43AC1MT 50FRTOMT 2221 6575 1', FALLBACK, OPTS)
     assert.ok(r.ok, r.errors.join('; '))
-    assert.deepEqual(r.faults.map((f) => [f.issue, f.action]), [
-      ['SIDE GRIP', 'CHANGE'],
-      ['DEFECTIVE PCB', 'RTO'],
-    ])
+    assert.deepEqual(
+      r.faults.map((f) => [f.issue, f.action]),
+      [
+        ['SIDE GRIP', 'CHANGE'],
+        ['DEFECTIVE PCB', 'RTO'],
+      ],
+    )
   })
 
   test('both decoders read an RTO code identically', async () => {

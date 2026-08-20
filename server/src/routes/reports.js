@@ -13,7 +13,9 @@ const MAX_FAULTS = 6
 
 // report | transmittal working set, from a ?mode= query (unset = all).
 const modeWhere = (req) => {
-  const m = String(req.query?.mode ?? '').trim().toLowerCase()
+  const m = String(req.query?.mode ?? '')
+    .trim()
+    .toLowerCase()
   return m === 'report' || m === 'transmittal' ? { mode: m } : {}
 }
 

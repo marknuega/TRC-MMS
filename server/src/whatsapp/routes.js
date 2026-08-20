@@ -34,7 +34,12 @@ const allowedSenders = (process.env.WA_ALLOWED_SENDERS || '')
   .filter(Boolean)
 
 const REPORT_TRIGGERS = ['report', 'ulat', 'export']
-const isReportRequest = (text) => REPORT_TRIGGERS.includes(String(text ?? '').trim().toLowerCase())
+const isReportRequest = (text) =>
+  REPORT_TRIGGERS.includes(
+    String(text ?? '')
+      .trim()
+      .toLowerCase(),
+  )
 
 // The branch every texted entry is tagged with. "All Branches" collapses to
 // blank exactly as writeBranch() does, so the two write paths agree.
@@ -161,13 +166,14 @@ router.post('/webhook', async (req, res) => {
     if (isReportRequest(text)) {
       try {
         const branch = botBranch()
-        const { text: reportText, count, dateLabel } = await dailyReportText({
+        const {
+          text: reportText,
+          count,
+          dateLabel,
+        } = await dailyReportText({
           where: branch ? { branch } : {},
         })
-        await sendText(
-          from,
-          count === 0 ? `No saved reports for ${dateLabel} yet.` : reportText,
-        )
+        await sendText(from, count === 0 ? `No saved reports for ${dateLabel} yet.` : reportText)
       } catch (err) {
         console.error('[whatsapp] report send failed:', err.message)
         await sendText(from, "⚠️ Couldn't generate the report right now. Please try again later.")

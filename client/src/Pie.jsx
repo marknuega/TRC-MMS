@@ -24,7 +24,12 @@ export function Pie({ title, data }) {
     <>
       {title && <h3 className="sp-brand-h">{title}</h3>}
       <div className="pie-wrap">
-        <div className="pie" style={{ background: `conic-gradient(${stops})` }} role="img" aria-label={title || 'Pie chart'} />
+        <div
+          className="pie"
+          style={{ background: `conic-gradient(${stops})` }}
+          role="img"
+          aria-label={title || 'Pie chart'}
+        />
         <ul className="pie-legend">
           {rows.map((d, i) => (
             <li key={d.label}>

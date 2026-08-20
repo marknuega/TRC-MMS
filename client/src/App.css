@@ -31,7 +31,10 @@
   padding: 1.25rem 0.9rem;
   background: var(--surface);
   border-right: 1px solid var(--border);
-  transition: width 0.15s ease, flex-basis 0.15s ease, padding 0.15s ease;
+  transition:
+    width 0.15s ease,
+    flex-basis 0.15s ease,
+    padding 0.15s ease;
 }
 .side-collapse {
   display: inline-flex;
@@ -221,7 +224,9 @@
   border-radius: var(--radius-sm);
   box-shadow: var(--field-shadow);
   box-sizing: border-box;
-  transition: border-color 0.12s, background-color 0.12s;
+  transition:
+    border-color 0.12s,
+    background-color 0.12s;
 }
 .app input,
 .app select {
@@ -290,7 +295,9 @@
   box-shadow: var(--field-shadow);
   box-sizing: border-box;
   cursor: pointer;
-  transition: border-color 0.12s, background-color 0.12s;
+  transition:
+    border-color 0.12s,
+    background-color 0.12s;
 }
 .multi-toggle:hover {
   border-color: var(--field-border-hover);
@@ -420,7 +427,11 @@
   font-weight: 600;
   cursor: pointer;
   border-radius: var(--radius-sm);
-  transition: filter 0.12s, background 0.12s, border-color 0.12s, transform 0.03s;
+  transition:
+    filter 0.12s,
+    background 0.12s,
+    border-color 0.12s,
+    transform 0.03s;
 }
 .btn-txt:active,
 .btn-pdf:active,
@@ -935,7 +946,9 @@ h2 {
   text-decoration: none;
   white-space: nowrap;
   cursor: pointer;
-  transition: filter 0.12s, transform 0.03s;
+  transition:
+    filter 0.12s,
+    transform 0.03s;
 }
 .breakdown-head .btn-whatsapp:hover {
   filter: brightness(1.08);
@@ -3066,7 +3079,9 @@ button.sync-pill {
   font-weight: 600;
   font-size: 0.92rem;
   text-decoration: none;
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
 }
 .manage-link-btn:hover {
   border-color: var(--primary);
@@ -3750,7 +3765,9 @@ button.sync-pill {
   background: var(--surface-3);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
 }
 .catalog-card:hover {
   background: var(--surface-2);
@@ -3802,7 +3819,10 @@ button.sync-pill {
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
 }
 .parts-card-edit:hover {
   background: var(--surface);
@@ -3950,7 +3970,9 @@ button.sync-pill {
   line-height: 1.7;
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.15s, border-color 0.15s;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
 }
 .agree-pill:hover {
   background: var(--card, #fff);

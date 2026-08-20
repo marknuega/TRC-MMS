@@ -15,9 +15,19 @@
     <link rel="icon" type="image/png" href="/icon-192.png" />
     <title>TRC-MMS — Offline</title>
     <style>
-      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
       body {
-        font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+        font-family:
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          sans-serif;
         background: #f8fafc;
         color: #0f172a;
         display: flex;
@@ -36,9 +46,20 @@
         width: 100%;
         box-shadow: 0 4px 24px rgba(15, 23, 42, 0.08);
       }
-      img { width: 56px; height: 56px; margin-bottom: 1rem; }
-      h1 { font-size: 1.3rem; margin-bottom: 0.6rem; }
-      p { color: #64748b; font-size: 0.95rem; line-height: 1.6; }
+      img {
+        width: 56px;
+        height: 56px;
+        margin-bottom: 1rem;
+      }
+      h1 {
+        font-size: 1.3rem;
+        margin-bottom: 0.6rem;
+      }
+      p {
+        color: #64748b;
+        font-size: 0.95rem;
+        line-height: 1.6;
+      }
       .note {
         margin-top: 1.25rem;
         background: rgba(37, 99, 235, 0.1);
@@ -61,12 +82,24 @@
         font-weight: 600;
         cursor: pointer;
       }
-      button:hover { background: #1d4ed8; }
+      button:hover {
+        background: #1d4ed8;
+      }
       @media (prefers-color-scheme: dark) {
-        body { background: #0f172a; color: #e2e8f0; }
-        .card { background: #1e293b; border-color: #334155; }
-        p { color: #94a3b8; }
-        .note { color: #93c5fd; }
+        body {
+          background: #0f172a;
+          color: #e2e8f0;
+        }
+        .card {
+          background: #1e293b;
+          border-color: #334155;
+        }
+        p {
+          color: #94a3b8;
+        }
+        .note {
+          color: #93c5fd;
+        }
       }
     </style>
   </head>
@@ -75,9 +108,8 @@
       <img src="/icon-192.png" alt="" />
       <h1>You're offline</h1>
       <p>
-        TRC-MMS could not be loaded because this device has never opened it while
-        connected. Open it once with a connection and it will work offline from
-        then on.
+        TRC-MMS could not be loaded because this device has never opened it while connected. Open it once with a
+        connection and it will work offline from then on.
       </p>
       <div class="note">Nothing has been lost — no data was entered on this device yet.</div>
       <button type="button" onclick="location.replace('/')">Try again</button>

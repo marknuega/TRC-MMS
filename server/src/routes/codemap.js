@@ -166,7 +166,10 @@ export function validateCodeMap(data) {
  * pinned together by codemap.test.js, which runs the same rows through both.
  */
 const VARIANT_RE = /^[A-Z]$/
-const upTrim = (v) => String(v ?? '').trim().toUpperCase()
+const upTrim = (v) =>
+  String(v ?? '')
+    .trim()
+    .toUpperCase()
 
 export function faultCodes(issueTypes) {
   const out = {}
@@ -215,14 +218,18 @@ export function technicianCodes(technicians) {
   }
   for (const it of rows) {
     if (!it || typeof it !== 'object') continue
-    const initials2 = String(it.initials2 ?? '').trim().toUpperCase()
+    const initials2 = String(it.initials2 ?? '')
+      .trim()
+      .toUpperCase()
     const name = String(it.name ?? '').trim()
     if (!initials2 || !name || !TECH_INITIALS2_RE.test(initials2)) continue
     if (!out[initials2]) out[initials2] = name
   }
   for (const it of rows) {
     if (!it || typeof it !== 'object') continue
-    const initials3 = String(it.initials3 ?? '').trim().toUpperCase()
+    const initials3 = String(it.initials3 ?? '')
+      .trim()
+      .toUpperCase()
     const name = String(it.name ?? '').trim()
     if (!initials3 || !name || !TECH_INITIALS3_RE.test(initials3)) continue
     if (!out[initials3]) out[initials3] = name
@@ -251,10 +258,7 @@ export function technicianCodes(technicians) {
  * vocabulary than the one published.
  */
 export async function fullCodeMap() {
-  const [map, opts] = await Promise.all([
-    readCodeMap(),
-    prisma.appOptions.findUnique({ where: { id: 1 } }),
-  ])
+  const [map, opts] = await Promise.all([readCodeMap(), prisma.appOptions.findUnique({ where: { id: 1 } })])
   return {
     ...map,
     faults: faultCodes(opts?.data?.issueTypes),

@@ -29,10 +29,7 @@ test('only two-digit parts numbers reach the card', () => {
 
 test('the unreachable ones are reported, not silently dropped', () => {
   const { unusable } = groupComponents(MAP)
-  assert.deepEqual(
-    unusable.map(([code]) => code).sort(),
-    ['98A', '99A', 'H43A'],
-  )
+  assert.deepEqual(unusable.map(([code]) => code).sort(), ['98A', '99A', 'H43A'])
 })
 
 test('a clean map reports nothing to fix', () => {

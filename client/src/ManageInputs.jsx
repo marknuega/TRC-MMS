@@ -140,17 +140,26 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
   // the same way an Issue type's own code outranks Code Map's lookup.
   //
   // Matched past case and punctuation, for the reason norm() does it in codes.js.
-  const codeKey = (v) => String(v ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '')
+  const codeKey = (v) =>
+    String(v ?? '')
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '')
   const mappedFullForms = {}
   for (const [code, full] of Object.entries(map?.agencies ?? FALLBACK.agencies ?? {})) {
     mappedFullForms[codeKey(code)] = full
   }
-  const mappedFullForm = (v) => (isAgencies ? mappedFullForms[codeKey(nameOf(v))] ?? '' : '')
+  const mappedFullForm = (v) => (isAgencies ? (mappedFullForms[codeKey(nameOf(v))] ?? '') : '')
   const fullFormOf = (v) => (isAgencies ? optionFullForm(v) || mappedFullForm(v) : '')
   // Prefixes are typed as one free-text field ("355, 06") because a model may
   // hold several and nobody knows in advance how many. Any run of non-digits
   // separates them, so a comma, a space or both all work.
-  const parsePrefixes = (s) => [...new Set(String(s ?? '').split(/\D+/).filter(Boolean))]
+  const parsePrefixes = (s) => [
+    ...new Set(
+      String(s ?? '')
+        .split(/\D+/)
+        .filter(Boolean),
+    ),
+  ]
   const makeItem = (name, f) => {
     if (isIssues) return { name, parts: f.parts.trim(), variant: f.variant.trim().toUpperCase() }
     if (isMaterials) return { name, description: f.desc.trim() }
@@ -256,7 +265,8 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
     if (bad) return `"${bad}" is not a prefix — 2 to 6 digits, e.g. 404.`
     if (!PREFIX_RE.test(b)) return `"${b}" is not a prefix — 2 to 6 digits, e.g. 500.`
     const itself = standIns.find((a) => a === b)
-    if (itself) return `${itself} would be stored as itself — a stand-in has to differ from the number it stands in for.`
+    if (itself)
+      return `${itself} would be stored as itself — a stand-in has to differ from the number it stands in for.`
     // Another model's stand-in would rewrite the same digits to something else
     // as soon as that model were picked. Two rules for one prefix is not a
     // sharing decision like a Tel prefix is — it is two answers to one question.
@@ -419,10 +429,16 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
           ? (hasTelPrefixes ? optionPrefixes(list[clash]) : optionIssiPrefixes(list[clash])).join(', ')
           : ''
       if (!givingCode || held) {
-        flash(`"${value}" is already in the list${held ? `, holding ${hasPrefixes ? 'prefix' : 'code'} ${held}` : ''}.`, 'name')
+        flash(
+          `"${value}" is already in the list${held ? `, holding ${hasPrefixes ? 'prefix' : 'code'} ${held}` : ''}.`,
+          'name',
+        )
         return
       }
-      onChange(cat, list.map((v, i) => (i === clash ? makeItem(value, newFields) : v)))
+      onChange(
+        cat,
+        list.map((v, i) => (i === clash ? makeItem(value, newFields) : v)),
+      )
       clearNew()
       return
     }
@@ -462,7 +478,10 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
       flash(problem, field)
       return
     }
-    onChange(cat, list.map((v, i) => (i === editIndex ? makeItem(value, editFields) : v)))
+    onChange(
+      cat,
+      list.map((v, i) => (i === editIndex ? makeItem(value, editFields) : v)),
+    )
     setEditIndex(-1)
     setEditValue('')
     setEditDesc('')
@@ -485,7 +504,10 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
   }
 
   function remove(i) {
-    onChange(cat, list.filter((_, idx) => idx !== i))
+    onChange(
+      cat,
+      list.filter((_, idx) => idx !== i),
+    )
     if (editIndex === i) setEditIndex(-1)
   }
 
@@ -509,7 +531,6 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
             Add, rename, or remove the choices that appear in the dropdowns. Changes save automatically and apply
             everywhere. Existing entries keep whatever value they were saved with.
           </p>
-
 
           {/* The category modifier tells the stylesheet how many extra fields
               are on the row, which is what decides how they reflow on a
@@ -538,7 +559,10 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                   setNewInitials2('')
                   setNewInitials3('')
                 }}
-                options={CATEGORIES.map((c) => ({ value: c.key, label: `${c.label} (${(options[c.key] ?? []).length})` }))}
+                options={CATEGORIES.map((c) => ({
+                  value: c.key,
+                  label: `${c.label} (${(options[c.key] ?? []).length})`,
+                }))}
               />
             </label>
             {/* Each field is its own label — one "Add new" over a row of boxes
@@ -561,7 +585,14 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                   Variant
                   <input
                     value={newVariant}
-                    onChange={(e) => setNewVariant(e.target.value.replace(/[^A-Za-z]/g, '').slice(0, 1).toUpperCase())}
+                    onChange={(e) =>
+                      setNewVariant(
+                        e.target.value
+                          .replace(/[^A-Za-z]/g, '')
+                          .slice(0, 1)
+                          .toUpperCase(),
+                      )
+                    }
                     placeholder="B"
                     aria-invalid={noticeField === 'code' || undefined}
                     className={noticeField === 'code' ? 'invalid' : undefined}
@@ -644,7 +675,14 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                   2-Letter Initial
                   <input
                     value={newInitials2}
-                    onChange={(e) => setNewInitials2(e.target.value.replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase())}
+                    onChange={(e) =>
+                      setNewInitials2(
+                        e.target.value
+                          .replace(/[^A-Za-z]/g, '')
+                          .slice(0, 2)
+                          .toUpperCase(),
+                      )
+                    }
                     placeholder="MA"
                     aria-invalid={noticeField === 'initials2' || undefined}
                     className={noticeField === 'initials2' ? 'invalid' : undefined}
@@ -655,7 +693,14 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                   3-Letter Initial
                   <input
                     value={newInitials3}
-                    onChange={(e) => setNewInitials3(e.target.value.replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase())}
+                    onChange={(e) =>
+                      setNewInitials3(
+                        e.target.value
+                          .replace(/[^A-Za-z]/g, '')
+                          .slice(0, 3)
+                          .toUpperCase(),
+                      )
+                    }
                     placeholder="MRA"
                     aria-invalid={noticeField === 'initials3' || undefined}
                     className={noticeField === 'initials3' ? 'invalid' : undefined}
@@ -733,25 +778,23 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
           {isIssues && (
             <p className="manage-hint">
               The <strong>Description</strong> is the issue type — it is what gets written on the entry. Give it a{' '}
-              <strong>Parts Code</strong> (2 digits) and a <strong>Variant</strong> (1 letter) and the decoder
-              resolves that fault straight to it: <code>19</code> + <code>B</code> = <code>19B</code>. No device
-              here — the technician's code supplies that, so <code>H19B</code> and <code>T19B</code> both land on
-              this one entry. The variant is part of the part's identity, not just a build, so two variants of
-              one parts number can be two genuinely different items rather than two builds of one. Leave both
-              blank for an issue with no code.
+              <strong>Parts Code</strong> (2 digits) and a <strong>Variant</strong> (1 letter) and the decoder resolves
+              that fault straight to it: <code>19</code> + <code>B</code> = <code>19B</code>. No device here — the
+              technician's code supplies that, so <code>H19B</code> and <code>T19B</code> both land on this one entry.
+              The variant is part of the part's identity, not just a build, so two variants of one parts number can be
+              two genuinely different items rather than two builds of one. Leave both blank for an issue with no code.
             </p>
           )}
           {hasTelPrefixes && (
             <p className="manage-hint">
-              <strong>Tel prefixes</strong> are the leading digits of a Tel number that select this model on an
-              entry. A number starting <code>190</code> makes the Model an STP9000; <code>355</code> or{' '}
-              <code>06</code> makes it a TH1N. The Type then follows from the Model as it always has. Give one as
-              many prefixes as it needs, separated by commas; 2 to 6 digits each, and the longest one that matches
-              wins, so a narrower range can sit inside a wider one. Two models may share a prefix — the one higher
-              up this list is the one selected, and the other is a dropdown away. Leave it blank for a model no
-              number identifies. A Tel number names the <strong>device and nothing else</strong>: whose radio it is
-              comes off the ISSI, on the Agencies list. This is where a new device is taught to the auto-select —
-              nothing else needs changing.
+              <strong>Tel prefixes</strong> are the leading digits of a Tel number that select this model on an entry. A
+              number starting <code>190</code> makes the Model an STP9000; <code>355</code> or <code>06</code> makes it
+              a TH1N. The Type then follows from the Model as it always has. Give one as many prefixes as it needs,
+              separated by commas; 2 to 6 digits each, and the longest one that matches wins, so a narrower range can
+              sit inside a wider one. Two models may share a prefix — the one higher up this list is the one selected,
+              and the other is a dropdown away. Leave it blank for a model no number identifies. A Tel number names the{' '}
+              <strong>device and nothing else</strong>: whose radio it is comes off the ISSI, on the Agencies list. This
+              is where a new device is taught to the auto-select — nothing else needs changing.
               {newPrefixes.trim() && <span className="manage-code-hint"> {prefixShareHint(newPrefixes)}</span>}
             </p>
           )}
@@ -760,30 +803,26 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
               A <strong>Stand-in prefix</strong> is for a device the real prefix cannot name on its own. Where two
               models share a prefix, a Tel number cannot say which is on the bench and the auto-select lands on
               whichever is higher in this list. Give each of them stand-ins — say <code>103, 03</code>{' '}
-              <strong>Stored as</strong> <code>109</code> — add those to its Tel prefixes, and typing{' '}
-              <code>103…</code> selects that model while the entry saves with the <code>109…</code> really on the
-              radio. Several stand-ins are one rule written more than once: separate them with commas, and each is
-              swapped for the same stored prefix. The swap happens once, at save, and only for the model that
-              declares it: the same digits typed against another model are somebody's real number and are stored
-              untouched. Both boxes or neither; leave them blank for a device that needs no stand-in. The three
-              SRG3900 builds are the case this exists for — <code>109</code> is really on all of them, so each
-              takes shorthand of its own to be picked by.
-              {newStandIn.trim() && (
-                <span className="manage-code-hint"> {standInHint(newStandIn, newPrefixes)}</span>
-              )}
+              <strong>Stored as</strong> <code>109</code> — add those to its Tel prefixes, and typing <code>103…</code>{' '}
+              selects that model while the entry saves with the <code>109…</code> really on the radio. Several stand-ins
+              are one rule written more than once: separate them with commas, and each is swapped for the same stored
+              prefix. The swap happens once, at save, and only for the model that declares it: the same digits typed
+              against another model are somebody's real number and are stored untouched. Both boxes or neither; leave
+              them blank for a device that needs no stand-in. The three SRG3900 builds are the case this exists for —{' '}
+              <code>109</code> is really on all of them, so each takes shorthand of its own to be picked by.
+              {newStandIn.trim() && <span className="manage-code-hint"> {standInHint(newStandIn, newPrefixes)}</span>}
             </p>
           )}
           {hasIssiPrefixes && (
             <p className="manage-hint">
-              <strong>ISSI prefixes</strong> are the leading digits of an <strong>ISSI</strong> that select this
-              agency on an entry: an ISSI starting <code>180</code> is the PSD, <code>191</code> the CD and{' '}
-              <code>214</code> the SRCA. Give one as many as it needs, separated by commas; 2 to 6 digits each,
-              longest match wins, and a shared prefix goes to whichever agency is higher in this list. Leave it
-              blank for an agency no number identifies. The ISSI names <strong>whose radio it is and nothing
-              else</strong> — the device comes off the Tel number, on the Models list — so the two lists are read
-              against their own number and the same digits may mean different things on each.{' '}
-              <code>00</code> is the one ISSI that is not an agency at all: it fills the whole entry in as{' '}
-              <strong>no activity today</strong>.
+              <strong>ISSI prefixes</strong> are the leading digits of an <strong>ISSI</strong> that select this agency
+              on an entry: an ISSI starting <code>180</code> is the PSD, <code>191</code> the CD and <code>214</code>{' '}
+              the SRCA. Give one as many as it needs, separated by commas; 2 to 6 digits each, longest match wins, and a
+              shared prefix goes to whichever agency is higher in this list. Leave it blank for an agency no number
+              identifies. The ISSI names <strong>whose radio it is and nothing else</strong> — the device comes off the
+              Tel number, on the Models list — so the two lists are read against their own number and the same digits
+              may mean different things on each. <code>00</code> is the one ISSI that is not an agency at all: it fills
+              the whole entry in as <strong>no activity today</strong>.
               {newIssiPrefixes.trim() && (
                 <span className="manage-code-hint"> {prefixShareHint(newIssiPrefixes, optionIssiPrefixes)}</span>
               )}
@@ -795,19 +834,16 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
               here: the numeric <strong>Tech ID</strong> (e.g. <code>1</code>), a <strong>2-Letter Initial</strong>{' '}
               (e.g. <code>MA</code> for Muhammad Amir), or a <strong>3-Letter Initial</strong> (e.g. <code>MRA</code>{' '}
               for a middle initial too) — any combination, or none. Leave all three blank for a technician who only
-              appears in the app's own dropdowns. This is where a technician's IDs are defined; what is set here is
-              what a report resolves to.
+              appears in the app's own dropdowns. This is where a technician's IDs are defined; what is set here is what
+              a report resolves to.
             </p>
           )}
           {isIssues && (
             <p className="manage-hint">
-              This is the primary code reference for the app: a code defined here is the authoritative
-              meaning of that code, and nothing else is consulted for it. Everything defined here appears
-              on the <strong>Code Reference</strong> under <em>Claimed Codes</em>, which is what technicians
-              read.
-              {newParts.trim() && (
-                <span className="manage-code-hint"> {codeInUseHint(newParts)}</span>
-              )}
+              This is the primary code reference for the app: a code defined here is the authoritative meaning of that
+              code, and nothing else is consulted for it. Everything defined here appears on the{' '}
+              <strong>Code Reference</strong> under <em>Claimed Codes</em>, which is what technicians read.
+              {newParts.trim() && <span className="manage-code-hint"> {codeInUseHint(newParts)}</span>}
             </p>
           )}
 
@@ -842,7 +878,12 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                               className="edit-input"
                               value={editVariant}
                               onChange={(e) =>
-                                setEditVariant(e.target.value.replace(/[^A-Za-z]/g, '').slice(0, 1).toUpperCase())
+                                setEditVariant(
+                                  e.target.value
+                                    .replace(/[^A-Za-z]/g, '')
+                                    .slice(0, 1)
+                                    .toUpperCase(),
+                                )
                               }
                               onKeyDown={cancelOnEscape}
                               placeholder="B"
@@ -924,7 +965,14 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                             <input
                               className="edit-input"
                               value={editInitials2}
-                              onChange={(e) => setEditInitials2(e.target.value.replace(/[^A-Za-z]/g, '').slice(0, 2).toUpperCase())}
+                              onChange={(e) =>
+                                setEditInitials2(
+                                  e.target.value
+                                    .replace(/[^A-Za-z]/g, '')
+                                    .slice(0, 2)
+                                    .toUpperCase(),
+                                )
+                              }
                               onKeyDown={cancelOnEscape}
                               placeholder="MA"
                             />
@@ -934,7 +982,14 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                             <input
                               className="edit-input"
                               value={editInitials3}
-                              onChange={(e) => setEditInitials3(e.target.value.replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase())}
+                              onChange={(e) =>
+                                setEditInitials3(
+                                  e.target.value
+                                    .replace(/[^A-Za-z]/g, '')
+                                    .slice(0, 3)
+                                    .toUpperCase(),
+                                )
+                              }
                               onKeyDown={cancelOnEscape}
                               placeholder="MRA"
                             />
@@ -947,7 +1002,13 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                         onChange={(e) => setEditValue(e.target.value)}
                         onKeyDown={cancelOnEscape}
                         placeholder={
-                          isMaterials ? 'Material name' : isIssues ? 'Description' : isTechnicians ? 'Technician name' : undefined
+                          isMaterials
+                            ? 'Material name'
+                            : isIssues
+                              ? 'Description'
+                              : isTechnicians
+                                ? 'Technician name'
+                                : undefined
                         }
                         autoFocus
                       />
@@ -972,18 +1033,22 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                       )}
                     </div>
                     <div className="manage-item-actions">
-                      <button type="button" onClick={saveEdit}>Save</button>
-                      <button type="button" className="ghost" onClick={() => setEditIndex(-1)}>Cancel</button>
+                      <button type="button" onClick={saveEdit}>
+                        Save
+                      </button>
+                      <button type="button" className="ghost" onClick={() => setEditIndex(-1)}>
+                        Cancel
+                      </button>
                       {/* Delete lives inside Edit so it can't be hit by accident. */}
-                      <button type="button" className="danger" onClick={() => remove(i)}>Delete</button>
+                      <button type="button" className="danger" onClick={() => remove(i)}>
+                        Delete
+                      </button>
                     </div>
                   </>
                 ) : (
                   <>
                     <span className="manage-item-label">
-                      {isIssues && issueCode(value) && (
-                        <span className="manage-item-code">{issueCode(value)}</span>
-                      )}
+                      {isIssues && issueCode(value) && <span className="manage-item-code">{issueCode(value)}</span>}
                       {hasTelPrefixes && optionPrefixes(value).length > 0 && (
                         <span className="manage-item-code" title="Tel prefixes">
                           {optionPrefixes(value).join(' / ')}
@@ -1007,9 +1072,12 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                         </span>
                       )}
                       {isTechnicians &&
-                        [technicianId(value), technicianInitials2(value), technicianInitials3(value)].filter(Boolean).length > 0 && (
+                        [technicianId(value), technicianInitials2(value), technicianInitials3(value)].filter(Boolean)
+                          .length > 0 && (
                           <span className="manage-item-code">
-                            {[technicianId(value), technicianInitials2(value), technicianInitials3(value)].filter(Boolean).join(' / ')}
+                            {[technicianId(value), technicianInitials2(value), technicianInitials3(value)]
+                              .filter(Boolean)
+                              .join(' / ')}
                           </span>
                         )}
                       {nameOf(value)}

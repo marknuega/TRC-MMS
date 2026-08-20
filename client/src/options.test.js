@@ -163,7 +163,7 @@ describe('mergeOptions', () => {
     for (const m of shipped) assert.equal(optionStandInReal(m), '109')
   })
 
-  test("a model that already carries prefixes keeps exactly what the admin set", () => {
+  test('a model that already carries prefixes keeps exactly what the admin set', () => {
     const out = mergeOptions({ models: [{ name: 'TH1N', prefixes: ['77'] }] })
     assert.deepEqual(optionPrefixes(out.models[0]), ['77'])
   })
@@ -269,7 +269,10 @@ describe('prefixOwners', () => {
   })
 
   test('the longest matching prefix wins, not the first', () => {
-    const models = [{ name: 'Wide', prefixes: ['06'] }, { name: 'Narrow', prefixes: ['0612'] }]
+    const models = [
+      { name: 'Wide', prefixes: ['06'] },
+      { name: 'Narrow', prefixes: ['0612'] },
+    ]
     assert.deepEqual(prefixOwners('0612345678', models), { prefix: '0612', names: ['Narrow'] })
     assert.deepEqual(prefixOwners('0699999999', models), { prefix: '06', names: ['Wide'] })
   })
@@ -381,7 +384,10 @@ describe('issiPick', () => {
   // 191 is CD's and PRI's both. CD is higher in the list, so CD is what a
   // number lands on — and moving PRI above it is how that is changed.
   test('a shared ISSI prefix goes to whichever agency is higher in the list', () => {
-    const list = [{ name: 'PRI', issiPrefixes: ['191'] }, { name: 'CD', issiPrefixes: ['191'] }]
+    const list = [
+      { name: 'PRI', issiPrefixes: ['191'] },
+      { name: 'CD', issiPrefixes: ['191'] },
+    ]
     assert.equal(issiPick('1917670', list), 'PRI')
     assert.equal(issiPick('1917670', [...list].reverse()), 'CD')
   })
@@ -403,7 +409,10 @@ describe('issiPick', () => {
 
   // Same rules as the Tel matcher, because it is the same matcher.
   test('longest match wins, and spacing cannot defeat one', () => {
-    const list = [{ name: 'Wide', issiPrefixes: ['18'] }, { name: 'Narrow', issiPrefixes: ['1804'] }]
+    const list = [
+      { name: 'Wide', issiPrefixes: ['18'] },
+      { name: 'Narrow', issiPrefixes: ['1804'] },
+    ]
     assert.equal(issiPick('1804133', list), 'Narrow')
     assert.equal(issiPick('180 41-33', list), 'Narrow')
     assert.equal(issiPick('1899999', list), 'Wide')
@@ -589,8 +598,6 @@ describe('isServiceAction', () => {
     }
   })
 })
-
-
 
 // 109 is really on the SRG3900 car kit, desktop and bike alike, so no number
 // starting with it can say which device is on the bench. Each build takes

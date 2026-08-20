@@ -90,8 +90,10 @@ describe('seriesFor', () => {
   // numbering space without colliding on (series, branch, docNumber).
   test('every combination yields exactly one of the three', () => {
     const all = [
-      seriesFor('report', false), seriesFor('report', true),
-      seriesFor('transmittal', false), seriesFor('transmittal', true),
+      seriesFor('report', false),
+      seriesFor('report', true),
+      seriesFor('transmittal', false),
+      seriesFor('transmittal', true),
     ]
     assert.deepEqual([...new Set(all)].sort(), ['REF', 'REP', 'TRANS'])
   })

@@ -36,7 +36,10 @@ async function netRequest(path, options = {}) {
 }
 
 // Replay any queued writes to the server (used on reconnect / after a call).
-export const syncNow = () => flushQueue((op) => netRequest(op.path, { method: op.method, body: op.body != null ? JSON.stringify(op.body) : undefined }))
+export const syncNow = () =>
+  flushQueue((op) =>
+    netRequest(op.path, { method: op.method, body: op.body != null ? JSON.stringify(op.body) : undefined }),
+  )
 
 async function request(path, options = {}) {
   const method = (options.method || 'GET').toUpperCase()
@@ -94,55 +97,45 @@ const scopeQs = (mode, branch, region) => {
 
 export const listEntries = (mode, branch, region) => request(`/api/reports${scopeQs(mode, branch, region)}`)
 
-export const createEntry = (entry) =>
-  request('/api/reports', { method: 'POST', body: JSON.stringify(entry) })
+export const createEntry = (entry) => request('/api/reports', { method: 'POST', body: JSON.stringify(entry) })
 
-export const updateEntry = (id, entry) =>
-  request(`/api/reports/${id}`, { method: 'PUT', body: JSON.stringify(entry) })
+export const updateEntry = (id, entry) => request(`/api/reports/${id}`, { method: 'PUT', body: JSON.stringify(entry) })
 
-export const deleteEntry = (id) =>
-  request(`/api/reports/${id}`, { method: 'DELETE' })
+export const deleteEntry = (id) => request(`/api/reports/${id}`, { method: 'DELETE' })
 
 export const clearEntries = (mode, branch) => request(`/api/reports${scopeQs(mode, branch)}`, { method: 'DELETE' })
 
 export const getOptions = () => request('/api/options')
 
-export const saveOptions = (data) =>
-  request('/api/options', { method: 'PUT', body: JSON.stringify(data) })
+export const saveOptions = (data) => request('/api/options', { method: 'PUT', body: JSON.stringify(data) })
 
 // The CDS code map — the vocabulary shared with the WhatsApp bot. Reading needs
 // a session; the PUT is admin-gated server-side, since every technician's
 // decode resolves through it.
 export const getCodeMap = () => request('/api/codemap')
 
-export const saveCodeMap = (data) =>
-  request('/api/codemap', { method: 'PUT', body: JSON.stringify(data) })
+export const saveCodeMap = (data) => request('/api/codemap', { method: 'PUT', body: JSON.stringify(data) })
 
 export const getSavedReports = () => request('/api/saved-reports')
 
-export const saveReport = (meta = {}) =>
-  request('/api/saved-reports', { method: 'POST', body: JSON.stringify(meta) })
+export const saveReport = (meta = {}) => request('/api/saved-reports', { method: 'POST', body: JSON.stringify(meta) })
 
-export const loadSavedReport = (id) =>
-  request(`/api/saved-reports/${id}/load`, { method: 'POST' })
+export const loadSavedReport = (id) => request(`/api/saved-reports/${id}/load`, { method: 'POST' })
 
-export const deleteSavedReport = (id) =>
-  request(`/api/saved-reports/${id}`, { method: 'DELETE' })
+export const deleteSavedReport = (id) => request(`/api/saved-reports/${id}`, { method: 'DELETE' })
 
 // Mark/unmark a saved report as reference-only (record kept, no parts used).
 export const setSavedReportReference = (id, isReferenceOnly) =>
   request(`/api/saved-reports/${id}`, { method: 'PATCH', body: JSON.stringify({ isReferenceOnly }) })
 
-const monthlyQs = (month, branch) =>
-  `?month=${encodeURIComponent(month)}&branch=${encodeURIComponent(branch)}`
+const monthlyQs = (month, branch) => `?month=${encodeURIComponent(month)}&branch=${encodeURIComponent(branch)}`
 
 export const getMonthly = (month, branch) => request(`/api/monthly${monthlyQs(month, branch)}`)
 
 export const saveMonthly = (month, branch, data) =>
   request('/api/monthly', { method: 'PUT', body: JSON.stringify({ month, branch, data }) })
 
-export const clearMonthly = (month, branch) =>
-  request(`/api/monthly${monthlyQs(month, branch)}`, { method: 'DELETE' })
+export const clearMonthly = (month, branch) => request(`/api/monthly${monthlyQs(month, branch)}`, { method: 'DELETE' })
 
 const branchQs = (branch, region) => {
   const p = new URLSearchParams()
@@ -154,8 +147,7 @@ const branchQs = (branch, region) => {
 
 export const getInventory = (branch, region) => request(`/api/inventory${branchQs(branch, region)}`)
 
-export const createInventory = (item) =>
-  request('/api/inventory', { method: 'POST', body: JSON.stringify(item) })
+export const createInventory = (item) => request('/api/inventory', { method: 'POST', body: JSON.stringify(item) })
 
 export const updateInventory = (id, item) =>
   request(`/api/inventory/${id}`, { method: 'PUT', body: JSON.stringify(item) })
@@ -169,10 +161,10 @@ export const getMe = () => request('/api/auth/me')
 // Never queued for offline replay: a failed login attempt isn't a durable
 // write to retry later (stale credentials would just retry forever and, on a
 // 401, stall the entire sync queue — see flushQueue's authExpired handling).
-export const login = (username, password) => netRequest('/api/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) })
+export const login = (username, password) =>
+  netRequest('/api/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) })
 export const logout = () => request('/api/auth/logout', { method: 'POST' })
-export const requestCredentials = (data) =>
-  request('/api/auth/request', { method: 'POST', body: JSON.stringify(data) })
+export const requestCredentials = (data) => request('/api/auth/request', { method: 'POST', body: JSON.stringify(data) })
 
 // ---- Admin ----
 export const getUsers = () => request('/api/admin/users')

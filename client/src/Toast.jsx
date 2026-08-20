@@ -12,7 +12,9 @@ export default function Toast({ message, onDone, duration = 4000 }) {
   if (!message) return null
   return (
     <div className="toast-success" role="status" aria-live="polite">
-      <span className="toast-icon" aria-hidden="true">✓</span>
+      <span className="toast-icon" aria-hidden="true">
+        ✓
+      </span>
       <span>{message}</span>
     </div>
   )
