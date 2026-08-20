@@ -1,0 +1,72 @@
+{
+  "name": "trc-mms-desktop",
+  "private": true,
+  "version": "1.0.0",
+  "description": "TRC-MMS offline desktop build — Software Developed by Muhammad Amir MT# MT1063 © 2026 Muhammad Amir. All rights reserved.",
+  "author": "Muhammad Amir <marknuega@gmail.com>",
+  "type": "module",
+  "main": "main.js",
+  "scripts": {
+    "schema": "node scripts/make-sqlite-schema.mjs",
+    "prepare-app": "node scripts/prepare.mjs",
+    "build": "npm run prepare-app && electron-builder --win --publish never",
+    "start": "npm run prepare-app && electron ."
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.3",
+    "bcryptjs": "^3.0.3",
+    "cookie-parser": "^1.4.7",
+    "express": "^4.21.2",
+    "express-rate-limit": "^8.6.1",
+    "helmet": "^8.3.0",
+    "jsonwebtoken": "^9.0.3"
+  },
+  "devDependencies": {
+    "electron": "^43.4.1",
+    "electron-builder": "^26.15.3",
+    "prisma": "^6.19.3"
+  },
+  "build": {
+    "appId": "sa.trc.mms",
+    "productName": "TRC-MMS",
+    "copyright": "© 2026 Muhammad Amir. All rights reserved.",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "app/**/*",
+      "prisma/schema.prisma",
+      "node_modules/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "app/template.db",
+        "to": "template.db"
+      }
+    ],
+    "asarUnpack": [
+      "app/generated/prisma/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "TRC-MMS"
+    }
+  }
+}

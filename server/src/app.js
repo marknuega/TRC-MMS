@@ -32,7 +32,14 @@ export const app = express()
 // client IP. Locally there's no proxy in front, so trusting a forwarded-for
 // hop that was never set makes express-rate-limit see an undefined IP and
 // throw; leave trust proxy off outside production.
-app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : false)
+//
+// NODE_ENV alone stopped being enough to decide this once the offline desktop
+// build existed: it runs NODE_ENV=production (so the client is served from
+// client/dist) but has nothing in front of it at all, so it sets TRUST_PROXY=0
+// and rate-limit goes on reading the real socket address.
+const trustProxy =
+  process.env.TRUST_PROXY != null ? Number(process.env.TRUST_PROXY) : process.env.NODE_ENV === 'production' ? 1 : 0
+app.set('trust proxy', Number.isFinite(trustProxy) && trustProxy > 0 ? trustProxy : false)
 
 // Security headers. CSP is tuned for the Vite SPA this server also serves
 // (same-origin scripts/styles; data: URIs for the select chevron + images).

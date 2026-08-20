@@ -1,0 +1,12 @@
+# Assembled by scripts/prepare.mjs on every build — never edit or commit.
+app/
+# Derived from server/prisma/schema.prisma by scripts/make-sqlite-schema.mjs.
+prisma/
+# electron-builder output: the installer itself.
+release/
+node_modules/
+
+# The repo root ignores build/ (it means "compiler output" there). Here it is
+# the opposite: build/ holds the icons electron-builder reads as INPUT, so a
+# clone without them cannot produce an installer. This deeper rule wins.
+!build/

@@ -1,0 +1,126 @@
+# TRC-MMS — offline desktop build
+
+A Windows installer that runs TRC-MMS entirely on one computer, with no internet
+connection of any kind.
+
+_Software Developed by Muhammad Amir · MT# MT1063 — © 2026 Muhammad Amir. All rights reserved._
+
+## What it is
+
+There is no desktop rewrite. This packages the **same** Express server and the
+**same** React client that run on Railway, and points an Electron window at them
+over `127.0.0.1`. The only substitution is the database: PostgreSQL becomes a
+local SQLite file.
+
+```
+TRC-MMS.exe
+  └── Electron window ── http://127.0.0.1:<stable port>
+                            └── Express (server/src, unmodified)
+                                  └── SQLite  %APPDATA%\TRC-MMS\trc-mms.db
+```
+
+Nothing in the app contacts the network. No CDN, no remote font, no telemetry,
+no sync.
+
+## Building the installer
+
+```bash
+cd desktop
+npm install
+npm run build      # -> desktop/release/TRC-MMS Setup 1.0.0.exe
+```
+
+`npm run build` runs `scripts/prepare.mjs` first, which:
+
+1. builds the React client if `client/dist` is missing,
+2. copies `server/src` and `client/dist` into `desktop/app/`, preserving the
+   relative layout so `app.js` finds the client with no code change,
+3. follows the server's imports into `client/src` and copies only the modules it
+   actually shares (currently `options.js` and `report.js`),
+4. derives the SQLite schema from `server/prisma/schema.prisma`,
+5. generates a SQLite Prisma client into `app/generated/prisma`, and
+6. builds `app/template.db` — the empty starter database.
+
+`desktop/app/`, `desktop/prisma/` and `desktop/release/` are all generated. None
+of them are committed.
+
+## Checking it before you ship it
+
+```bash
+node scripts/smoke.mjs
+```
+
+Boots the packaged server against a throwaway SQLite database and drives the
+real HTTP API — login, sessions, the `Json` columns, the report round trip.
+This is the check that matters: everything it covers is something the
+PostgreSQL→SQLite conversion could have broken silently.
+
+## Installing on a technician's PC
+
+Copy `TRC-MMS Setup 1.0.0.exe` (about 132 MB) to the machine and run it. It
+installs per-user, so it needs no administrator rights, and it creates a desktop
+and Start Menu shortcut.
+
+**On first launch a dialog shows the administrator username and a generated
+password. Write it down — it is shown once and is never stored in readable
+form.** If it is lost, use **Help → Reset admin password**.
+
+## Where the data lives
+
+```
+%APPDATA%\TRC-MMS\
+    trc-mms.db     every report, entry, inventory row and user
+    config.json    the JWT secret, the local port, the installation ID
+```
+
+Deliberately **not** beside the `.exe`: Program Files is not writable by a
+standard user, and reinstalling or upgrading replaces that folder wholesale.
+Keeping the database in the profile means a reinstall never destroys reports.
+
+**`trc-mms.db` is the only file worth backing up.** `File → Open data folder`
+opens it directly. Copy that file somewhere safe on a schedule — there is no
+server behind this build, so if the machine dies, that file is the reports.
+
+## Things to know before rolling it out
+
+**Each install is an island.** Every copy has its own database. A report typed
+on one machine does not exist on any other, an admin sees only what was typed on
+their own PC, and inventory counts drift apart independently. This is what a
+fully standalone build means, and it is the main thing to weigh against the LAN
+option (one PC serving the others, still with no internet).
+
+**Document numbers collide across machines.** Each install mints its own
+`REP-####` series starting from 1, so two PCs will both produce `REP-0001` for
+different reports. `config.json` carries a per-install `deviceTag` (shown under
+**Help → About**) so the documents can be told apart after the fact.
+
+**Upgrades keep the data but not schema changes.** Installing a newer build
+leaves `%APPDATA%\TRC-MMS\trc-mms.db` untouched, which is right for the reports
+but means a build whose schema has changed will not match an existing database.
+Adding a migration step is the follow-up work when the schema next moves.
+
+**The build is unsigned.** Windows SmartScreen will warn on first run
+("Windows protected your PC" → More info → Run anyway). A code-signing
+certificate is what removes that.
+
+## Why the schema is generated, not written
+
+`scripts/make-sqlite-schema.mjs` derives the SQLite schema from the server's
+PostgreSQL one at build time, so the two cannot drift — a model added to the
+server and forgotten here would otherwise ship a desktop app whose database
+silently lacks a table.
+
+Three differences are handled, and anything else stops the build rather than
+being guessed at:
+
+| PostgreSQL | SQLite | Why it is safe |
+| --- | --- | --- |
+| `provider = "postgresql"` | `provider = "sqlite"` | the database file path arrives as `DATABASE_URL`, as on Railway |
+| `@db.Date` | dropped | every write is `new Date("YYYY-MM-DD")` (UTC midnight) and every read goes through `dateKey()`, so date-only semantics survive |
+| `Json @default("{}")` | default dropped | Prisma emits invalid SQLite DDL for it; both tables are single-row stores whose every write passes `data` explicitly |
+
+The generated Prisma client goes to `app/generated/prisma` rather than the
+default `node_modules/.prisma/client`, because electron-builder collects
+`node_modules` from the declared dependency tree — `.prisma` is not a package
+anyone depends on, so the default location is dropped from the installer and the
+app dies on its first query.
