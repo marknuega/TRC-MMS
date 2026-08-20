@@ -8,7 +8,7 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
 import LoginPage from './LoginPage.jsx'
-import { getMe, logout } from './api'
+import { getMe, logout, syncNow } from './api'
 
 // Gate the whole app behind a session: show the login page until authenticated.
 function Gate() {
@@ -55,5 +55,12 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').catch(() => {
       /* PWA install is a progressive enhancement — ignore registration errors */
     })
+  })
+
+  // A Background Sync fired while this window was open. The worker deliberately
+  // does not replay the queue itself in that case — this context owns the
+  // optimistic cache and the 401 handling — so it hands the work back here.
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data?.type === 'FLUSH_QUEUE') syncNow()
   })
 }

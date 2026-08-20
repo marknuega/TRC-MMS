@@ -1,0 +1,90 @@
+<!doctype html>
+<!--
+  Software Developed by Muhammad Amir  MT# MT1063
+  © 2026 Muhammad Amir. All rights reserved.
+
+  Last-resort fallback only. A normal offline launch boots the real app from the
+  cached shell and reads from IndexedDB — this page is shown when the very first
+  visit happened with no connection, so there is no shell to boot.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#2563eb" />
+    <link rel="icon" type="image/png" href="/icon-192.png" />
+    <title>TRC-MMS — Offline</title>
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+        background: #f8fafc;
+        color: #0f172a;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100svh;
+        padding: 1.5rem;
+      }
+      .card {
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        padding: 2.5rem 2rem;
+        text-align: center;
+        max-width: 26rem;
+        width: 100%;
+        box-shadow: 0 4px 24px rgba(15, 23, 42, 0.08);
+      }
+      img { width: 56px; height: 56px; margin-bottom: 1rem; }
+      h1 { font-size: 1.3rem; margin-bottom: 0.6rem; }
+      p { color: #64748b; font-size: 0.95rem; line-height: 1.6; }
+      .note {
+        margin-top: 1.25rem;
+        background: rgba(37, 99, 235, 0.1);
+        border: 1px solid rgba(37, 99, 235, 0.3);
+        color: #1d4ed8;
+        border-radius: 8px;
+        padding: 0.6rem 0.9rem;
+        font-size: 0.8rem;
+        font-weight: 600;
+      }
+      button {
+        margin-top: 1.25rem;
+        width: 100%;
+        background: #2563eb;
+        color: #fff;
+        border: 0;
+        border-radius: 9px;
+        padding: 0.7rem 1.5rem;
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button:hover { background: #1d4ed8; }
+      @media (prefers-color-scheme: dark) {
+        body { background: #0f172a; color: #e2e8f0; }
+        .card { background: #1e293b; border-color: #334155; }
+        p { color: #94a3b8; }
+        .note { color: #93c5fd; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <img src="/icon-192.png" alt="" />
+      <h1>You're offline</h1>
+      <p>
+        TRC-MMS could not be loaded because this device has never opened it while
+        connected. Open it once with a connection and it will work offline from
+        then on.
+      </p>
+      <div class="note">Nothing has been lost — no data was entered on this device yet.</div>
+      <button type="button" onclick="location.replace('/')">Try again</button>
+    </div>
+    <script>
+      // Retry by itself the moment the connection comes back.
+      addEventListener('online', () => location.replace('/'))
+    </script>
+  </body>
+</html>
