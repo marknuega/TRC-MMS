@@ -1250,6 +1250,10 @@ function App({ user, onLogout }) {
   // Scopes the '+' shortcut's "focus the new row's Issue field" — the DOM is
   // searched rather than tracking a per-row ref, since rows come and go.
   const cardRef = useRef(null)
+  // Where the cursor lands once an entry is saved — the Tel number, the same
+  // field that starts identifying the next device — so filing one entry
+  // walks straight into the next without reaching for the mouse.
+  const telRef = useRef(null)
 
   // The agency a number selected on its own, or '' when none has.
   //
@@ -1455,6 +1459,9 @@ function App({ user, onLogout }) {
         reportDate: f.reportDate,
         technician: f.technician,
       }))
+      // The Tel input isn't cleared until the setForm above re-renders it —
+      // wait a frame so the focus lands on the fresh, empty field.
+      if (!isTransmittal) requestAnimationFrame(() => telRef.current?.focus())
       setError(null)
       refresh()
     } catch (err) {
@@ -2598,6 +2605,7 @@ function App({ user, onLogout }) {
                                 Tel number <span className="opt">(optional)</span>
                               </span>
                               <input
+                                ref={telRef}
                                 value={form.telNumber}
                                 onChange={setTel}
                                 placeholder="Full number, e.g. 0501234567"
