@@ -10,26 +10,35 @@ import { execSync } from 'node:child_process'
 // Stale bundles are the recurring bug this exists to kill: the calculation rules
 // live in client/src/report.js, so a stale client is not a cosmetic problem —
 // it silently produces different numbers from the same data.
-function buildId() {
-  const stamp = new Date().toISOString().replace(/[-:]/g, '').slice(0, 13) // 20260820T1401
-  let sha = 'nogit'
+function commitSha() {
+  // A local checkout: ask git, and say so when the tree is dirty — a hand-tested
+  // build is otherwise indistinguishable from the commit someone else can check
+  // out under the same name.
   try {
-    sha = execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] })
+    const sha = execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] })
       .toString()
       .trim()
-    // A dirty tree is not the commit it claims to be — say so, or a hand-tested
-    // build is indistinguishable from the commit someone else can check out.
-    if (
-      execSync('git status --porcelain', { stdio: ['ignore', 'pipe', 'ignore'] })
-        .toString()
-        .trim()
-    ) {
-      sha += '-dirty'
-    }
+    const dirty = execSync('git status --porcelain', { stdio: ['ignore', 'pipe', 'ignore'] })
+      .toString()
+      .trim()
+    return dirty ? `${sha}-dirty` : sha
   } catch {
-    // Not a git checkout (a release tarball, say). The timestamp still pins it.
+    // Not a git checkout. CI builders usually are not: Railway builds from a
+    // source snapshot with no .git directory, which is why the first deploy of
+    // this stamp came out as "nogit" and could not name its own commit. The
+    // platform passes the sha in the environment instead.
+    const fromEnv =
+      process.env.RAILWAY_GIT_COMMIT_SHA ||
+      process.env.SOURCE_COMMIT ||
+      process.env.GITHUB_SHA ||
+      process.env.VERCEL_GIT_COMMIT_SHA
+    return fromEnv ? fromEnv.slice(0, 7) : 'nogit'
   }
-  return `${stamp}-${sha}`
+}
+
+function buildId() {
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').slice(0, 13) // 20260820T1401
+  return `${stamp}-${commitSha()}`
 }
 
 const BUILD_ID = process.env.BUILD_ID || buildId()
