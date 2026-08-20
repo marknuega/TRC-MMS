@@ -1,0 +1,13 @@
+node_modules/
+dist/
+build/
+server/generated/
+server/prisma/migrations/
+
+# Lock files are generated — reformatting them only creates merge conflicts.
+package-lock.json
+**/package-lock.json
+
+# Prose, not code. Reflowing tables and hard-wrapped paragraphs would churn
+# documents that are written to be read as written.
+*.md

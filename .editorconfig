@@ -1,0 +1,19 @@
+# Editor defaults for every contributor, whatever their editor.
+# The JavaScript style itself (no semicolons, single quotes, 120 columns) lives
+# in .prettierrc — this file only covers what EditorConfig can express.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.md]
+# Two trailing spaces are a hard line break in Markdown.
+trim_trailing_whitespace = false
+
+[*.{json,yml,yaml}]
+indent_size = 2

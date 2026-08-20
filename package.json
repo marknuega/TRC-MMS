@@ -4,5 +4,12 @@
   "description": "TRC Daily Report — Software Developed by Muhammad Amir MT# MT1063 © 2026 Muhammad Amir. All rights reserved.",
   "engines": {
     "node": "22.x"
+  },
+  "scripts": {
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "prettier": "3.9.6"
   }
 }
