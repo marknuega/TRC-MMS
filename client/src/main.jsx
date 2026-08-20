@@ -9,6 +9,7 @@ import './index.css'
 import App from './App.jsx'
 import LoginPage from './LoginPage.jsx'
 import { getMe, logout, syncNow } from './api'
+import { setStandalone } from './offline.js'
 
 // Gate the whole app behind a session: show the login page until authenticated.
 function Gate() {
@@ -17,7 +18,10 @@ function Gate() {
 
   useEffect(() => {
     getMe()
-      .then(({ user }) => {
+      .then(({ user, edition }) => {
+        // The offline desktop build says so here. Told early, before the app
+        // renders, so the sync UI never flashes on a machine it means nothing on.
+        setStandalone(edition === 'desktop')
         if (user) {
           setUser(user)
           setStatus('authed')

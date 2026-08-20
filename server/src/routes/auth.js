@@ -30,7 +30,13 @@ router.post('/logout', (req, res) => {
 
 // GET /api/auth/me - current user (or null). Never 401 so the client can probe.
 router.get('/me', (req, res) => {
-  res.json({ user: publicUser(req.user) })
+  // Which build the client is talking to. The offline desktop edition serves
+  // this same client from 127.0.0.1 against a database on the same machine, so
+  // there is no remote to fall behind and nothing for the sync machinery to
+  // mean — and on a PC with no network at all, navigator.onLine is false, which
+  // would otherwise brand a perfectly working app "Offline" forever.
+  // Absent or 'server' means the normal deployed app.
+  res.json({ user: publicUser(req.user), edition: process.env.APP_EDITION || 'server' })
 })
 
 // POST /api/auth/request - prospective user asks an admin for credentials (public).

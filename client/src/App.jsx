@@ -631,7 +631,7 @@ function App({ user, onLogout }) {
   const nextReportId = `REP-${pad4(nextSeriesNumber(saved, 'REP', seriesBranch))}`
   const nextRefId = `REF-${pad4(nextSeriesNumber(saved, 'REF', seriesBranch))}`
   const nextTransId = `TRANS-${pad4(nextSeriesNumber(saved, 'TRANS', seriesBranch))}`
-  const [sync, setSync] = useState({ online: true, pending: 0, syncing: false, authExpired: false })
+  const [sync, setSync] = useState({ online: true, standalone: false, pending: 0, syncing: false, authExpired: false })
   const [editId, setEditId] = useState(null) // entry id being edited in the modal
   const [editForm, setEditForm] = useState(null)
   const lastEntriesSig = useRef('') // baseline for the live-refresh poll
@@ -2352,6 +2352,11 @@ function App({ user, onLogout }) {
               </span>
             </button>
           ) : (
+            // Hidden entirely in the offline desktop edition: its server is on
+            // this same machine, so there is no remote to be behind and nothing
+            // a technician could usefully do about "syncing". An expired session
+            // still shows above, because that one is real and actionable.
+            !sync.standalone &&
             (!sync.online || sync.pending > 0) && (
               <div
                 className={`sync-pill${sync.online ? ' syncing' : ' offline'}`}

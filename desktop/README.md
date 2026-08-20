@@ -13,21 +13,49 @@ over `127.0.0.1`. The only substitution is the database: PostgreSQL becomes a
 local SQLite file.
 
 ```
-TRC-MMS.exe
+TRC-MMS (Desktop).exe
   └── Electron window ── http://127.0.0.1:<stable port>
                             └── Express (server/src, unmodified)
-                                  └── SQLite  %APPDATA%\TRC-MMS\trc-mms.db
+                                  └── SQLite  %APPDATA%\TRC-MMS (Desktop)\trc-mms.db
 ```
 
 Nothing in the app contacts the network. No CDN, no remote font, no telemetry,
 no sync.
+
+## Telling it apart from the website
+
+The deployed site can be installed as a PWA, which also opens in its own window
+with its own icon and no browser chrome. The two look nearly identical, but one
+talks to Railway and the other to a database on this machine — and typing a day
+of reports into the wrong one is an easy, expensive mistake.
+
+So this build is named **TRC-MMS (Desktop)** everywhere: the installer, the
+shortcut, the data folder, and the window title, which is pinned rather than
+taken from the page (the page's `<title>` is the same string the PWA shows). It
+also has a **File / Edit / View / Help** menu bar, which the PWA has not, and
+`Help → About` names the edition, the installation ID and the data folder.
+
+## The sync UI is suppressed here
+
+The client is shipped unchanged, offline queue and all, but the server sets
+`APP_EDITION=desktop` and `/api/auth/me` passes that to the client, which then
+hides the sync and offline pills.
+
+This is not cosmetic. On a PC with no network at all, `navigator.onLine` is
+`false` even though the server is on the same machine, which without this flag
+would (a) show a permanent "Offline" badge on a perfectly working app and (b)
+make `flushQueue` refuse to drain, stranding any write that ever did queue.
+Writes themselves were never at risk — they always try the network first, and
+`fetch` to `127.0.0.1` succeeds regardless of what the network adapter says.
+
+The expired-session pill still shows, because that one is real and actionable.
 
 ## Building the installer
 
 ```bash
 cd desktop
 npm install
-npm run build      # -> desktop/release/TRC-MMS Setup 1.0.0.exe
+npm run build      # -> desktop/release/TRC-MMS (Desktop) Setup 1.0.0.exe
 ```
 
 `npm run build` runs `scripts/prepare.mjs` first, which:
@@ -57,7 +85,7 @@ PostgreSQL→SQLite conversion could have broken silently.
 
 ## Installing on a technician's PC
 
-Copy `TRC-MMS Setup 1.0.0.exe` (about 132 MB) to the machine and run it. It
+Copy `TRC-MMS (Desktop) Setup 1.0.0.exe` (about 126 MB) to the machine and run it. It
 installs per-user, so it needs no administrator rights, and it creates a desktop
 and Start Menu shortcut.
 
@@ -68,7 +96,7 @@ form.** If it is lost, use **Help → Reset admin password**.
 ## Where the data lives
 
 ```
-%APPDATA%\TRC-MMS\
+%APPDATA%\TRC-MMS (Desktop)\
     trc-mms.db     every report, entry, inventory row and user
     config.json    the JWT secret, the local port, the installation ID
 ```
@@ -95,7 +123,7 @@ different reports. `config.json` carries a per-install `deviceTag` (shown under
 **Help → About**) so the documents can be told apart after the fact.
 
 **Upgrades keep the data but not schema changes.** Installing a newer build
-leaves `%APPDATA%\TRC-MMS\trc-mms.db` untouched, which is right for the reports
+leaves `%APPDATA%\TRC-MMS (Desktop)\trc-mms.db` untouched, which is right for the reports
 but means a build whose schema has changed will not match an existing database.
 Adding a migration step is the follow-up work when the schema next moves.
 

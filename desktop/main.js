@@ -26,21 +26,44 @@ import electron from 'electron'
 const { app, BrowserWindow, dialog, Menu, shell } = electron
 import { createServer } from 'node:http'
 import { randomBytes } from 'node:crypto'
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const here = dirname(fileURLToPath(import.meta.url))
 
+// The window, the shortcut and the installer all say "TRC-MMS (Desktop)". The
+// deployed site can be installed as a PWA under the name "TRC-MMS", and the two
+// windows are otherwise near identical — one talks to Railway, the other to a
+// database on this machine. Typing a day of reports into the wrong one is the
+// mistake this name exists to prevent.
+const APP_TITLE = 'TRC-MMS (Desktop)'
+
 // Pin the data folder name before anything reads it. Left alone, Electron names
 // it from package.json's `name` ("trc-mms-desktop"), which is a build-time
 // detail nobody should have to recognise when they go looking for the database
 // to back up. Must run before the first getPath('userData').
-app.setName('TRC-MMS')
+app.setName(APP_TITLE)
 
 const userData = app.getPath('userData')
 const DB_PATH = join(userData, 'trc-mms.db')
 const CONFIG_PATH = join(userData, 'config.json')
+
+// Builds before the rename kept their data in a folder named "TRC-MMS". Renaming
+// the app moved where it looks, so carry the old folder across rather than
+// silently starting empty and looking, to whoever typed into it, like data loss.
+// One-time and conservative: it only ever runs when the new folder does not yet
+// exist, so it can never overwrite newer data.
+function migrateLegacyDataFolder() {
+  const legacy = join(dirname(userData), 'TRC-MMS')
+  if (legacy === userData || existsSync(userData) || !existsSync(join(legacy, 'trc-mms.db'))) return
+  try {
+    renameSync(legacy, userData)
+    console.log(`migrated data folder ${legacy} -> ${userData}`)
+  } catch (err) {
+    console.error('could not migrate the old data folder:', err.message)
+  }
+}
 
 // A packaged build reads the seed database from resources/; an unpackaged `npm
 // start` reads it straight out of app/.
@@ -54,6 +77,7 @@ let firstRunAdmin = null // { username, password } to show once, after the windo
 // invalidated on launch. It is generated per install rather than baked into the
 // installer, so one machine's secret cannot forge another's sessions.
 function loadConfig() {
+  migrateLegacyDataFolder()
   mkdirSync(userData, { recursive: true })
   if (existsSync(CONFIG_PATH)) {
     try {
@@ -96,6 +120,11 @@ async function startServer(config) {
   // Nothing sits in front of this server, so the rate limiter must read the
   // real socket address rather than a forwarded-for header no one set.
   process.env.TRUST_PROXY = '0'
+
+  // Tells the client (via /api/auth/me) that it is the standalone edition, so
+  // it hides the sync UI and stops trusting navigator.onLine — which is false
+  // on a PC with no network even though this server is a millimetre away.
+  process.env.APP_EDITION = 'desktop'
 
   // This build generates its own SQLite Prisma client into app/generated/prisma
   // (see make-sqlite-schema.mjs for why it is not in the default location).
@@ -184,7 +213,7 @@ function createWindow() {
     minWidth: 1024,
     minHeight: 640,
     show: false,
-    title: 'TRC-MMS',
+    title: APP_TITLE,
     backgroundColor: '#ffffff',
     icon: app.isPackaged ? undefined : join(here, 'build/icon.png'),
     webPreferences: {
@@ -195,6 +224,11 @@ function createWindow() {
       sandbox: true,
     },
   })
+
+  // The page sets its own <title>, which Electron would adopt — and that title
+  // is the same string the PWA window shows. Keeping ours means the title bar
+  // stays the one place the two builds are always distinguishable.
+  win.on('page-title-updated', (e) => e.preventDefault())
 
   win.once('ready-to-show', () => {
     win.show()

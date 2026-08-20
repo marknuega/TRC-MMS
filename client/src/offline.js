@@ -61,6 +61,19 @@ const delQueue = (id) => idb(QUEUE_STORE, 'readwrite', (s) => s.delete(id)).catc
 const listeners = new Set()
 let flushing = false
 let authExpired = false // session cookie expired mid-sync; queue is kept intact
+
+// The offline desktop edition talks to a server on this same machine, so it is
+// always reachable no matter what the network adapter says. That distinction
+// matters twice over: a standalone PC with no network reports
+// navigator.onLine === false, which would otherwise show a permanent "Offline"
+// badge AND make flushQueue below refuse to drain — stranding any write that
+// ever did queue. Set once from /api/auth/me at startup.
+let standalone = false
+export function setStandalone(value) {
+  standalone = Boolean(value)
+  notify()
+}
+const isOnline = () => standalone || navigator.onLine
 export function onSyncChange(fn) {
   listeners.add(fn)
   notify()
@@ -68,7 +81,7 @@ export function onSyncChange(fn) {
 }
 export async function notify() {
   const pending = (await listQueue()).length
-  const state = { online: navigator.onLine, pending, syncing: flushing, authExpired }
+  const state = { online: isOnline(), standalone, pending, syncing: flushing, authExpired }
   for (const fn of listeners) fn(state)
 }
 
@@ -350,7 +363,7 @@ export async function queueMutation(method, path, body) {
 // Replay the queue in order. `send(op)` performs the raw network request and
 // resolves on any HTTP response, rejecting only on a network failure.
 export async function flushQueue(send) {
-  if (flushing || !navigator.onLine) return
+  if (flushing || !isOnline()) return
   flushing = true
   authExpired = false // give a fresh attempt the benefit of the doubt each run
   await notify()

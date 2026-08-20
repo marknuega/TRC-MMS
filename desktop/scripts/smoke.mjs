@@ -33,6 +33,7 @@ process.env.DATABASE_URL = `file:${db}`
 process.env.PRISMA_CLIENT_URL = pathToFileURL(join(desktop, 'app/generated/prisma/index.js')).href
 process.env.JWT_SECRET = 'smoke-test-secret-not-used-anywhere-real'
 process.env.TRUST_PROXY = '0'
+process.env.APP_EDITION = 'desktop'
 process.env.SEED_ADMIN_USERNAME = 'admin'
 process.env.SEED_ADMIN_PASSWORD = 'smoke-test-password'
 
@@ -100,6 +101,14 @@ await check('session is accepted', async () => {
   const body = await res.json()
   must(res.ok, `expected 2xx, got ${res.status}`)
   must(body.user?.username === 'admin', `expected admin, got ${JSON.stringify(body.user)}`)
+})
+
+// The whole standalone UI hinges on this one field: without it the client shows
+// a permanent "Offline" badge (navigator.onLine is false on a PC with no
+// network) and refuses to drain its queue.
+await check('reports itself as the desktop edition', async () => {
+  const body = await authed('/api/auth/me').then((r) => r.json())
+  must(body.edition === 'desktop', `expected edition "desktop", got ${JSON.stringify(body.edition)}`)
 })
 
 // The Json columns are the ones whose SQLite translation was least certain, so

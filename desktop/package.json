@@ -28,7 +28,7 @@
   },
   "build": {
     "appId": "sa.trc.mms",
-    "productName": "TRC-MMS",
+    "productName": "TRC-MMS (Desktop)",
     "copyright": "© 2026 Muhammad Amir. All rights reserved.",
     "directories": {
       "output": "release",
@@ -66,7 +66,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "TRC-MMS"
+      "shortcutName": "TRC-MMS (Desktop)"
     }
   }
 }
