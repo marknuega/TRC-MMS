@@ -80,6 +80,32 @@ the code it loaded. `UpdateBanner` in `client/src/version.jsx` polls
 `/api/version` (every five minutes and on window focus) and offers a reload when
 the running build no longer matches the server's.
 
+## Printing: why the desktop path is different
+
+Electron has no print preview. `window.print()` opens the Windows **printer**
+dialog — no PDF view, no "Save as PDF" — and `window.open('', '_blank')`, which
+several exports used to build their document in, is a popup the shell declines
+to open at all, so those exports silently did nothing.
+
+Every export now goes through `client/src/printDoc.js`. In a browser it is the
+hidden-iframe trick as before. In the desktop app the document is handed to the
+main process over `preload.cjs`, rendered with `printToPDF`, and shown in a
+viewer window with Chromium's own PDF controls — the same end result the browser
+gives: a PDF on screen that can be saved.
+
+Two things that are easy to get wrong here, both checked by
+`npm run print-check`:
+
+- **The preload must actually load.** Electron ignores a preload path it cannot
+  resolve without raising anything — no error, no event — leaving
+  `window.trcDesktop` undefined and the client falling back to the browser path,
+  which on Electron is the printer dialog. The check asserts the bridge is there.
+- **One reused renderer, not one per export.** Destroying a `BrowserWindow` and
+  creating another leaves the new one failing every `file://` load with
+  `ERR_FAILED`, so the first export would work and every later one would produce
+  nothing. The hidden worker is created once and reused, and dropped with the
+  main window so `window-all-closed` still fires.
+
 ## Building the installer
 
 ```bash

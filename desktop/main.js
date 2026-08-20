@@ -23,10 +23,11 @@
 // imported whole and destructured — `import { app } from 'electron'` throws
 // "does not provide an export named 'app'" before any of this file runs.
 import electron from 'electron'
-const { app, BrowserWindow, dialog, Menu, shell } = electron
+const { app, BrowserWindow, dialog, ipcMain, Menu, shell } = electron
 import { createServer } from 'node:http'
+import { tmpdir } from 'node:os'
 import { randomBytes } from 'node:crypto'
-import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
@@ -216,6 +217,91 @@ function clientBuildId() {
   }
 }
 
+// ── Printing ─────────────────────────────────────────────────────
+// Electron has no print preview. window.print() opens the Windows printer
+// dialog — no PDF view, no "Save as PDF" — which is not what the web app does
+// and not what anyone wants from an export button. So the renderer hands the
+// document here instead (see preload.cjs), and this renders a real PDF and
+// shows it in a viewer window the user can save or print from.
+
+const scratch = [] // temp files to remove on quit
+
+function tempFile(ext) {
+  const file = join(tmpdir(), `trc-mms-${Date.now()}-${randomBytes(4).toString('hex')}.${ext}`)
+  scratch.push(file)
+  return file
+}
+
+// One hidden renderer, reused for every export, created on first use and kept
+// for the life of the app.
+//
+// Not one window per export: destroying a BrowserWindow and creating another
+// leaves the new one failing every file:// load with ERR_FAILED, so the first
+// export would work and every one after it would silently produce nothing.
+// Reusing a single window sidesteps that entirely and is faster besides.
+let pdfWorker = null
+
+function worker() {
+  if (pdfWorker && !pdfWorker.isDestroyed()) return pdfWorker
+  pdfWorker = new BrowserWindow({
+    show: false,
+    // These documents are static markup built by the app itself; they never need
+    // scripting, and turning it off means a report can never execute anything.
+    webPreferences: { javascript: false, contextIsolation: true, nodeIntegration: false },
+  })
+  return pdfWorker
+}
+
+// Render a standalone HTML document. It is loaded from a file rather than a
+// data: URL — Electron refuses data: URLs in a window, and a full report would
+// exceed what one can carry anyway.
+async function htmlToPdf(html) {
+  const source = tempFile('html')
+  writeFileSync(source, html, 'utf8')
+
+  const w = worker()
+  await w.loadFile(source)
+  return w.webContents.printToPDF({
+    printBackground: true,
+    // The exports carry their own @page rules; honouring them keeps the desktop
+    // output identical to what the browser produces.
+    preferCSSPageSize: true,
+    pageSize: 'A4',
+  })
+}
+
+function showPdf(data, title) {
+  const file = tempFile('pdf')
+  writeFileSync(file, data)
+
+  const viewer = new BrowserWindow({
+    width: 900,
+    height: 1000,
+    title: title || 'TRC-MMS — print preview',
+    autoHideMenuBar: true,
+    // Chromium's own PDF viewer, which brings the save and print controls with
+    // it. Without plugins the window would offer to download the file instead.
+    webPreferences: { plugins: true, contextIsolation: true, nodeIntegration: false },
+  })
+  viewer.setMenuBarVisibility(false)
+  // Chromium's PDF viewer renames the window after the temp file it is showing,
+  // which is a scratch path no one should be reading. Keep the given title.
+  viewer.on('page-title-updated', (e) => e.preventDefault())
+  viewer.loadURL(pathToFileURL(file).href)
+  return file
+}
+
+ipcMain.handle('trc:print-html', async (_event, { html, title }) => {
+  showPdf(await htmlToPdf(html), title)
+})
+
+ipcMain.handle('trc:print-page', async (event, { title }) => {
+  // The live page, through its own print stylesheet — the same thing the
+  // browser would put on paper.
+  const data = await event.sender.printToPDF({ printBackground: true, preferCSSPageSize: true, pageSize: 'A4' })
+  showPdf(data, title)
+})
+
 // ── Window ───────────────────────────────────────────────────────
 function createWindow() {
   const win = new BrowserWindow({
@@ -229,7 +315,10 @@ function createWindow() {
     icon: app.isPackaged ? undefined : join(here, 'build/icon.png'),
     webPreferences: {
       // The page is our own app served from localhost, but it has no need to
-      // reach Node, so it does not get to.
+      // reach Node, so it does not get to. The preload is the single, narrow
+      // exception: two functions for rendering a document to PDF, and nothing
+      // else crosses.
+      preload: join(here, 'preload.cjs'),
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
@@ -240,6 +329,15 @@ function createWindow() {
   // is the same string the PWA window shows. Keeping ours means the title bar
   // stays the one place the two builds are always distinguishable.
   win.on('page-title-updated', (e) => e.preventDefault())
+
+  // The hidden PDF worker is still a window as far as Electron is concerned, so
+  // leaving it alive would stop 'window-all-closed' ever firing — after the
+  // first export, closing the app would leave it running invisibly. Drop it with
+  // the main window, and let any open PDF viewer keep the app alive on its own.
+  win.on('closed', () => {
+    if (pdfWorker && !pdfWorker.isDestroyed()) pdfWorker.destroy()
+    pdfWorker = null
+  })
 
   win.once('ready-to-show', () => {
     win.show()
@@ -410,6 +508,12 @@ if (!app.requestSingleInstanceLock()) {
       )
       app.quit()
     }
+  })
+
+  // The rendered PDFs and their HTML sources are scratch files; a viewer window
+  // may still hold one open, so they go at quit rather than on close.
+  app.on('will-quit', () => {
+    for (const file of scratch) rmSync(file, { force: true })
   })
 
   app.on('window-all-closed', () => app.quit())

@@ -36,6 +36,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { COPYRIGHT_HTML } from './copyright'
+import { printDocument } from './printDoc.js'
 import { FALLBACK, useCodeMap } from './codes'
 import { issueCodeIndex } from './options'
 import { groupComponents, PARTS_RE, COMPONENT_BUCKETS } from './refGroups'
@@ -184,25 +185,7 @@ function printReference(data) {
   <div class="foot">${COPYRIGHT_HTML}</div>
 </body></html>`
 
-  const iframe = document.createElement('iframe')
-  iframe.style.position = 'fixed'
-  iframe.style.right = '0'
-  iframe.style.bottom = '0'
-  iframe.style.width = '0'
-  iframe.style.height = '0'
-  iframe.style.border = '0'
-  document.body.appendChild(iframe)
-  const doc = iframe.contentWindow.document
-  doc.open()
-  doc.write(html)
-  doc.close()
-  const cleanup = () => setTimeout(() => iframe.remove(), 1500)
-  iframe.contentWindow.onafterprint = cleanup
-  setTimeout(() => {
-    iframe.contentWindow.focus()
-    iframe.contentWindow.print()
-    cleanup()
-  }, 250)
+  printDocument(html, 'TRC-MMS — Code Reference')
 }
 
 // Actions, Companies, Technician ID, Agencies — same card design as the

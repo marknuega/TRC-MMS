@@ -7,6 +7,7 @@ import { useMemo, useState } from 'react'
 import { periodEntries, buildSparePartsReport } from './report'
 import { Pie } from './Pie'
 import { COPYRIGHT_HTML } from './copyright'
+import { printDocument } from './printDoc.js'
 import { ALL_BRANCHES } from './options'
 import { PeriodPicker, makePeriod, periodValue, periodLabel } from './period'
 import SearchSelect from './SearchSelect'
@@ -218,8 +219,6 @@ export default function SparePartsReport({
   // Consolidated printable report — same sections as the Excel export, laid out
   // for print/save-as-PDF. Merges every branch when "All branches" is selected.
   function exportPdf() {
-    const w = window.open('', '_blank')
-    if (!w) return
     const e = (v) =>
       String(v ?? '')
         .replace(/&/g, '&amp;')
@@ -263,7 +262,7 @@ export default function SparePartsReport({
           `<tr><td>${e(ag.agency)}</td><td class="c">${agencyGet(ag, 'MAINTENANCE')}</td><td class="c">${agencyGet(ag, 'PROGRAMMING')}</td><td class="c">${agencyGet(ag, 'INSTALLATION')}</td><td class="c">${agencyGet(ag, 'DISMANTLE')}</td></tr>`,
       )
       .join('')
-    w.document.write(
+    printDocument(
       `<!doctype html><html><head><meta charset="utf-8"><title>${e(fileBase)}</title>` +
         `<style>body{font-family:Arial,sans-serif;color:#111;margin:24px}h1{font-size:17px;margin:0 0 2px}` +
         `h2{font-size:13px;margin:18px 0 6px;color:#2563eb}p.meta{margin:0 0 14px;color:#555;font-size:12px}` +
@@ -285,9 +284,6 @@ export default function SparePartsReport({
         `<p class="meta" style="margin-top:16px">${COPYRIGHT_HTML}</p>` +
         `</body></html>`,
     )
-    w.document.close()
-    w.focus()
-    w.print()
   }
 
   return (

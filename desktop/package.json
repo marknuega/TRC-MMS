@@ -10,7 +10,8 @@
     "schema": "node scripts/make-sqlite-schema.mjs",
     "prepare-app": "node scripts/prepare.mjs",
     "build": "npm run prepare-app && electron-builder --win --publish never",
-    "start": "npm run prepare-app && electron ."
+    "start": "npm run prepare-app && electron .",
+    "print-check": "electron scripts/print-check.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
@@ -36,6 +37,7 @@
     },
     "files": [
       "main.js",
+      "preload.cjs",
       "app/**/*",
       "prisma/schema.prisma",
       "node_modules/**/*"

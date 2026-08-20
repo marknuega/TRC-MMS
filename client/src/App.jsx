@@ -62,6 +62,7 @@ import IssueInput from './IssueInput'
 import { Credit, Copyright, COPYRIGHT_HTML } from './copyright'
 import { BrandMark } from './brand'
 import { BUILD_ID, UpdateBanner } from './version.jsx'
+import { printDocument, printCurrentPage } from './printDoc.js'
 import InstallApp from './InstallApp.jsx'
 import {
   groupReports,
@@ -444,43 +445,6 @@ function MultiSelect({ value, options, onChange, placeholder = '— select —' 
       )}
     </div>
   )
-}
-
-// Print an HTML document via a hidden iframe (more reliable than a popup for
-// Chrome's "Save as PDF" — a script-opened window can hang on "Saving…"). The
-// iframe is kept alive until the print dialog closes so the PDF has its source.
-function printDocument(html) {
-  const iframe = document.createElement('iframe')
-  iframe.setAttribute('aria-hidden', 'true')
-  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden'
-  document.body.appendChild(iframe)
-  const cw = iframe.contentWindow
-  let printed = false
-  let cleaned = false
-  const cleanup = () => {
-    if (cleaned) return
-    cleaned = true
-    // Delay so we never yank the source while Chrome is still writing the file.
-    setTimeout(() => iframe.remove(), 1500)
-  }
-  const doPrint = () => {
-    if (printed) return
-    printed = true
-    try {
-      cw.focus()
-      cw.print()
-    } catch {
-      /* ignore */
-    }
-  }
-  cw.onafterprint = cleanup
-  const doc = cw.document
-  doc.open()
-  doc.write(html)
-  doc.close()
-  if (doc.readyState === 'complete') setTimeout(doPrint, 200)
-  else cw.onload = () => setTimeout(doPrint, 200)
-  setTimeout(doPrint, 800) // fallback if load never fires
 }
 
 // A compact fingerprint of the working entries — changes when an entry is
@@ -3149,7 +3113,7 @@ function App({ user, onLogout }) {
                       <button
                         type="button"
                         className="btn-pdf"
-                        onClick={() => window.print()}
+                        onClick={() => printCurrentPage()}
                         disabled={!reports.length}
                       >
                         ⭳ PDF

@@ -8,6 +8,7 @@ import {
   getInventoryTxns,
 } from './api'
 import { COPYRIGHT_HTML } from './copyright'
+import { printDocument } from './printDoc.js'
 import SearchSelect from './SearchSelect'
 import { advanceOnEnter } from './focusNav'
 
@@ -109,8 +110,6 @@ function downloadCsv(filename, items) {
 }
 
 function exportInventoryPdf(items, branch, store) {
-  const w = window.open('', '_blank')
-  if (!w) return
   const title = `TRC ${branch || 'All'} - Inventory`
   const scope = store ? ` · ${store}` : ''
   const head = ['SKU', 'Store', 'Shelf', 'Item Code', 'Begin', 'Out', 'Avail', 'Remarks']
@@ -121,7 +120,7 @@ function exportInventoryPdf(items, branch, store) {
         `<td class="c">${esc(i.begin)}</td><td class="c">${esc(i.out)}</td><td class="c">${esc(i.avail)}</td><td>${esc(i.remarks)}</td></tr>`,
     )
     .join('')
-  w.document.write(
+  printDocument(
     `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title>` +
       `<style>body{font-family:Arial,sans-serif;color:#111;margin:24px}h1{font-size:16px;margin:0 0 2px}p{margin:0 0 14px;color:#555;font-size:12px}` +
       `table{border-collapse:collapse;width:100%;font-size:10.5px}th,td{border:1px solid #999;padding:4px 6px;text-align:left}` +
@@ -132,9 +131,6 @@ function exportInventoryPdf(items, branch, store) {
       `<p style="margin-top:14px">${COPYRIGHT_HTML}</p>` +
       `</body></html>`,
   )
-  w.document.close()
-  w.focus()
-  w.print()
 }
 
 const isLow = (i) => i.lowStock > 0 && i.avail <= i.lowStock
@@ -198,8 +194,6 @@ export default function Inventory({ embedded = false, branch = '', region = '' }
   }
 
   function exportHistPdf(h) {
-    const w = window.open('', '_blank')
-    if (!w) return
     const head = ['#', 'Date', 'Type', 'Change', 'Avail', 'Reference', 'Branch', 'Material']
     const body = histRows(h)
       .map(
@@ -207,7 +201,7 @@ export default function Inventory({ embedded = false, branch = '', region = '' }
           `<tr>${r.map((c, i) => `<td class="${i === 0 || (i >= 3 && i <= 4) ? 'c' : ''}">${esc(c)}</td>`).join('')}</tr>`,
       )
       .join('')
-    w.document.write(
+    printDocument(
       `<!doctype html><html><head><meta charset="utf-8"><title>Inventory History ${esc(h.item.sku)}</title>` +
         `<style>body{font-family:Arial,sans-serif;color:#111;margin:24px}h1{font-size:16px;margin:0 0 2px}p{margin:0 0 14px;color:#555;font-size:12px}` +
         `table{border-collapse:collapse;width:100%;font-size:11px}th,td{border:1px solid #999;padding:5px 7px;text-align:left}` +
@@ -218,9 +212,6 @@ export default function Inventory({ embedded = false, branch = '', region = '' }
         `<p style="margin-top:14px">${COPYRIGHT_HTML}</p>` +
         `</body></html>`,
     )
-    w.document.close()
-    w.focus()
-    w.print()
   }
 
   async function refresh() {
