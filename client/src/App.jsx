@@ -668,7 +668,7 @@ function App({ user, onLogout }) {
   const nextReportId = `REP-${pad4(nextSeriesNumber(saved, "REP", seriesBranch))}`;
   const nextRefId = `REF-${pad4(nextSeriesNumber(saved, "REF", seriesBranch))}`;
   const nextTransId = `TRANS-${pad4(nextSeriesNumber(saved, "TRANS", seriesBranch))}`;
-  const [sync, setSync] = useState({ online: true, pending: 0 });
+  const [sync, setSync] = useState({ online: true, pending: 0, syncing: false, authExpired: false });
   const [editId, setEditId] = useState(null); // entry id being edited in the modal
   const [editForm, setEditForm] = useState(null);
   const lastEntriesSig = useRef(""); // baseline for the live-refresh poll
@@ -2616,25 +2616,53 @@ function App({ user, onLogout }) {
               </button>
             ))}
           </nav>
-          {(!sync.online || sync.pending > 0) && (
-            <div
-              className={`sync-pill${sync.online ? " syncing" : " offline"}`}
-              title={
-                sync.online
-                  ? "Syncing queued changes to the server"
-                  : "Working offline — changes are saved on this device and will sync when you reconnect"
-              }
+          {/* The session died while the queue still held writes — usually a phone
+              left offline past the 7-day cookie. Nothing is lost: the queue sits
+              in IndexedDB and drains once App remounts after a fresh login. */}
+          {sync.authExpired ? (
+            <button
+              type="button"
+              className="sync-pill expired"
+              onClick={onLogout}
+              title="Your session expired while offline. Log in again and the queued changes will sync automatically — nothing has been lost."
             >
-              <span className="side-ico">{sync.online ? "⟳" : "📴"}</span>
+              <span className="side-ico">🔑</span>
               <span className="side-label">
-                {sync.online ? "Syncing…" : "Offline"}
-                {sync.pending > 0 && (
-                  <small>
-                    {sync.pending} change{sync.pending === 1 ? "" : "s"} pending
-                  </small>
-                )}
+                Session expired
+                <small>
+                  Log in again to sync
+                  {sync.pending > 0 && ` (${sync.pending} pending)`}
+                </small>
               </span>
-            </div>
+            </button>
+          ) : (
+            (!sync.online || sync.pending > 0) && (
+              <div
+                className={`sync-pill${sync.online ? " syncing" : " offline"}`}
+                title={
+                  sync.online
+                    ? "Syncing queued changes to the server"
+                    : "Working offline — changes are saved on this device and will sync when you reconnect"
+                }
+              >
+                <span className="side-ico">{sync.online ? "⟳" : "📴"}</span>
+                <span className="side-label">
+                  {sync.online ? "Syncing…" : "Offline"}
+                  {sync.pending > 0 && (
+                    <small>
+                      {sync.pending} change{sync.pending === 1 ? "" : "s"} pending
+                    </small>
+                  )}
+                </span>
+                {/* Background Sync is unsupported on Firefox/Safari and the
+                    browser can defer it anywhere — let the user force it. */}
+                {sync.online && sync.pending > 0 && !sync.syncing && (
+                  <button type="button" className="sync-retry" onClick={() => syncNow()} title="Sync queued changes now">
+                    Sync now
+                  </button>
+                )}
+              </div>
+            )
           )}
           <div className="side-user">
             <span

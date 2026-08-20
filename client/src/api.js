@@ -11,6 +11,13 @@ async function netRequest(path, options = {}) {
   try {
     res = await fetch(`${BASE}${path}`, {
       cache: 'no-store',
+      // Always send the session cookie. fetch's default is 'same-origin', which
+      // is enough while the server serves the client, but silently drops the
+      // cookie the moment VITE_API_URL points at a separate origin (as
+      // .env.example directs on Railway) — every call would 401 and the sync
+      // queue would stall on authExpired. Matches the service worker's
+      // background sync, which posts with credentials too.
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       ...options,
     })

@@ -1739,6 +1739,37 @@ h2 {
 .sync-pill.syncing .side-ico {
   animation: sync-spin 1s linear infinite;
 }
+/* Session expired: the whole pill is the re-login affordance. */
+button.sync-pill {
+  width: calc(100% - 0.8rem);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.sync-pill.expired {
+  background: rgba(220, 38, 38, 0.14);
+  color: #b91c1c;
+  border: 1px solid rgba(220, 38, 38, 0.4);
+}
+.sync-pill.expired:hover {
+  background: rgba(220, 38, 38, 0.22);
+}
+.sync-retry {
+  margin-left: auto;
+  flex-shrink: 0;
+  background: var(--accent, #2563eb);
+  color: #fff;
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: 0.25rem 0.5rem;
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.sync-retry:hover {
+  filter: brightness(1.1);
+}
 @keyframes sync-spin {
   to {
     transform: rotate(360deg);
@@ -1751,12 +1782,18 @@ h2 {
   .sync-pill.syncing {
     color: #93c5fd;
   }
+  .sync-pill.expired {
+    color: #fca5a5;
+  }
 }
 :root[data-theme='dark'] .sync-pill.offline {
   color: #fbbf24;
 }
 :root[data-theme='dark'] .sync-pill.syncing {
   color: #93c5fd;
+}
+:root[data-theme='dark'] .sync-pill.expired {
+  color: #fca5a5;
 }
 
 .side-user {

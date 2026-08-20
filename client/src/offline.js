@@ -292,11 +292,27 @@ async function applyOptimistic(op) {
   return undefined // no optimistic handler — nothing to show until sync
 }
 
+// Ask the service worker for a Background Sync wake-up. That lets the queue
+// drain after the tab is closed or the phone is locked — the common case for a
+// technician who fills a report underground and pockets the phone. Purely an
+// enhancement: where it is unsupported (Firefox, Safari) the 'online' listener
+// in api.js still flushes, so nothing is lost, it just needs the app open.
+export function requestBackgroundSync() {
+  navigator.serviceWorker?.ready
+    ?.then((reg) => {
+      if (reg.active) reg.active.postMessage({ type: 'REQUEST_SYNC' })
+    })
+    .catch(() => {})
+}
+
 // Enqueue a failed mutation (after applying its optimistic effect).
 export async function queueMutation(method, path, body) {
   const op = { method, path, body }
   const optimistic = await applyOptimistic(op)
-  if (!op._skip) await putQueue({ method: op.method, path: op.path, body: op.body, tmpId: op.tmpId, ts: Date.now() })
+  if (!op._skip) {
+    await putQueue({ method: op.method, path: op.path, body: op.body, tmpId: op.tmpId, ts: Date.now() })
+    requestBackgroundSync()
+  }
   await notify()
   return optimistic
 }
