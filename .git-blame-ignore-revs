@@ -1,0 +1,10 @@
+# Commits that only moved whitespace. `git blame` skips these, so a line still
+# points at whoever wrote it rather than at the reformat that reflowed it.
+#
+# Enable locally (once per clone):
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+#
+# GitHub reads this file by name and applies it automatically.
+
+# Apply the house style across the tree, once
+f77928b395fad12552e00c30c38f27d46eb6c2ff
