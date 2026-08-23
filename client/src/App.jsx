@@ -1223,7 +1223,10 @@ function App({ user, onLogout }) {
   // Choosing a model auto-fills Type from the model→type map (if the model is mapped).
   const setModel = (e) => {
     const model = e.target.value
-    if (model !== form.model) devicePicked.current = true
+    if (model !== form.model) {
+      devicePicked.current = true
+      setAutoModel(null) // chosen by hand now, whatever the number said
+    }
     setForm((f) => ({
       ...f,
       model,
@@ -1265,6 +1268,23 @@ function App({ user, onLogout }) {
   // beside the field instead.
   const [autoAgency, setAutoAgency] = useState('')
 
+  // The Model a Tel number selected on its own: { model, changed }, or null
+  // when no number has named one on this entry.
+  //
+  // State for the same reason autoAgency is: it is RENDERED. A fresh form
+  // arrives carrying the last entry's Model (emptyForm reads saveLast), so the
+  // field reads a model either way and the box alone cannot say whether this
+  // number chose it or the previous device left it there. devicePicked answers
+  // a different question — whether a HUMAN chose it — and is a ref because
+  // nothing draws it.
+  //
+  // `changed` is why this is a pair rather than a name. A number that selects
+  // the model already showing moves nothing on screen, so the field looks
+  // exactly like one nobody has touched — and the technician cannot tell a
+  // registered number from a leftover. The two cases are tinted differently
+  // (see .is-auto-new / .is-auto-same) so the second one still says something.
+  const [autoModel, setAutoModel] = useState(null)
+
   // A Tel number's leading digits say WHAT the device is (set in Manage inputs
   // → Tel prefixes). Typing it selects the Model, and the Type comes off the
   // model from there, through the same MODEL_TYPE map setModel uses.
@@ -1281,6 +1301,16 @@ function App({ user, onLogout }) {
   const setTel = (e) => {
     const telNumber = e.target.value
     const model = devicePicked.current ? '' : telPick(telNumber, options.models)
+    // Only on a hit. Backspacing to a prefix that names nothing leaves the
+    // Model where it was, so the tint has to stay with it rather than clear on
+    // the way past.
+    //
+    // And `changed` is settled once, the first time the number names THIS
+    // model, then held. Every digit typed after the prefix re-selects the same
+    // model, and re-deciding on each of them would compare it against the
+    // value it had just written — turning a genuine change green one keystroke
+    // after it went blue.
+    if (model) setAutoModel((prev) => (prev?.model === model ? prev : { model, changed: model !== form.model }))
     setForm((f) => ({
       ...f,
       telNumber,
@@ -1305,6 +1335,7 @@ function App({ user, onLogout }) {
       devicePicked.current = true
       agencyPicked.current = true
       setAutoAgency(fill.agency)
+      setAutoModel(fill.model ? { model: fill.model, changed: fill.model !== form.model } : null)
       setForm((f) => ({
         ...f,
         issiNumber,
@@ -1453,7 +1484,10 @@ function App({ user, onLogout }) {
       // yet and the next Tel number is free to say what the device is and whose.
       devicePicked.current = false
       agencyPicked.current = false
-      setAutoAgency('') // nothing has been auto-selected onto the fresh form yet
+      // Nothing has been auto-selected onto the fresh form yet — the Model it
+      // carries over is the last entry's, which is nobody's choice about this one.
+      setAutoAgency('')
+      setAutoModel(null)
       setForm((f) => ({
         ...emptyForm(),
         reportDate: f.reportDate,
@@ -2584,7 +2618,23 @@ function App({ user, onLogout }) {
                           <div className="grid">
                             <label>
                               Model {form.type === 'OTHER' && <span className="opt">(optional)</span>}
-                              <SearchSelect value={form.model} onChange={setModel} options={modelOptions} />
+                              <SearchSelect
+                                value={form.model}
+                                onChange={setModel}
+                                options={modelOptions}
+                                // Tinted while the value showing is the one the Tel
+                                // number picked, in the colour that says whether
+                                // picking it moved the field. Compared rather than
+                                // trusted: a stale autoModel must not tint a field
+                                // that has moved on.
+                                className={
+                                  autoModel && autoModel.model === form.model
+                                    ? autoModel.changed
+                                      ? 'is-auto-new'
+                                      : 'is-auto-same'
+                                    : ''
+                                }
+                              />
                             </label>
                             <label>
                               Type
@@ -2822,6 +2872,11 @@ function App({ user, onLogout }) {
                                     <button
                                       key={a}
                                       type="button"
+                                      // Tinted when this is the agency the ISSI number
+                                      // picked out. It already leads the row, but the
+                                      // chips are otherwise identical and position
+                                      // alone did not say which one that was.
+                                      className={sameAgency(a, autoAgency) ? 'is-auto' : undefined}
                                       onClick={() => {
                                         agencyPicked.current = true
                                         setAutoAgency('')

@@ -1186,6 +1186,24 @@ h2 {
   width: 100%;
   padding-right: 1.9rem; /* room for the caret */
 }
+/* The Model a Tel prefix named — the same idea as the tinted agency chip in the
+   faults footer, but in two colours, because this field cannot show a change it
+   did not make.
+
+   Blue: the number picked a different device than the last entry left in the
+   box. Green: it picked that same device again — the field never moves, so
+   without a colour of its own there is nothing on screen to say the number
+   registered at all, and a confirmed model looks identical to a leftover one.
+
+   Background only: the border still answers to hover, and :not(:focus) hands
+   the field back to the focus rule rather than outranking it on source order
+   (both selectors weigh the same). */
+.search-select.is-auto-new input:not(:focus) {
+  background: var(--primary-soft);
+}
+.search-select.is-auto-same input:not(:focus) {
+  background: var(--success-soft);
+}
 .search-select.has-icon input {
   padding-left: 1.9rem; /* room for the leading icon */
 }
@@ -1399,6 +1417,15 @@ h2 {
   background: var(--surface-2);
   color: var(--text);
   cursor: pointer;
+}
+/* The agency the ISSI number selected. Tinted with the same soft-primary pair
+   a ticked option in the search menu uses, so "this is the one already chosen"
+   looks the same wherever the app says it. Hover still overrides the border and
+   text below, on specificity, so the chip keeps answering to the pointer. */
+.agency-quickpicks.agency-quickpicks button.is-auto {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary-ink);
 }
 .agency-quickpicks.agency-quickpicks button:hover:not(:disabled) {
   border-color: var(--primary);
