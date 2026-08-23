@@ -1158,6 +1158,21 @@ export function groupReports(entries) {
   return [...byKey.values()].sort((a, b) => (a.key < b.key ? 1 : -1))
 }
 
+// The sheet's rows in fixed model order — TH1N, THR9, TMR 880I, STP9000, then
+// the SRG mounts, then Hytera. Entries are typed in the order the devices came
+// across the bench, which scatters each model down the MODEL column and leaves
+// the reader adding up the same device in three places.
+//
+// The order is MODEL_ORDER, the one the Materials and Device summaries already
+// sort their blocks by, so the sheet and the summaries under it cannot disagree
+// about what comes first. An unrecognised model sorts last (modelRank), and the
+// sort is stable, so entries on the same model keep the order they were entered
+// in — a technician can still find the one just typed at the bottom of its
+// group.
+export function entriesByModel(entries) {
+  return [...(entries ?? [])].sort((a, b) => modelRank(a.model) - modelRank(b.model))
+}
+
 // ---- Full report model for one date ----
 // opts: { branch, mode: 'report'|'transmittal', transmittedBy, receivedBy,
 //         shortId, numberMode }
@@ -1171,6 +1186,11 @@ export function groupReports(entries) {
 // question with the same answer.
 export function buildDateReport(dateLabel, reportId, entries, opts = {}) {
   const { branch = '', mode = 'report', transmittedBy = '', receivedBy = '', shortId = '', numberMode = 'full' } = opts
+  // Sorted once, here, rather than at each render site: everything built from
+  // this model — the sheet, the PDF, the TXT and its notes — then reads the
+  // entries in one order. The summaries sort their own blocks regardless, so
+  // this changes nothing about what they count.
+  const ordered = entriesByModel(entries)
   return {
     dateLabel,
     reportId,
@@ -1180,11 +1200,11 @@ export function buildDateReport(dateLabel, reportId, entries, opts = {}) {
     numberMode,
     transmittedBy,
     receivedBy,
-    entries,
-    totals: headerTotals(entries),
-    materialsSummary: buildMaterialsSummary(entries),
-    deviceSummary: buildDeviceSummary(entries),
-    tx: mode === 'transmittal' ? transmittalMaterials(entries) : null,
+    entries: ordered,
+    totals: headerTotals(ordered),
+    materialsSummary: buildMaterialsSummary(ordered),
+    deviceSummary: buildDeviceSummary(ordered),
+    tx: mode === 'transmittal' ? transmittalMaterials(ordered) : null,
   }
 }
 

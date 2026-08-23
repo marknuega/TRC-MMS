@@ -12,6 +12,7 @@ import {
   buildDateReport,
   buildTxt,
   deviceBlocksByType,
+  entriesByModel,
   foldMaintenance,
   materialBlocksByType,
   setIssueClaims,
@@ -1245,5 +1246,58 @@ describe('a PCB, a programming and an installation on one day', () => {
         }
       }
     }
+  })
+})
+
+// The sheet's rows are read down the MODEL column, so they run in MODEL_ORDER
+// rather than the order the devices reached the bench.
+describe('the sheet lists its entries in fixed model order', () => {
+  const TYPE_OF = { TH1N: 'AIRBUS', THR9: 'AIRBUS', 'TMR 880I': 'AIRBUS', MT680: 'HYTERA' }
+  const at = (model, tag = '') => ({
+    agency: 'PSD',
+    type: TYPE_OF[model] ?? 'SEPURA',
+    model,
+    tag,
+    faults: [{ issue: 'SPEAKER', quantity: 1, action: 'CHANGE', company: 'MOTECO' }],
+  })
+  const models = (entries) => entriesByModel(entries).map((e) => e.model)
+
+  test('every model sorts to its place in MODEL_ORDER', () => {
+    const shuffled = ['MT680', 'SRG3900 CARKIT', 'TH1N', 'STP9000', 'SRG3900 BIKE', 'THR9', 'SRG3900 DESKTOP']
+    assert.deepEqual(models(shuffled.map((m) => at(m))), [
+      'TH1N',
+      'THR9',
+      'STP9000',
+      'SRG3900 CARKIT',
+      'SRG3900 DESKTOP',
+      'SRG3900 BIKE',
+      'MT680',
+    ])
+  })
+
+  // Stable, so the entry just typed is still the last of its group rather than
+  // landing somewhere in the middle of the devices it shares a model with.
+  test('entries on one model keep the order they were entered in', () => {
+    const entries = [at('STP9000', 'a'), at('TH1N', 'b'), at('STP9000', 'c'), at('TH1N', 'd')]
+    assert.deepEqual(
+      entriesByModel(entries).map((e) => e.tag),
+      ['b', 'd', 'a', 'c'],
+    )
+  })
+
+  test('a model MODEL_ORDER does not name sorts last, not first', () => {
+    assert.deepEqual(models([at('SOMETHING NEW'), at('STP9000'), at('TH1N')]), ['TH1N', 'STP9000', 'SOMETHING NEW'])
+  })
+
+  // Sorted on the report model itself, so the sheet, the PDF and the WhatsApp
+  // text all number the same entry the same way.
+  test('the report is built from the sorted entries', () => {
+    const report = buildDateReport('23/08/2026', 'MAKKAH-REP-0016', [at('SRG3900 CARKIT'), at('TH1N'), at('STP9000')], {
+      branch: 'Makkah',
+    })
+    assert.deepEqual(
+      report.entries.map((e) => e.model),
+      ['TH1N', 'STP9000', 'SRG3900 CARKIT'],
+    )
   })
 })
