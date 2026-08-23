@@ -4,7 +4,7 @@
  */
 
 import { useMemo, useState } from 'react'
-import { agencyBlocks } from './report'
+import { agencyBlocks, foldMaintenance } from './report'
 import { ALL_BRANCHES } from './options'
 import SearchSelect from './SearchSelect'
 
@@ -70,7 +70,10 @@ export default function AgencyTotals({
         entries.push(e)
       }
     }
-    return agencyBlocks(entries)
+    // Installation and Dismantle count as maintenance here, the same as they do
+    // in the report's own Agency Summary (see foldMaintenance) — this screen is
+    // the same tally over a longer period, so it must not tell a different story.
+    return agencyBlocks(entries).map((b) => ({ ...b, cats: foldMaintenance(b.cats) }))
   }, [saved, branch, start, end])
 
   const get = (b, label) => b.cats.find(([l]) => l === label)?.[1] || 0
@@ -78,26 +81,20 @@ export default function AgencyTotals({
     (acc, b) => {
       acc.m += get(b, 'MAINTENANCE')
       acc.p += get(b, 'PROGRAMMING')
-      acc.i += get(b, 'INSTALLATION')
-      acc.d += get(b, 'DISMANTLE')
       acc.t += b.total
       return acc
     },
-    { m: 0, p: 0, i: 0, d: 0, t: 0 },
+    { m: 0, p: 0, t: 0 },
   )
 
   function exportCsv() {
     const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
-    const head = ['Agency', 'Maintenance', 'Programming', 'Installation', 'Dismantle', 'Total']
+    const head = ['Agency', 'Maintenance', 'Programming', 'Total']
     const lines = [head.map(esc).join(',')]
     for (const b of rows) {
-      lines.push(
-        [b.agency, get(b, 'MAINTENANCE'), get(b, 'PROGRAMMING'), get(b, 'INSTALLATION'), get(b, 'DISMANTLE'), b.total]
-          .map(esc)
-          .join(','),
-      )
+      lines.push([b.agency, get(b, 'MAINTENANCE'), get(b, 'PROGRAMMING'), b.total].map(esc).join(','))
     }
-    lines.push(['TOTAL', grand.m, grand.p, grand.i, grand.d, grand.t].map(esc).join(','))
+    lines.push(['TOTAL', grand.m, grand.p, grand.t].map(esc).join(','))
     const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -183,8 +180,6 @@ export default function AgencyTotals({
                     <th>Agency</th>
                     <th className="num">Maintenance</th>
                     <th className="num">Programming</th>
-                    <th className="num">Installation</th>
-                    <th className="num">Dismantle</th>
                     <th className="num">Total</th>
                   </tr>
                 </thead>
@@ -194,8 +189,6 @@ export default function AgencyTotals({
                       <td className="nowrap">{b.agency}</td>
                       <td className="num">{get(b, 'MAINTENANCE') || ''}</td>
                       <td className="num">{get(b, 'PROGRAMMING') || ''}</td>
-                      <td className="num">{get(b, 'INSTALLATION') || ''}</td>
-                      <td className="num">{get(b, 'DISMANTLE') || ''}</td>
                       <td className="num avail">{b.total}</td>
                     </tr>
                   ))}
@@ -203,8 +196,6 @@ export default function AgencyTotals({
                     <td className="nowrap">TOTAL</td>
                     <td className="num">{grand.m}</td>
                     <td className="num">{grand.p}</td>
-                    <td className="num">{grand.i}</td>
-                    <td className="num">{grand.d}</td>
                     <td className="num">{grand.t}</td>
                   </tr>
                 </tbody>

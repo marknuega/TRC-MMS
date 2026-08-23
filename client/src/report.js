@@ -468,9 +468,15 @@ const lastWord = (s) =>
     .split(/\s+/)
     .pop() || ''
 const modelShort = (m) => lastWord(modelDisplay(m)) // "SRG CARKIT" -> "CARKIT", "TH1N" -> "TH1N"
-// Monthly description device tag: drop the leading "SRG " so Sepura car-kit /
-// desktop / bike read as "(SEPURA-CARKIT)", "(SEPURA-DESKTOP)", "(SEPURA-BIKE)".
+// Device tag: drop the leading "SRG " so Sepura car-kit / desktop / bike read
+// as "CARKIT", "DESKTOP", "BIKE". Used by the monthly description tag —
+// "(SEPURA-CARKIT)" — and by the summary block headings below.
 const descModel = (m) => modelDisplay(m).replace(/^SRG\s+/i, '')
+
+// Heading over a summary block: "SEPURA (CARKIT)". The Entry & Materials and
+// the Device Summary sections both print it from here, so the two never end up
+// calling the same device by two different names.
+const blockHeader = (type, model) => `${type} (${descModel(model)})`
 const modelRank = (raw) => MODEL_RANK.get(up(raw)) ?? Number.MAX_SAFE_INTEGER // unknown models sort last
 const companyDisplay = (c) => COMPANY_DISPLAY[up(c)] ?? String(c ?? '').trim()
 
@@ -545,7 +551,7 @@ export function materialBlocksByType(entries) {
         .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base', numeric: true }))
       if (!rows.length) continue
       blocks.push({
-        header: `${type} ${md}`,
+        header: blockHeader(type, rawOf.get(md)),
         lines: rows.map((r) => (isNoActivityIssue(r.label) ? r.label : `${r.label}${r.code}${r.company} = ${r.qty}`)),
       })
     }
@@ -662,6 +668,35 @@ export function reportNotes(entries) {
     })
 }
 
+// Installation and Dismantle ALSO count under MAINTENANCE: fitting a car kit
+// or stripping one out is maintenance work on that device, and the day's
+// maintenance figure is read as including it.
+//
+// keepLines says whether the two survive as lines of their own on top of that.
+// The Device Summary keeps them, so the block still says what the work was —
+// which does mean its MAINTENANCE and INSTALLATION lines describe the one job
+// from two angles, and its TOTAL counts it twice. Deliberate: MAINTENANCE
+// answers "how much maintenance", INSTALLATION "how much of it was an
+// install". The Agency Summary is the compact roll-up pasted into a message
+// and drops them, so it shows the folded MAINTENANCE alone.
+//
+// Folded here rather than in classify() so the underlying tallies stay
+// separate: the monthly spare-parts sheet reports Installation and
+// Dismantling in columns of their own.
+const FOLDS_INTO_MAINTENANCE = new Set(['MAINTENANCE', 'INSTALLATION', 'DISMANTLE'])
+export function foldMaintenance(cats, { keepLines = false } = {}) {
+  let maintenance = 0
+  const rest = []
+  for (const [label, v] of cats) {
+    if (!FOLDS_INTO_MAINTENANCE.has(label)) rest.push([label, v])
+    else {
+      maintenance += v
+      if (keepLines && label !== 'MAINTENANCE') rest.push([label, v])
+    }
+  }
+  return [['MAINTENANCE', maintenance], ...rest].filter(([, v]) => v > 0)
+}
+
 // ---- Device Summary (by TYPE then device-short model) ----
 // { AIRBUS: [{header, lines:[...]}], ... } for the split PDF layout.
 export function deviceBlocksByType(entries) {
@@ -695,19 +730,25 @@ export function deviceBlocksByType(entries) {
     const blocks = []
     for (const dev of order) {
       const a = byDevice.get(dev)
-      const cats = [
-        ['MAINTENANCE', a.maintenance],
-        ['PROGRAMMING', a.program],
-        ['INSTALLATION', a.install],
-        ['DISMANTLE', a.dismantle],
-      ].filter(([, v]) => v > 0)
+      const cats = foldMaintenance(
+        [
+          ['MAINTENANCE', a.maintenance],
+          ['PROGRAMMING', a.program],
+          ['INSTALLATION', a.install],
+          ['DISMANTLE', a.dismantle],
+        ],
+        { keepLines: true },
+      )
       if (!cats.length) continue
-      const total = a.maintenance + a.program + a.install + a.dismantle
+      // The sum of the lines actually printed, which is what TOTAL has always
+      // been. An install therefore lands in it twice — once as itself and once
+      // inside MAINTENANCE — see foldMaintenance.
+      const total = cats.reduce((n, [, v]) => n + v, 0)
       // Per-block numbered lines (used by the PDF split columns).
       const lines = cats.map(([label, v], i) => `${i + 1}. ${label} = ${v}`)
       lines.push(`${INDENT}TOTAL = ${total}`)
       // cats + total kept so the TXT can number continuously across all blocks.
-      blocks.push({ header: `${type} ${dev}`, lines, cats, total })
+      blocks.push({ header: blockHeader(type, rawOf.get(dev)), lines, cats, total })
     }
     byType[type] = blocks
   }
@@ -759,21 +800,45 @@ export function agencyBlocks(entries) {
     .filter((b) => b.cats.length)
 }
 
-// Compact agency roll-up, e.g.
+// The rows of the Agency Summary, in the order they print. Installation and
+// Dismantle have folded into MAINTENANCE by the time this runs (see
+// foldMaintenance), so these two are the only rows there can be — which is why
+// the order is a fixed list here, rather than read off whichever agency
+// happens to come first.
+const AGENCY_LINES = [
+  ['MAINTENANCE', 'MAIN'],
+  ['PROGRAMMING', 'PROG'],
+]
+
+// Agency roll-up, e.g.
 //   Agency Summary
 //   ------------------------------
-//   KINGDOM [MAIN 7]
-//   ------------------------------
-//   PSD [INS 1]
+//   MAIN: [PSD = 9] [PRI = 2]
+//   PROG: [PSD = 5] [PRI = 1]
+// One line per category rather than one block per agency: the question this
+// section answers is who did the maintenance, and reading that off used to
+// mean hopping between blocks to compare one number against another.
 // Part of the exported/copied report text (see buildTxt) — daily reports only,
 // since a transmittal moves materials and has no agency of its own.
-const AGENCY_ABBR = { MAINTENANCE: 'MAIN', PROGRAMMING: 'PROG', INSTALLATION: 'INS', DISMANTLE: 'DISM' }
 export function agencyComment(entries) {
   const blocks = agencyBlocks(entries)
   if (!blocks.length) return ''
-  const lines = blocks.map((b) => `${b.agency} ${b.cats.map(([l, v]) => `[${AGENCY_ABBR[l] || l} ${v}]`).join(' ')}`)
-  const body = lines.reduce((acc, s, i) => (i ? [...acc, DIVIDER, s] : [s]), [])
-  return ['Agency Summary', DIVIDER, ...body].join('\n')
+  // Busiest agency first, and the SAME order on every line, so the block reads
+  // down the columns as well as across; alphabetical settles a tie.
+  const agencies = blocks
+    .map((b) => ({ agency: b.agency, cats: new Map(foldMaintenance(b.cats)), total: b.total }))
+    .sort((a, b) => b.total - a.total || a.agency.localeCompare(b.agency))
+  const lines = []
+  for (const [label, abbr] of AGENCY_LINES) {
+    // An agency with none of this category is left off the line rather than
+    // printed as a "= 0" the reader has to skip past.
+    const cells = agencies.filter((a) => a.cats.get(label) > 0).map((a) => `[${a.agency} = ${a.cats.get(label)}]`)
+    if (cells.length) lines.push(`${abbr}: ${cells.join(' ')}`)
+  }
+  // No TOTAL line: the block is the roll-up, and a total under it would not
+  // match the Device Summary's totals added up anyway — those count an install
+  // twice on purpose (see foldMaintenance).
+  return ['Agency Summary', DIVIDER, ...lines].join('\n')
 }
 
 // ---------------------------------------------------------------------------

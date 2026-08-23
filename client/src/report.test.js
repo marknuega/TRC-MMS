@@ -12,6 +12,7 @@ import {
   buildDateReport,
   buildTxt,
   deviceBlocksByType,
+  foldMaintenance,
   materialBlocksByType,
   setIssueClaims,
   isCountable,
@@ -220,13 +221,13 @@ describe('chargers and power supplies count on top of the entry max', () => {
 
   test('the device summary totals 5', () => {
     const [block] = deviceBlocksByType(makkah).AIRBUS
-    assert.equal(block.header, 'AIRBUS TH1N')
+    assert.equal(block.header, 'AIRBUS (TH1N)')
     assert.deepEqual(block.cats, [['MAINTENANCE', 5]])
     assert.equal(block.total, 5)
   })
 
   test('the agency summary agrees with it', () => {
-    assert.equal(agencyComment(makkah), ['Agency Summary', DIVIDER, 'PSD [MAIN 5]'].join('\n'))
+    assert.equal(agencyComment(makkah), ['Agency Summary', DIVIDER, 'MAIN: [PSD = 5]'].join('\n'))
   })
 
   test('the exported report reads exactly as it should', () => {
@@ -243,20 +244,20 @@ describe('chargers and power supplies count on top of the entry max', () => {
         DIVIDER,
         'Entry & Materials Summary',
         DIVIDER,
-        'AIRBUS TH1N',
+        'AIRBUS (TH1N)',
         'ANTENNA (MOT) = 1',
         'BCOVER (MOT) = 1',
         'CHARGER12 (MOT) = 3',
         DIVIDER,
         'Device Summary',
         DIVIDER,
-        'AIRBUS TH1N',
+        'AIRBUS (TH1N)',
         '1. MAINTENANCE = 5',
         '       TOTAL = 5',
         DIVIDER,
         'Agency Summary',
         DIVIDER,
-        'PSD [MAIN 5]',
+        'MAIN: [PSD = 5]',
       ].join('\n'),
     )
   })
@@ -955,7 +956,13 @@ describe('a PCB, a programming and an installation on one day', () => {
       shortId: 'MAK-REP-A011',
     })
   const materialLines = (entries, type) => materialBlocksByType(entries)[type].flatMap((b) => b.lines)
-  const agencyOf = (entries, name) => agencyBlocks(entries).find((b) => b.agency === name)
+  // agencyBlocks keeps Installation and Dismantle broken out for the monthly
+  // sheet; the daily Agency Summary folds them into MAINTENANCE. These rules are
+  // about the daily report, so they read the folded tally it actually prints.
+  const agencyOf = (entries, name) => {
+    const b = agencyBlocks(entries).find((x) => x.agency === name)
+    return b && { ...b, cats: foldMaintenance(b.cats) }
+  }
 
   // -- Rule 1: PCB carries its action code in the Entry & Materials Summary --
   //
@@ -1046,15 +1053,23 @@ describe('a PCB, a programming and an installation on one day', () => {
       })
     })
 
-    test('the Device Summary shows install only, not a maintenance line too', () => {
+    // ...so the block's MAINTENANCE is the install's own 2 and nothing else —
+    // the three parts are not counted a second time on top of it. INSTALLATION
+    // then keeps its line, and TOTAL sums both lines (see foldMaintenance).
+    test('the Device Summary maintenance is the install, not the parts as well', () => {
       const [block] = deviceBlocksByType(a011()).SEPURA
-      assert.equal(block.header, 'SEPURA CARKIT')
-      assert.deepEqual(block.cats, [['INSTALLATION', 2]])
-      assert.equal(block.total, 2)
+      assert.equal(block.header, 'SEPURA (CARKIT)')
+      assert.deepEqual(block.cats, [
+        ['MAINTENANCE', 2],
+        ['INSTALLATION', 2],
+      ])
+      assert.equal(block.total, 4)
     })
 
-    test('the Agency Summary reads the same way', () => {
-      assert.deepEqual(agencyOf(a011(), 'PSD').cats, [['INSTALLATION', 2]])
+    // The roll-up drops the INSTALLATION line the device block keeps, so its
+    // maintenance is the same 2 with nothing beside it.
+    test('the Agency Summary counts the same work', () => {
+      assert.deepEqual(agencyOf(a011(), 'PSD').cats, [['MAINTENANCE', 2]])
       assert.equal(agencyOf(a011(), 'PSD').total, 2)
     })
 
@@ -1086,7 +1101,13 @@ describe('a PCB, a programming and an installation on one day', () => {
     test('the installation prints under the car kit and under no other device', () => {
       assert.ok(materialLines(a011(), 'SEPURA').includes('INSTALLATION = 2'))
       assert.ok(!materialLines(a011(), 'AIRBUS').some((l) => l.startsWith('INSTALLATION')))
-      assert.ok(!deviceBlocksByType(a011()).AIRBUS[0].cats.some(([l]) => l === 'INSTALLATION'))
+      // In the Device Summary the install counts as the car kit's MAINTENANCE
+      // (Rule 2), so what the TH1N must not pick up is that count, not a
+      // category of its own: its own maintenance is the 1 PCB it really had.
+      assert.deepEqual(deviceBlocksByType(a011()).AIRBUS[0].cats, [
+        ['MAINTENANCE', 1],
+        ['PROGRAMMING', 1],
+      ])
     })
 
     test('each lands on the agency of the entry that recorded it', () => {
@@ -1095,31 +1116,38 @@ describe('a PCB, a programming and an installation on one day', () => {
         ['PROGRAMMING', 1],
       ])
       assert.ok(!agencyOf(a011(), 'PSD').cats.some(([l]) => l === 'PROGRAMMING'))
-      assert.ok(!agencyOf(a011(), 'PRI').cats.some(([l]) => l === 'INSTALLATION'))
+      // PRI's maintenance is its own 1 PCB — the car kit's install went to PSD.
+      assert.equal(agencyOf(a011(), 'PRI').cats.find(([l]) => l === 'MAINTENANCE')[1], 1)
     })
   })
 
-  // -- Rule 4: the Agency Summary mirrors the Device Summary --
-  describe('the Agency Summary mirrors the Device Summary, category for category', () => {
+  // -- Rule 4: the Agency Summary agrees with the Device Summary --
+  describe('the Agency Summary agrees with the Device Summary', () => {
+    // The roll-up is the same numbers minus the INSTALLATION / DISMANTLE lines
+    // the device blocks keep, so every category it DOES show must match.
     test('each agency reads the categories its device block reads', () => {
       const devices = deviceBlocksByType(a011())
-      assert.deepEqual(agencyOf(a011(), 'PRI').cats, devices.AIRBUS[0].cats)
-      assert.deepEqual(agencyOf(a011(), 'PSD').cats, devices.SEPURA[0].cats)
+      const dropInstall = (cats) => cats.filter(([l]) => l !== 'INSTALLATION' && l !== 'DISMANTLE')
+      assert.deepEqual(agencyOf(a011(), 'PRI').cats, dropInstall(devices.AIRBUS[0].cats))
+      assert.deepEqual(agencyOf(a011(), 'PSD').cats, dropInstall(devices.SEPURA[0].cats))
     })
 
     test('it never absorbs programming into maintenance', () => {
+      // PRI and PSD tie on 2, so the tie-break puts them in alphabetical order.
       assert.equal(
         agencyComment(a011()),
-        ['Agency Summary', DIVIDER, 'PRI [MAIN 1] [PROG 1]', DIVIDER, 'PSD [INS 2]'].join('\n'),
+        ['Agency Summary', DIVIDER, 'MAIN: [PRI = 1] [PSD = 2]', 'PROG: [PRI = 1]'].join('\n'),
       )
-      // Not [MAIN 1] [PROG 1] merged into one, and PSD carries no MAIN at all
-      // — its three parts were the install, not a repair alongside it.
-      assert.ok(!agencyComment(a011()).includes('[MAIN 2]'))
+      // Installation folds into maintenance; programming does not. PRI keeps a
+      // PROG cell of its own rather than arriving on the MAIN line as a 2.
+      assert.ok(!agencyComment(a011()).includes('MAIN: [PRI = 2]'))
     })
 
-    test('a category with nothing in it is not shown', () => {
-      assert.ok(!agencyComment(a011()).includes('[DISM'))
-      assert.ok(!agencyComment(a011()).includes(' 0]'))
+    test('an agency with nothing in a category is left off that line', () => {
+      // PSD did no programming, so the PROG line names PRI and stops — and the
+      // block ends there, with no TOTAL line under it.
+      assert.equal(agencyComment(a011()).split('\n').at(-1), 'PROG: [PRI = 1]')
+      assert.ok(!agencyComment(a011()).includes('= 0]'))
     })
   })
 
@@ -1132,14 +1160,15 @@ describe('a PCB, a programming and an installation on one day', () => {
       assert.equal(
         deviceSection(a011()),
         [
-          'AIRBUS TH1N',
+          'AIRBUS (TH1N)',
           '1. MAINTENANCE = 1',
           '2. PROGRAMMING = 1',
           '       TOTAL = 2',
           DIVIDER,
-          'SEPURA CARKIT',
-          '3. INSTALLATION = 2',
-          '       TOTAL = 2',
+          'SEPURA (CARKIT)',
+          '3. MAINTENANCE = 2',
+          '4. INSTALLATION = 2',
+          '       TOTAL = 4',
         ].join('\n'),
       )
     })
@@ -1150,7 +1179,7 @@ describe('a PCB, a programming and an installation on one day', () => {
         .filter((l) => l.includes('TOTAL'))
       assert.equal(totals.length, 2) // one per block, not one for the report
       for (const line of totals) assert.match(line, /^ {7}TOTAL = \d+$/)
-      assert.deepEqual(totals, ['       TOTAL = 2', '       TOTAL = 2'])
+      assert.deepEqual(totals, ['       TOTAL = 2', '       TOTAL = 4'])
     })
   })
 
@@ -1166,11 +1195,11 @@ describe('a PCB, a programming and an installation on one day', () => {
         DIVIDER,
         'Entry & Materials Summary',
         DIVIDER,
-        'AIRBUS TH1N',
+        'AIRBUS (TH1N)',
         'PCB (C) (MOI) = 1',
         'PROGRAMMING = 1',
         DIVIDER,
-        'SEPURA SRG CARKIT',
+        'SEPURA (CARKIT)',
         'FISTMIC (MOT) = 2',
         'FUSE COVER (MOT) = 2',
         'FUSE10 (MOT) = 2',
@@ -1178,20 +1207,20 @@ describe('a PCB, a programming and an installation on one day', () => {
         DIVIDER,
         'Device Summary',
         DIVIDER,
-        'AIRBUS TH1N',
+        'AIRBUS (TH1N)',
         '1. MAINTENANCE = 1',
         '2. PROGRAMMING = 1',
         '       TOTAL = 2',
         DIVIDER,
-        'SEPURA CARKIT',
-        '3. INSTALLATION = 2',
-        '       TOTAL = 2',
+        'SEPURA (CARKIT)',
+        '3. MAINTENANCE = 2',
+        '4. INSTALLATION = 2',
+        '       TOTAL = 4',
         DIVIDER,
         'Agency Summary',
         DIVIDER,
-        'PRI [MAIN 1] [PROG 1]',
-        DIVIDER,
-        'PSD [INS 2]',
+        'MAIN: [PRI = 1] [PSD = 2]',
+        'PROG: [PRI = 1]',
       ].join('\n'),
     )
   })
