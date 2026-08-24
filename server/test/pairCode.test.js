@@ -13,6 +13,7 @@ import {
   normalizePairCode,
   pairCodeForFault,
   parsePairCode,
+  stockedElsewhere,
 } from '../../client/src/pairCode.js'
 import { CODEMAP_SEED } from '../src/codemapSeed.js'
 
@@ -136,5 +137,38 @@ describe('pairCodeForFault', () => {
 
   test('a model the map does not name draws no model-specific code', () => {
     assert.equal(pairCodeForFault({ model: 'For Record Purpose Only.', issue: 'SPEAKER LOW' }, vocab), '')
+  })
+})
+
+// A Model Code says which shelf an item comes off. Offering a Carkit part while
+// a TH1n is on the bench offers a fault that draws from the wrong box.
+describe('stockedElsewhere', () => {
+  test('a part held only for another device is not offered here', () => {
+    assert.equal(stockedElsewhere(['C:LOUDSPEAKER SEPURA - 300-00719'], 'H'), true)
+    assert.equal(stockedElsewhere(['C45A'], 'H'), true)
+  })
+
+  test('a part held for this device is offered', () => {
+    assert.equal(stockedElsewhere(['H45A'], 'H'), false)
+    assert.equal(stockedElsewhere(['C45A', 'H45A'], 'H'), false)
+  })
+
+  // Most of the store is shared, and this must never hide any of it — only
+  // something somebody deliberately bound to a device.
+  test('a part on no Model Code at all is shared, and always offered', () => {
+    assert.equal(stockedElsewhere([], 'H'), false)
+    assert.equal(stockedElsewhere(undefined, 'H'), false)
+  })
+
+  // "For Record Purpose Only." is a real Model on a real entry and names no
+  // device, so there is nothing to narrow against.
+  test('a model the map names no letter for narrows nothing', () => {
+    assert.equal(stockedElsewhere(['C45A'], ''), false)
+    assert.equal(stockedElsewhere(['C45A'], undefined), false)
+  })
+
+  test('ignores anything that is not a Model Code', () => {
+    assert.equal(stockedElsewhere(['nonsense'], 'H'), false)
+    assert.equal(stockedElsewhere(['nonsense', 'C45A'], 'H'), true)
   })
 })

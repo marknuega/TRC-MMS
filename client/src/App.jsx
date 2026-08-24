@@ -33,6 +33,7 @@ import {
   normalizePairCode,
   pairCodeForFault,
   parsePairCode,
+  stockedElsewhere,
 } from './pairCode.js'
 import { advanceOnEnter, isAddFaultShortcut, isSaveShortcut } from './focusNav'
 import {
@@ -825,6 +826,21 @@ function App({ user, onLogout }) {
   // Each carries the way to give it a code instead — see IssueInput.
   const issueSuggestions = useMemo(() => {
     const model = form.model
+    // A part already bound to another device's shelf is not offered here.
+    // "LOUDSPEAKER SEPURA - 300-00719" is held under C; a TH1n on the bench
+    // cannot draw it, coded or not. Only ever hides something deliberately
+    // bound — a shared item, which is most of the store, is offered for
+    // everything.
+    const letter = deviceLetterFor(model, equipmentCodes)
+    const stockedForThis = (name) =>
+      !stockedElsewhere(
+        pairCodesByPart.get(
+          String(name ?? '')
+            .trim()
+            .toUpperCase(),
+        ),
+        letter,
+      )
     const out = []
     const seen = new Set()
     // `source` is which admin-managed list the row came from, and it is what
@@ -851,15 +867,17 @@ function App({ user, onLogout }) {
     const fits = (it) => issueFitsModel(it, model)
     for (const it of options.issueTypes ?? []) {
       const code = issueCode(it)
-      if (code && fits(it)) add(issueName(it), code)
+      if (code && fits(it) && stockedForThis(issueName(it))) add(issueName(it), code)
     }
-    for (const it of options.issueTypes ?? []) if (!issueCode(it) && fits(it)) add(issueName(it))
+    for (const it of options.issueTypes ?? []) {
+      if (!issueCode(it) && fits(it) && stockedForThis(issueName(it))) add(issueName(it))
+    }
     for (const a of options.actions ?? []) {
       if (!['CHANGE', 'REPAIR', 'NEW'].includes(String(a).toUpperCase())) add(a, '', 'action')
     }
-    for (const n of inventoryNames) add(n, '', 'inventory')
+    for (const n of inventoryNames) if (stockedForThis(n)) add(n, '', 'inventory')
     return out
-  }, [options.issueTypes, options.actions, inventoryNames, form.model])
+  }, [options.issueTypes, options.actions, inventoryNames, form.model, pairCodesByPart, equipmentCodes])
 
   // The 4 most-used issues float to the top of the menu — same idea as the
   // Agency quick-picks below, counted the same way: from saved reports plus

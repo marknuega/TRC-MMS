@@ -132,7 +132,10 @@ export function deviceLetterFor(model, equipmentCodes) {
     .map(([letter, label]) => ({ letter: up(letter).slice(0, 1), model: modelHalf(label) }))
     .filter((p) => /^[A-Z]$/.test(p.letter) && p.model)
   if (pairs.length === 0) return ''
-  const hit = matchOption(model, pairs.map((p) => p.model))
+  const hit = matchOption(
+    model,
+    pairs.map((p) => p.model),
+  )
   if (hit == null) return ''
   return pairs.find((p) => p.model === hit)?.letter ?? ''
 }
@@ -193,6 +196,30 @@ export function claimedPartsCode(issue, issueTypes) {
     }
   }
   return ''
+}
+
+/**
+ * Whether a part is stocked, but for other devices than this one.
+ *
+ * A Model Code says which shelf an item comes off, so an item held only under
+ * C is the Carkit's — offering it while a TH1n is on the bench offers a fault
+ * that would draw from the wrong box or from nothing at all.
+ *
+ * Two ways to answer no, and both matter. A part stocked under NO Model Code is
+ * shared, which is most of the store, and shared parts are offered for
+ * everything — this can only ever hide something somebody deliberately bound to
+ * a device. And a model the code map names no letter for narrows nothing,
+ * because there is no letter to compare against.
+ *
+ * @param codes  the Model Codes that part is stocked under
+ * @param letter the device letter of the model in hand
+ */
+export function stockedElsewhere(codes, letter) {
+  const held = (codes ?? []).map((c) => parsePairCode(c)?.letter).filter(Boolean)
+  if (held.length === 0) return false // shared, or not stocked at all
+  const want = up(letter)
+  if (!/^[A-Z]$/.test(want)) return false // nothing to narrow against
+  return !held.includes(want)
 }
 
 /**
