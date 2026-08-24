@@ -27,6 +27,7 @@ const stamp = (d) => new Date(d).toLocaleString('en-GB')
 const BLANK = {
   sku: '',
   store: '',
+  roomId: '',
   shelf: '',
   itemCode: '',
   description: '',
@@ -109,6 +110,7 @@ const COLUMN_KEYS = {
   'MODEL CODE': 'pairCode',
   ALIAS: 'alias',
   DESCRIPTION: 'description',
+  'ROOM ID': 'roomId',
 }
 const POSITIONAL = [
   'sku',
@@ -122,6 +124,7 @@ const POSITIONAL = [
   'pairCode',
   'alias',
   'description',
+  'roomId',
 ]
 const NUMERIC = new Set(['begin', 'out'])
 
@@ -149,6 +152,7 @@ function parsePaste(text) {
     const row = {
       sku: '',
       store: '',
+      roomId: '',
       shelf: '',
       itemCode: '',
       description: '',
@@ -183,6 +187,7 @@ function downloadCsv(filename, items) {
     'Model Code',
     'Alias',
     'Description',
+    'Room ID',
   ]
   const lines = [head.map(esc).join(',')]
   for (const i of items) {
@@ -190,7 +195,20 @@ function downloadCsv(filename, items) {
     // ("M:CUR3 DISPLAY, 3RD SHELF") survives the round trip back through
     // parseDelimited.
     lines.push(
-      [i.sku, i.store, i.shelf, i.itemCode, i.begin, i.out, i.avail, i.remarks, i.pairCode, i.alias, i.description]
+      [
+        i.sku,
+        i.store,
+        i.shelf,
+        i.itemCode,
+        i.begin,
+        i.out,
+        i.avail,
+        i.remarks,
+        i.pairCode,
+        i.alias,
+        i.description,
+        i.roomId,
+      ]
         .map(esc)
         .join(','),
     )
@@ -210,6 +228,7 @@ function exportInventoryPdf(items, branch, store) {
   const head = [
     'SKU',
     'Store',
+    'Room ID',
     'Shelf',
     'Item Code',
     'Description',
@@ -223,7 +242,7 @@ function exportInventoryPdf(items, branch, store) {
   const body = items
     .map(
       (i) =>
-        `<tr><td>${esc(i.sku)}</td><td>${esc(i.store)}</td><td>${esc(i.shelf)}</td><td>${esc(i.itemCode)}</td>` +
+        `<tr><td>${esc(i.sku)}</td><td>${esc(i.store)}</td><td>${esc(i.roomId)}</td><td>${esc(i.shelf)}</td><td>${esc(i.itemCode)}</td>` +
         `<td>${esc(i.description)}</td><td>${esc(i.alias)}</td><td>${esc(i.pairCode)}</td>` +
         `<td class="c">${esc(i.begin)}</td><td class="c">${esc(i.out)}</td><td class="c">${esc(i.avail)}</td><td>${esc(i.remarks)}</td></tr>`,
     )
@@ -374,7 +393,7 @@ export default function Inventory({ embedded = false, branch = '', region = '', 
       (i) =>
         (!store || i.store === store) &&
         (!q ||
-          `${i.sku} ${i.store} ${i.shelf} ${i.itemCode} ${i.description ?? ''} ${i.alias ?? ''} ${i.pairCode} ${i.formerPairCode ?? ''} ${i.remarks}`
+          `${i.sku} ${i.store} ${i.roomId ?? ''} ${i.shelf} ${i.itemCode} ${i.description ?? ''} ${i.alias ?? ''} ${i.pairCode} ${i.formerPairCode ?? ''} ${i.remarks}`
             .toLowerCase()
             .includes(q)),
     )
@@ -393,6 +412,7 @@ export default function Inventory({ embedded = false, branch = '', region = '', 
     setForm({
       sku: it.sku,
       store: it.store,
+      roomId: it.roomId ?? '',
       shelf: it.shelf,
       itemCode: it.itemCode,
       description: it.description ?? '',
@@ -434,7 +454,7 @@ export default function Inventory({ embedded = false, branch = '', region = '', 
     const rows = parsePaste(text)
     if (!rows.length) {
       setError(
-        `No rows recognised in ${source} — expected SKU, Store, Shelf, Item Code, Begin, Out, Avail, Remarks, Model Code, Alias, Description.`,
+        `No rows recognised in ${source} — expected SKU, Store, Shelf, Item Code, Begin, Out, Avail, Remarks, Model Code, Alias, Description, Room ID.`,
       )
       return
     }
@@ -552,7 +572,7 @@ export default function Inventory({ embedded = false, branch = '', region = '', 
               <p className="saved-hint">
                 Paste rows (Excel = tab-separated):{' '}
                 <strong>
-                  SKU, Store, Shelf, Item Code, Begin, Out, Avail, Remarks, Model Code, Alias, Description
+                  SKU, Store, Shelf, Item Code, Begin, Out, Avail, Remarks, Model Code, Alias, Description, Room ID
                 </strong>
                 . Existing SKUs are updated, new ones added. Model Code is last so older exports still import; include a
                 header row to use any other order.
@@ -586,6 +606,12 @@ export default function Inventory({ embedded = false, branch = '', region = '', 
                 <label>
                   Store
                   <input value={form.store} onChange={set('store')} list="inv-stores" />
+                </label>
+                {/* The room within that store — the step between the store and
+                    the shelf, where a branch keeps stock in more than one. */}
+                <label>
+                  Room ID
+                  <input value={form.roomId} onChange={set('roomId')} />
                 </label>
                 <label>
                   Shelf
@@ -708,6 +734,7 @@ export default function Inventory({ embedded = false, branch = '', region = '', 
                   <tr>
                     <th>SKU</th>
                     <th>Store</th>
+                    <th>Room ID</th>
                     <th>Shelf</th>
                     <th>Item Code</th>
                     <th>Description</th>
@@ -725,6 +752,7 @@ export default function Inventory({ embedded = false, branch = '', region = '', 
                     <tr key={i.id} className={isLow(i) ? 'low' : ''}>
                       <td className="nowrap">{i.sku}</td>
                       <td className="nowrap">{i.store}</td>
+                      <td className="nowrap">{i.roomId}</td>
                       <td>{i.shelf}</td>
                       <td className="item">{i.itemCode}</td>
                       <td className="rem">{i.description}</td>
@@ -743,7 +771,7 @@ export default function Inventory({ embedded = false, branch = '', region = '', 
                   ))}
                   {filtered.length === 0 && (
                     <tr>
-                      <td colSpan={12} className="empty">
+                      <td colSpan={13} className="empty">
                         No items match the filter.
                       </td>
                     </tr>

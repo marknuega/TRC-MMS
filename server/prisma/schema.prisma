@@ -40,6 +40,9 @@ model InventoryItem {
   sku            String         @unique
   branch         String         @default("") // owning branch; non-admins are scoped to their own
   store          String         @default("")
+  // Which room in that store the stock sits in — the step between the store
+  // and the shelf, for a branch whose stock is spread across more than one.
+  roomId         String         @default("") @map("room_id")
   shelf          String         @default("")
   itemCode       String         @default("") @map("item_code")
   // The short name this item is written by on a report — "Battery 3180" for

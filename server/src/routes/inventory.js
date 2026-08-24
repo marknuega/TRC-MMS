@@ -50,6 +50,7 @@ function parseItem(body) {
     data: {
       sku,
       store: clean(body?.store),
+      roomId: clean(body?.roomId),
       shelf: clean(body?.shelf),
       itemCode: clean(body?.itemCode),
       description: clean(body?.description),
