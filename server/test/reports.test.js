@@ -115,4 +115,51 @@ describe('inventory', () => {
     const del = await authFetch(`/api/inventory/${created.id}`, { method: 'DELETE' })
     assert.equal(del.status, 204)
   })
+
+  // The Model Code is what makes "Speaker (45A)" on a Carkit a different shelf
+  // from the same words on a TH1n. These guard the two ways it can be set to
+  // something that would look right and draw nothing.
+  describe('Model Code', () => {
+    const branch = `TEST-${randomBytes(4).toString('hex')}`
+    const post = (body) => authFetch('/api/inventory', { method: 'POST', body: JSON.stringify(body) })
+
+    after(async () => {
+      await prisma.inventoryTxn.deleteMany({ where: { branch } })
+      await prisma.inventoryItem.deleteMany({ where: { branch } })
+    })
+
+    test('refuses a code that is neither form', async () => {
+      const res = await post({ sku: `${branch}-A`, pairCode: '45A', branch })
+      assert.equal(res.status, 400) // no model in front of it
+      assert.match((await res.json()).error, /Model Code/)
+    })
+
+    // An item coded ahead of its vocabulary is stocked, listed, and drawn on by
+    // nothing — a fault only resolves to C45A once an Issue type says what 45A
+    // is. Caught here, where someone is looking at the form.
+    test('refuses a parts code no Issue type claims', async () => {
+      const res = await post({ sku: `${branch}-B`, pairCode: 'H77A', branch })
+      assert.equal(res.status, 400)
+      assert.match((await res.json()).error, /no Issue type claims/)
+    })
+
+    // Being unclaimed is the whole reason the provisional form exists.
+    test('accepts the provisional form for a part with no code', async () => {
+      const res = await post({
+        sku: `${branch}-C`,
+        pairCode: 'M:CUR3 Display for TMR880i - HT10280AA',
+        branch,
+      })
+      assert.equal(res.status, 201)
+      // Stored upper-cased and whitespace-collapsed, so one shelf is one code
+      // however the name was typed.
+      assert.equal((await res.json()).pairCode, 'M:CUR3 DISPLAY FOR TMR880I - HT10280AA')
+    })
+
+    test('refuses a code another item in the branch already holds', async () => {
+      const res = await post({ sku: `${branch}-D`, pairCode: 'M:CUR3 DISPLAY FOR TMR880I - HT10280AA', branch })
+      assert.equal(res.status, 409)
+      assert.match((await res.json()).error, new RegExp(`${branch}-C`))
+    })
+  })
 })

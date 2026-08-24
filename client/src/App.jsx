@@ -3595,7 +3595,9 @@ function App({ user, onLogout }) {
             />
           )}
 
-          {page === 'inventory' && <Inventory embedded branch={isAllBranches ? '' : branch} region={region} />}
+          {page === 'inventory' && (
+            <Inventory embedded branch={isAllBranches ? '' : branch} region={region} options={options} />
+          )}
 
           {page === 'reference' && <ReferenceCard isAdmin={isAdmin} issueTypes={options.issueTypes} />}
 

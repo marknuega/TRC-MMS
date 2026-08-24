@@ -1,6 +1,14 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
-import { hasRtoAction, isRtoAction, seriesFor, requestedDate, requestedDocNumber } from '../src/routes/savedReports.js'
+import {
+  hasRtoAction,
+  isRtoAction,
+  resolveInventoryUsage,
+  seriesFor,
+  requestedDate,
+  requestedDocNumber,
+} from '../src/routes/savedReports.js'
+import { CODEMAP_SEED } from '../src/codemapSeed.js'
 
 // RTO (Return to Owner) = the device went back untouched, so no part was used.
 // A snapshot containing one is saved as reference-only.
@@ -155,5 +163,143 @@ describe('requestedDocNumber', () => {
 
   test('anything not a number is refused', () => {
     for (const v of ['A019', 'nineteen', {}]) assert.ok(requestedDocNumber(v).error, `${v} should be refused`)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Which shelf a fault draws from.
+//
+// The bug this closes: "Speaker (45A)" on an SRG3900 Carkit and the same words
+// on a TH1n are two different physical items with two different counts, and
+// matching on the name alone drew one model's usage out of the other model's
+// box — inside the save transaction, with a document number already printed
+// against it.
+// ---------------------------------------------------------------------------
+describe('resolveInventoryUsage', () => {
+  const VOCAB = {
+    equipmentCodes: CODEMAP_SEED.equipmentCodes,
+    issueTypes: [
+      { name: 'SPEAKER LOW', parts: '45', variant: 'A' },
+      'CUR3 DISPLAY FOR TMR880I - HT10280AA', // named, no parts code yet
+    ],
+  }
+
+  const item = (id, sku, itemCode, pairCode = '') => ({ id, sku, itemCode, pairCode, begin: 10, out: 0 })
+  const entry = (model, ...faults) => ({
+    model,
+    faults: faults.map((f) => (typeof f === 'string' ? { issue: f, quantity: 1, action: 'CHANGE' } : f)),
+  })
+  const drawn = (usage) => usage.map((u) => [u.item.sku, u.qty, u.pairCode])
+
+  test('a fault draws the row coded for its own model', () => {
+    const items = [
+      item(1, 'TH1N-SPK', 'SPEAKER LOW', 'H45A'),
+      item(2, 'CARKIT-SPK', 'SPEAKER LOW', 'C45A'),
+      item(3, 'DESK-SPK', 'SPEAKER LOW', 'D45A'),
+    ]
+    assert.deepEqual(drawn(resolveInventoryUsage([entry('TH1N', 'SPEAKER LOW')], items, VOCAB)), [
+      ['TH1N-SPK', 1, 'H45A'],
+    ])
+    assert.deepEqual(drawn(resolveInventoryUsage([entry('SRG3900 CARKIT', 'SPEAKER LOW')], items, VOCAB)), [
+      ['CARKIT-SPK', 1, 'C45A'],
+    ])
+  })
+
+  // The heart of it: one report, two models, one part name — and each model
+  // comes off its own shelf.
+  test('two models in one report draw the same part from two shelves', () => {
+    const items = [item(1, 'TH1N-SPK', 'SPEAKER LOW', 'H45A'), item(2, 'CARKIT-SPK', 'SPEAKER LOW', 'C45A')]
+    const snapshot = [entry('TH1N', 'SPEAKER LOW'), entry('SRG3900 CARKIT', 'SPEAKER LOW')]
+    assert.deepEqual(drawn(resolveInventoryUsage(snapshot, items, VOCAB)), [
+      ['TH1N-SPK', 1, 'H45A'],
+      ['CARKIT-SPK', 1, 'C45A'],
+    ])
+  })
+
+  // Most of the store genuinely is shared, which is why a blank Model Code
+  // keeps working exactly as it did before any of this existed — and why the
+  // migration needed no backfill.
+  test('an uncoded row is shared, and still matches by name', () => {
+    const items = [item(1, 'ANY-SPK', 'SPEAKER LOW')]
+    assert.deepEqual(drawn(resolveInventoryUsage([entry('TH1N', 'SPEAKER LOW')], items, VOCAB)), [['ANY-SPK', 1, '']])
+  })
+
+  test('a coded row wins over a shared one', () => {
+    const items = [item(1, 'ANY-SPK', 'SPEAKER LOW'), item(2, 'TH1N-SPK', 'SPEAKER LOW', 'H45A')]
+    assert.deepEqual(drawn(resolveInventoryUsage([entry('TH1N', 'SPEAKER LOW')], items, VOCAB)), [
+      ['TH1N-SPK', 1, 'H45A'],
+    ])
+  })
+
+  // A coded row belongs to ONE model. Letting it also answer to the bare name
+  // is exactly the hole this closes, so a Carkit-coded speaker must not be
+  // reachable by a TH1n fault even when nothing else stocks it.
+  test('a row coded for another model is not reachable by name', () => {
+    const items = [item(2, 'CARKIT-SPK', 'SPEAKER LOW', 'C45A')]
+    assert.deepEqual(resolveInventoryUsage([entry('TH1N', 'SPEAKER LOW')], items, VOCAB), [])
+  })
+
+  test('an item with no parts code is drawn by its provisional code', () => {
+    const items = [
+      item(1, 'TMR-CUR3', 'CUR3 DISPLAY FOR TMR880I - HT10280AA', 'M:CUR3 DISPLAY FOR TMR880I - HT10280AA'),
+    ]
+    const snapshot = [entry('TMR 880i', 'CUR3 Display for TMR880i - HT10280AA')]
+    assert.deepEqual(drawn(resolveInventoryUsage(snapshot, items, VOCAB)), [
+      ['TMR-CUR3', 1, 'M:CUR3 DISPLAY FOR TMR880I - HT10280AA'],
+    ])
+  })
+
+  test('a model the code map does not name falls back to the shared shelf', () => {
+    const items = [item(1, 'ANY-SPK', 'SPEAKER LOW'), item(2, 'TH1N-SPK', 'SPEAKER LOW', 'H45A')]
+    const snapshot = [entry('For Record Purpose Only.', 'SPEAKER LOW')]
+    assert.deepEqual(drawn(resolveInventoryUsage(snapshot, items, VOCAB)), [['ANY-SPK', 1, '']])
+  })
+
+  test('quantities for one item accumulate across entries', () => {
+    const items = [item(1, 'TH1N-SPK', 'SPEAKER LOW', 'H45A')]
+    const snapshot = [
+      entry('TH1N', { issue: 'SPEAKER LOW', quantity: 2, action: 'CHANGE' }),
+      entry('TH1n', { issue: 'SPEAKER LOW', quantity: 3, action: 'REPAIR' }),
+    ]
+    assert.deepEqual(drawn(resolveInventoryUsage(snapshot, items, VOCAB)), [['TH1N-SPK', 5, 'H45A']])
+  })
+
+  // RTO = the device went back untouched. Skipped per FAULT, so a report that
+  // also records real usage still deducts for those parts.
+  test('an RTO fault draws nothing, and does not stop the rest of the report', () => {
+    const items = [item(1, 'TH1N-SPK', 'SPEAKER LOW', 'H45A')]
+    const snapshot = [
+      entry('TH1N', { issue: 'SPEAKER LOW', quantity: 1, action: 'RTO' }),
+      entry('TH1N', { issue: 'SPEAKER LOW', quantity: 2, action: 'CHANGE' }),
+    ]
+    assert.deepEqual(drawn(resolveInventoryUsage(snapshot, items, VOCAB)), [['TH1N-SPK', 2, 'H45A']])
+  })
+
+  test('a fault nothing stocks is ignored, as it always was', () => {
+    assert.deepEqual(resolveInventoryUsage([entry('TH1N', 'ANTENNA')], [item(1, 'X', 'SPEAKER LOW')], VOCAB), [])
+  })
+
+  // Refused rather than guessed at: this runs inside the save transaction, so
+  // picking one of the two would move stock off the wrong shelf under a
+  // document number that is already printed.
+  test('two rows answering one fault fail the save and name both', () => {
+    const items = [item(1, 'TH1N-SPK-A', 'SPEAKER LOW', 'H45A'), item(2, 'TH1N-SPK-B', 'SPEAKER LOW', 'H45A')]
+    assert.throws(() => resolveInventoryUsage([entry('TH1N', 'SPEAKER LOW')], items, VOCAB), (err) => {
+      assert.equal(err.status, 409)
+      assert.match(err.message, /H45A/)
+      assert.match(err.message, /TH1N-SPK-A, TH1N-SPK-B/)
+      return true
+    })
+  })
+
+  test('two shared rows under one item code are refused the same way', () => {
+    const items = [item(1, 'SPK-A', 'SPEAKER LOW'), item(2, 'SPK-B', 'SPEAKER LOW')]
+    assert.throws(() => resolveInventoryUsage([entry('TH1N', 'SPEAKER LOW')], items, VOCAB), /SPK-A, SPK-B/)
+  })
+
+  test('tolerates an empty snapshot, empty stock and missing faults', () => {
+    assert.deepEqual(resolveInventoryUsage([], [], VOCAB), [])
+    assert.deepEqual(resolveInventoryUsage(undefined, undefined, VOCAB), [])
+    assert.deepEqual(resolveInventoryUsage([{ model: 'TH1N' }], [item(1, 'X', 'SPEAKER LOW')], VOCAB), [])
   })
 })

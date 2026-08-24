@@ -36,22 +36,36 @@ model SavedReport {
 
 // Spare-parts inventory. Avail is derived (begin - out), not stored.
 model InventoryItem {
-  id        Int            @id @default(autoincrement())
-  sku       String         @unique
-  branch    String         @default("") // owning branch; non-admins are scoped to their own
-  store     String         @default("")
-  shelf     String         @default("")
-  itemCode  String         @default("") @map("item_code")
-  begin     Int            @default(0)
-  out       Int            @default(0)
-  lowStock  Int            @default(0) @map("low_stock")
-  remarks   String         @default("")
-  txns      InventoryTxn[]
-  createdAt DateTime       @default(now()) @map("created_at")
-  updatedAt DateTime       @updatedAt @map("updated_at")
+  id             Int            @id @default(autoincrement())
+  sku            String         @unique
+  branch         String         @default("") // owning branch; non-admins are scoped to their own
+  store          String         @default("")
+  shelf          String         @default("")
+  itemCode       String         @default("") @map("item_code")
+  // Model+Parts pair code — the identity a fault draws this item by:
+  // [device letter][parts][variant] (C45A = Speaker, SRG Carkit), or the
+  // provisional [letter]:[name] form (M:CUR3 DISPLAY FOR TMR880I - HT10280AA)
+  // while the part has no parts code of its own. See client/src/pairCode.js.
+  //
+  // Blank means SHARED: matched by itemCode alone, the way every item was
+  // before this column existed, and used only when no model-specific row
+  // answers. Unique per branch, enforced in routes/inventory.js — '' is not
+  // NULL and a database constraint would collide on every shared row.
+  pairCode       String         @default("") @map("pair_code")
+  // The provisional code this item was held by before its name was given a
+  // parts code. Never cleared: documents already printed carry the old form.
+  formerPairCode String         @default("") @map("former_pair_code")
+  begin          Int            @default(0)
+  out            Int            @default(0)
+  lowStock       Int            @default(0) @map("low_stock")
+  remarks        String         @default("")
+  txns           InventoryTxn[]
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
 
   @@index([store])
   @@index([branch])
+  @@index([pairCode])
   @@map("inventory_items")
 }
 
@@ -67,6 +81,11 @@ model InventoryTxn {
   reference  String        @default("") // REP-#### / TRANS-#### / note
   branch     String        @default("")
   material   String        @default("")
+  // The pair code the fault resolved through, or '' when the item was matched
+  // as a shared one by name. Recorded literally so the ledger still reads
+  // right after the item's own code is promoted — and rewritten by that
+  // promotion, so the audit stays continuous across it.
+  pairCode   String        @default("") @map("pair_code")
   createdAt  DateTime      @default(now()) @map("created_at")
 
   @@index([itemId])

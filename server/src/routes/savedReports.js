@@ -9,6 +9,13 @@ import { isNoActivityIssue } from '../reportEntry.js'
 // The id a document is shown by, so a clash names the OTHER document the way
 // its holder would read it — same rendering the page and the print sheet use.
 import { shortIdOf } from '../../../client/src/report.js'
+// The Model+Parts pair code an inventory item is held by, and the vocabulary
+// it is derived from. Shared with the browser rather than re-implemented, so
+// the code an item is listed under and the code a save looks it up by can
+// never drift apart.
+import { normalizePairCode, pairCodeForFault } from '../../../client/src/pairCode.js'
+import { mergeOptions } from '../../../client/src/options.js'
+import { CODEMAP_SEED } from '../codemapSeed.js'
 
 const router = Router()
 
@@ -29,6 +36,10 @@ export const seriesFor = (mode, isReferenceOnly) =>
   normMode(mode) === 'transmittal' ? 'TRANS' : isReferenceOnly ? 'REF' : 'REP'
 
 const docId = (series, n) => `${series}-${String(n).padStart(4, '0')}`
+const upTrim = (v) =>
+  String(v ?? '')
+    .trim()
+    .toUpperCase()
 const withFaults = { faults: { orderBy: { position: 'asc' } } }
 
 // RTO (Return to Owner) means the device went back untouched — no part was
@@ -50,51 +61,152 @@ export const isRtoAction = (action) =>
 export const hasRtoAction = (snapshot) =>
   (snapshot ?? []).some((e) => (e.faults ?? []).some((f) => isRtoAction(f.action)))
 
-// Deduct stock for materials/faults that match an inventory item (by itemCode,
-// case-insensitive). Quantities across the snapshot are summed per item, and
-// `out` is incremented (so `avail` = begin - out drops). Unmatched issues are
-// ignored. Runs inside the save transaction so it's all-or-nothing.
+// ---------------------------------------------------------------------------
+// Stock deduction.
+//
+// A fault draws its item by the Model+Parts PAIR code — the device letter of
+// the entry's model in front of the part, C45A rather than a bare 45A. The same
+// "Speaker (45A)" is a different physical item on a Carkit than on a TH1n, with
+// its own shelf and its own count, and matching on the name alone drew one
+// model's usage out of the other model's box. See client/src/pairCode.js for
+// the format and the reasoning.
+//
+// An item with a blank pair code is SHARED: matched by itemCode exactly as
+// before this existed, and reached only when no model-specific row answers.
+// That is the majority of the store, and it is why nothing needed backfilling.
 //
 // The skip is per FAULT, not per report: an RTO line returns the device
 // untouched and must never draw stock, but a reference-only report that also
 // records real part usage still deducts for those parts normally.
-async function applyInventoryUsage(tx, snapshot, reference, branch) {
-  const used = new Map() // itemCode(upper) -> total qty
-  for (const e of snapshot) {
+// ---------------------------------------------------------------------------
+
+// Ambiguity is refused, never guessed at. This runs inside the save
+// transaction, so a wrong guess is stock moved off the wrong shelf with a
+// document number already printed against it — the one error here nobody can
+// unwind afterwards. 409 rather than 500 so the message survives the error
+// middleware and reaches the person saving.
+function ambiguous(message) {
+  const e = new Error(message)
+  e.status = 409
+  return e
+}
+
+const push = (map, key, value) => {
+  const at = map.get(key)
+  if (at) at.push(value)
+  else map.set(key, [value])
+}
+
+/**
+ * Which items a snapshot draws on, and how many of each.
+ *
+ * Pure — no database, no transaction — so the resolution rules can be tested on
+ * their own (see test/savedReports.test.js). Throws an ambiguity error rather
+ * than choosing between two candidates.
+ *
+ * @param snapshot the saved entries, each with its model and its faults
+ * @param items    the saving branch's inventory rows
+ * @param vocab    { equipmentCodes, issueTypes } — the live code map + options
+ * @returns [{ item, qty, pairCode }] — pairCode '' when matched as a shared item
+ */
+export function resolveInventoryUsage(snapshot, items, vocab = {}) {
+  const byPair = new Map() // pair code -> rows carrying it
+  const byName = new Map() // item code -> shared rows carrying it
+  for (const it of items ?? []) {
+    const pair = normalizePairCode(it.pairCode)
+    // A coded row is model-specific and is NEVER reachable by name: letting it
+    // answer to a bare "Speaker (45A)" again would reopen the exact hole this
+    // closes.
+    if (pair) {
+      push(byPair, pair, it)
+      continue
+    }
+    const name = upTrim(it.itemCode)
+    if (name) push(byName, name, it)
+  }
+
+  const wanted = new Map() // item id -> { item, qty, pairCode }
+  for (const e of snapshot ?? []) {
     for (const f of e.faults ?? []) {
       if (isRtoAction(f.action)) continue // returned, not consumed
-      const key = String(f.issue ?? '')
-        .trim()
-        .toUpperCase()
-      if (!key) continue
-      used.set(key, (used.get(key) || 0) + Math.max(0, Number(f.quantity) || 0))
+      const issue = String(f.issue ?? '').trim()
+      if (!issue) continue
+
+      const pairCode = pairCodeForFault({ model: e.model, issue }, vocab)
+      let hits = pairCode ? (byPair.get(pairCode) ?? []) : []
+      let matchedBy = pairCode
+      if (hits.length === 0) {
+        // No model-specific row — fall back to the shared shelf, matched on the
+        // name exactly as it always was (punctuation included: "SPEAKER (45A)"
+        // and "SPEAKER 45A" are two listings, not one).
+        hits = byName.get(upTrim(issue)) ?? []
+        matchedBy = ''
+      }
+      if (hits.length === 0) continue // nothing stocks it — ignored, as before
+      if (hits.length > 1) {
+        const where = matchedBy ? `pair code ${matchedBy}` : `item code "${upTrim(issue)}"`
+        throw ambiguous(
+          `"${issue}" on ${e.model || 'an untyped model'} matches ${hits.length} inventory items ` +
+            `under ${where} (${hits.map((h) => h.sku).join(', ')}). ` +
+            `Give them different Model Codes before saving — nothing was saved.`,
+        )
+      }
+
+      const item = hits[0]
+      const qty = Math.max(0, Number(f.quantity) || 0)
+      const at = wanted.get(item.id)
+      if (at) at.qty += qty
+      else wanted.set(item.id, { item, qty, pairCode: matchedBy })
     }
   }
-  if (used.size === 0) return
-  // Only deduct from the saving branch's own stock (each branch has separate inventory).
+  // A run of zero-quantity faults draws nothing and writes no ledger row.
+  return [...wanted.values()].filter((u) => u.qty > 0)
+}
+
+/**
+ * The live vocabulary a fault resolves through: which letter is which radio
+ * (the code map) and which name claims which parts code (the options).
+ *
+ * Read fresh per save rather than cached — a part coded five minutes ago must
+ * draw from its coded shelf on the next save, not after a redeploy. Falls back
+ * to the shipped defaults exactly as the browser does, so an install that has
+ * never saved either list still resolves.
+ */
+async function loadPairVocabulary(tx) {
+  const [optionsRow, mapRow] = await Promise.all([
+    tx.appOptions.findUnique({ where: { id: 1 } }),
+    tx.codeMap.findUnique({ where: { id: 1 } }),
+  ])
+  const options = mergeOptions(optionsRow?.data ?? {})
+  const equipmentCodes = mapRow?.data?.equipmentCodes ?? CODEMAP_SEED.equipmentCodes
+  return { equipmentCodes, issueTypes: options.issueTypes }
+}
+
+// Deduct the resolved usage and write the ledger. Runs inside the save
+// transaction, so it is all-or-nothing with the snapshot itself.
+async function applyInventoryUsage(tx, snapshot, reference, branch) {
+  // Only the saving branch's own stock (each branch has separate inventory).
   const items = await tx.inventoryItem.findMany({
     where: { branch: branch ?? '' },
-    select: { id: true, sku: true, itemCode: true, begin: true, out: true },
+    select: { id: true, sku: true, itemCode: true, pairCode: true, begin: true, out: true },
   })
-  for (const it of items) {
-    const qty = used.get(
-      String(it.itemCode ?? '')
-        .trim()
-        .toUpperCase(),
-    )
-    if (!qty) continue
-    const newOut = it.out + qty
-    await tx.inventoryItem.update({ where: { id: it.id }, data: { out: newOut } })
+  if (items.length === 0) return
+
+  const usage = resolveInventoryUsage(snapshot, items, await loadPairVocabulary(tx))
+  for (const { item, qty, pairCode } of usage) {
+    const newOut = item.out + qty
+    await tx.inventoryItem.update({ where: { id: item.id }, data: { out: newOut } })
     await tx.inventoryTxn.create({
       data: {
-        itemId: it.id,
-        sku: it.sku,
+        itemId: item.id,
+        sku: item.sku,
         type: 'usage',
         change: -qty,
-        availAfter: it.begin - newOut,
+        availAfter: item.begin - newOut,
         reference: reference ?? '',
         branch: branch ?? '',
-        material: it.itemCode,
+        material: item.itemCode,
+        pairCode,
       },
     })
   }
@@ -367,6 +479,14 @@ router.post('/', async (req, res, next) => {
     // the check, so it reads the same way.
     if (err?.code === 'P2002') {
       return res.status(409).json({ error: 'That document number was just taken — choose another number' })
+    }
+    // A refused stock lookup (two inventory items answering to one fault). The
+    // transaction rolled back, so nothing was saved and nothing was deducted —
+    // and the message names the two items, which is the only thing that lets
+    // the person saving fix it. Passing it to the error middleware instead
+    // would replace it with "Internal server error" in production.
+    if (err?.status) {
+      return res.status(err.status).json({ error: err.message })
     }
     next(err)
   }

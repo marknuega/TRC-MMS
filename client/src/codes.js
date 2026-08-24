@@ -53,6 +53,7 @@
 import { useEffect, useRef, useState } from 'react'
 // Extension-ful so `node --test` resolves it too, not just Vite.
 import { issueCodeIndex, optionNames, technicianName } from './options.js'
+import { matchOption, up } from './pairCode.js'
 
 // This app now OWNS the code map, so the mirror is same-origin. It stays a
 // fetch rather than a bundled import because the map is edited at runtime and
@@ -151,46 +152,11 @@ export const FALLBACK = {
   },
 }
 
-const up = (v) =>
-  String(v ?? '')
-    .trim()
-    .toUpperCase()
-// Comparison key: case and punctuation carry no meaning across the two lists.
-const norm = (v) => up(v).replace(/[^A-Z0-9]/g, '')
-
-/**
- * Resolve a name from the code map onto the app's own option list.
- *
- * The two vocabularies are maintained separately (the code map on the WhatsApp
- * admin, the options in Manage Inputs), so they agree in spirit but not always
- * to the character — "SRG Carkit" over here is "SRG3900 CARKIT" over there.
- * Progressively looser matching, stopping at the first hit:
- *   1. exact once punctuation is ignored
- *   2. exact once model numbers are ignored too (SRG*3900*CARKIT)
- *   3. one is contained in the other
- * Returns null rather than guessing when nothing matches, so the caller can warn
- * instead of silently writing a value that no dropdown offers.
- */
-export function matchOption(name, list) {
-  const want = norm(name)
-  if (!want) return null
-  const opts = (list ?? []).map((o) => ({ raw: o, n: norm(o) }))
-
-  const exact = opts.find((o) => o.n === want)
-  if (exact) return exact.raw
-
-  const bare = (s) => s.replace(/[0-9]/g, '')
-  const digitless = opts.find((o) => bare(o.n) === bare(want) && bare(want).length >= 3)
-  if (digitless) return digitless.raw
-
-  // Longest match wins, NOT the first. The option list holds both "LCD" and
-  // "LCD CABLE", and first-match order would resolve an LCD Cable fault to the
-  // bare LCD — quietly filing it against the wrong part.
-  const partial = opts
-    .filter((o) => o.n.includes(want) || want.includes(o.n))
-    .sort((a, b) => b.n.length - a.n.length)[0]
-  return partial ? partial.raw : null
-}
+// `up`, `norm` and matchOption now live beside the pair-code helpers that also
+// need them (pairCode.js), so the server can reach the matcher without pulling
+// this module and its React import in. Re-exported here because matchOption is
+// part of this module's published surface and its callers predate the move.
+export { matchOption } from './pairCode.js'
 
 // 'Airbus TH1n' -> { type: 'AIRBUS', model: 'TH1n' }. The first word is the
 // brand, which is exactly what the app stores as the entry Type.

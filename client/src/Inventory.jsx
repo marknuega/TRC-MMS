@@ -8,6 +8,9 @@ import {
   getInventoryTxns,
 } from './api'
 import { COPYRIGHT_HTML } from './copyright'
+import { FALLBACK, useCodeMap } from './codes.js'
+import { optionNames } from './options.js'
+import { deviceLetterFor, pairCodeForFault, parsePairCode } from './pairCode.js'
 import { printDocument } from './printDoc.js'
 import SearchSelect from './SearchSelect'
 import { advanceOnEnter } from './focusNav'
@@ -21,7 +24,7 @@ const esc = (v) =>
 const signed = (n) => (n > 0 ? `+${n}` : String(n))
 const stamp = (d) => new Date(d).toLocaleString('en-GB')
 
-const BLANK = { sku: '', store: '', shelf: '', itemCode: '', begin: 0, out: 0, lowStock: 0, remarks: '' }
+const BLANK = { sku: '', store: '', shelf: '', itemCode: '', pairCode: '', begin: 0, out: 0, lowStock: 0, remarks: '' }
 
 // Tab if the data actually uses tabs (an Excel copy-paste), else comma. Decided
 // from the whole text, not the first line, because a leading header row can look
@@ -74,31 +77,72 @@ function parseDelimited(text) {
 }
 
 // Expected columns (Excel TSV / CSV), matching the inventory sheet:
-// SKU, Store, Shelf, Item Code, Begin, Out, Avail(ignored — it is derived), Remarks
+// SKU, Store, Shelf, Item Code, Begin, Out, Avail(ignored — it is derived),
+// Remarks, Model Code
+//
+// Model Code is LAST rather than next to Item Code, where it belongs on screen.
+// Reading is positional, so slotting it in the middle would shift every column
+// after it and quietly re-import a year of exports into the wrong fields. A
+// header row is honoured when there is one, which is what lets a hand-made
+// sheet put the columns in any order it likes.
+const COLUMN_KEYS = {
+  SKU: 'sku',
+  STORE: 'store',
+  SHELF: 'shelf',
+  'ITEM CODE': 'itemCode',
+  BEGIN: 'begin',
+  OUT: 'out',
+  AVAIL: null, // derived from begin - out; a pasted value is ignored
+  REMARKS: 'remarks',
+  'MODEL CODE': 'pairCode',
+}
+const POSITIONAL = ['sku', 'store', 'shelf', 'itemCode', 'begin', 'out', null, 'remarks', 'pairCode']
+const NUMERIC = new Set(['begin', 'out'])
+
+const columnKey = (cell) => {
+  const k = String(cell ?? '')
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, ' ')
+  return Object.prototype.hasOwnProperty.call(COLUMN_KEYS, k) ? COLUMN_KEYS[k] : undefined
+}
+
 function parsePaste(text) {
+  const lines = parseDelimited(text)
+  // A header only counts if EVERY cell in it is a column this understands —
+  // half-recognised means it is a data row that happens to start with "SKU".
+  let layout = POSITIONAL
+  if (lines.length && columnKey(lines[0][0]) === 'sku') {
+    const named = lines[0].map(columnKey)
+    if (named.every((k) => k !== undefined)) layout = named
+  }
   const rows = []
-  for (const f of parseDelimited(text)) {
+  for (const f of lines) {
     const sku = (f[0] || '').trim()
     if (!sku || sku.toUpperCase() === 'SKU') continue // skip header / blanks
-    rows.push({
-      sku,
-      store: (f[1] || '').trim(),
-      shelf: (f[2] || '').trim(),
-      itemCode: (f[3] || '').trim(),
-      begin: Number((f[4] || '').trim()) || 0,
-      out: Number((f[5] || '').trim()) || 0,
-      remarks: (f[7] || '').trim(),
+    const row = { sku: '', store: '', shelf: '', itemCode: '', pairCode: '', begin: 0, out: 0, remarks: '' }
+    layout.forEach((key, i) => {
+      if (!key) return
+      const cell = (f[i] || '').trim()
+      row[key] = NUMERIC.has(key) ? Number(cell) || 0 : cell
     })
+    if (!row.sku) continue
+    rows.push(row)
   }
   return rows
 }
 
 function downloadCsv(filename, items) {
   const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
-  const head = ['SKU', 'Store', 'Shelf', 'Item Code', 'Begin', 'Out', 'Avail', 'Remarks']
+  const head = ['SKU', 'Store', 'Shelf', 'Item Code', 'Begin', 'Out', 'Avail', 'Remarks', 'Model Code']
   const lines = [head.map(esc).join(',')]
   for (const i of items) {
-    lines.push([i.sku, i.store, i.shelf, i.itemCode, i.begin, i.out, i.avail, i.remarks].map(esc).join(','))
+    // esc() quotes every field, so a Model Code carrying commas of its own
+    // ("M:CUR3 DISPLAY, 3RD SHELF") survives the round trip back through
+    // parseDelimited.
+    lines.push(
+      [i.sku, i.store, i.shelf, i.itemCode, i.begin, i.out, i.avail, i.remarks, i.pairCode].map(esc).join(','),
+    )
   }
   const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
   const url = URL.createObjectURL(blob)
@@ -112,11 +156,12 @@ function downloadCsv(filename, items) {
 function exportInventoryPdf(items, branch, store) {
   const title = `TRC ${branch || 'All'} - Inventory`
   const scope = store ? ` · ${store}` : ''
-  const head = ['SKU', 'Store', 'Shelf', 'Item Code', 'Begin', 'Out', 'Avail', 'Remarks']
+  const head = ['SKU', 'Store', 'Shelf', 'Item Code', 'Model Code', 'Begin', 'Out', 'Avail', 'Remarks']
   const body = items
     .map(
       (i) =>
         `<tr><td>${esc(i.sku)}</td><td>${esc(i.store)}</td><td>${esc(i.shelf)}</td><td>${esc(i.itemCode)}</td>` +
+        `<td>${esc(i.pairCode)}</td>` +
         `<td class="c">${esc(i.begin)}</td><td class="c">${esc(i.out)}</td><td class="c">${esc(i.avail)}</td><td>${esc(i.remarks)}</td></tr>`,
     )
     .join('')
@@ -135,7 +180,7 @@ function exportInventoryPdf(items, branch, store) {
 
 const isLow = (i) => i.lowStock > 0 && i.avail <= i.lowStock
 
-export default function Inventory({ embedded = false, branch = '', region = '' }) {
+export default function Inventory({ embedded = false, branch = '', region = '', options = {} }) {
   const [items, setItems] = useState([])
   const [openState, setOpen] = useState(false)
   const open = embedded || openState
@@ -149,6 +194,30 @@ export default function Inventory({ embedded = false, branch = '', region = '' }
   const [error, setError] = useState(null)
   const [notice, setNotice] = useState('')
   const [hist, setHist] = useState(null) // { item, txns } — transaction-history modal
+
+  // The Model Code is always derivable: the device letter of a model, plus the
+  // parts code its Item Code claims, or the Item Code itself while it claims
+  // none. Typing it by hand is what this avoids — "M:CUR3 DISPLAY FOR TMR880I -
+  // HT10280AA" is not a string anyone should have to retype, and one wrong
+  // character is an item that silently never matches a fault.
+  const { map } = useCodeMap()
+  const equipmentCodes = map?.equipmentCodes ?? FALLBACK.equipmentCodes
+  const vocab = { equipmentCodes, issueTypes: options.issueTypes }
+
+  // Only the models the code map names a letter for — the rest own no
+  // model-specific stock and would derive nothing.
+  const codedModels = useMemo(
+    () => optionNames(options.models).filter((m) => deviceLetterFor(m, equipmentCodes)),
+    [options.models, equipmentCodes],
+  )
+
+  // Which model an already-stored code belongs to, so editing an item shows
+  // the model it is held under rather than starting blank.
+  const modelOfCode = (pairCode) => {
+    const letter = parsePairCode(pairCode)?.letter
+    if (!letter) return ''
+    return codedModels.find((m) => deviceLetterFor(m, equipmentCodes) === letter) ?? ''
+  }
 
   async function openHistory(item) {
     setHist({ item, txns: null })
@@ -170,17 +239,18 @@ export default function Inventory({ embedded = false, branch = '', region = '' }
       t.reference,
       t.branch,
       t.material,
+      t.pairCode,
     ])
   }
 
   function exportHistExcel(h) {
     const b = 'border:1px solid #999;padding:4px;'
     const hb = `${b}background:#dfe3ee;font-weight:bold;text-align:center;`
-    const head = ['#', 'Date', 'Type', 'Change', 'Avail', 'Reference', 'Branch', 'Material']
+    const head = ['#', 'Date', 'Type', 'Change', 'Avail', 'Reference', 'Branch', 'Material', 'Model Code']
     let html = `<meta charset="utf-8"><table style="border-collapse:collapse;font-family:Arial;font-size:11px;">`
-    html += `<tr><td colspan="8" style="${b}background:#2563eb;color:#fff;font-weight:bold;font-size:14px;">Transaction history — ${esc(h.item.sku)} · ${esc(h.item.itemCode)}</td></tr>`
+    html += `<tr><td colspan="9" style="${b}background:#2563eb;color:#fff;font-weight:bold;font-size:14px;">Transaction history — ${esc(h.item.sku)} · ${esc(h.item.itemCode)}${h.item.pairCode ? ` · ${esc(h.item.pairCode)}` : ''}</td></tr>`
     if (h.item.remarks)
-      html += `<tr><td colspan="8" style="${b}background:#eef2ff;"><b>Remarks:</b> ${esc(h.item.remarks)}</td></tr>`
+      html += `<tr><td colspan="9" style="${b}background:#eef2ff;"><b>Remarks:</b> ${esc(h.item.remarks)}</td></tr>`
     html += `<tr>${head.map((x) => `<th style="${hb}">${esc(x)}</th>`).join('')}</tr>`
     for (const r of histRows(h))
       html += `<tr>${r.map((c, i) => `<td style="${b}${i === 0 || (i >= 3 && i <= 4) ? 'text-align:center;' : ''}">${esc(c)}</td>`).join('')}</tr>`
@@ -194,7 +264,7 @@ export default function Inventory({ embedded = false, branch = '', region = '' }
   }
 
   function exportHistPdf(h) {
-    const head = ['#', 'Date', 'Type', 'Change', 'Avail', 'Reference', 'Branch', 'Material']
+    const head = ['#', 'Date', 'Type', 'Change', 'Avail', 'Reference', 'Branch', 'Material', 'Model Code']
     const body = histRows(h)
       .map(
         (r) =>
@@ -206,7 +276,7 @@ export default function Inventory({ embedded = false, branch = '', region = '' }
         `<style>body{font-family:Arial,sans-serif;color:#111;margin:24px}h1{font-size:16px;margin:0 0 2px}p{margin:0 0 14px;color:#555;font-size:12px}` +
         `table{border-collapse:collapse;width:100%;font-size:11px}th,td{border:1px solid #999;padding:5px 7px;text-align:left}` +
         `th{background:#dfe3ee}td.c{text-align:center}tfoot{color:#777}</style></head><body>` +
-        `<h1>Transaction history — ${esc(h.item.sku)}</h1><p>${esc(h.item.itemCode)} · printed ${esc(stamp(Date.now()))}</p>` +
+        `<h1>Transaction history — ${esc(h.item.sku)}</h1><p>${esc(h.item.itemCode)}${h.item.pairCode ? ` · ${esc(h.item.pairCode)}` : ''} · printed ${esc(stamp(Date.now()))}</p>` +
         (h.item.remarks ? `<p style="margin:-8px 0 14px;color:#111"><b>Remarks:</b> ${esc(h.item.remarks)}</p>` : '') +
         `<table><thead><tr>${head.map((x) => `<th>${esc(x)}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table>` +
         `<p style="margin-top:14px">${COPYRIGHT_HTML}</p>` +
@@ -240,7 +310,10 @@ export default function Inventory({ embedded = false, branch = '', region = '' }
     return items.filter(
       (i) =>
         (!store || i.store === store) &&
-        (!q || `${i.sku} ${i.store} ${i.shelf} ${i.itemCode} ${i.remarks}`.toLowerCase().includes(q)),
+        (!q ||
+          `${i.sku} ${i.store} ${i.shelf} ${i.itemCode} ${i.pairCode} ${i.formerPairCode ?? ''} ${i.remarks}`
+            .toLowerCase()
+            .includes(q)),
     )
   }, [items, store, search])
   const lowCount = useMemo(() => items.filter(isLow).length, [items])
@@ -259,6 +332,7 @@ export default function Inventory({ embedded = false, branch = '', region = '' }
       store: it.store,
       shelf: it.shelf,
       itemCode: it.itemCode,
+      pairCode: it.pairCode ?? '',
       begin: it.begin,
       out: it.out,
       lowStock: it.lowStock,
@@ -294,7 +368,7 @@ export default function Inventory({ embedded = false, branch = '', region = '' }
   async function importText(text, source) {
     const rows = parsePaste(text)
     if (!rows.length) {
-      setError(`No rows recognised in ${source} — expected SKU, Store, Shelf, Item Code, Begin, Out, Avail, Remarks.`)
+      setError(`No rows recognised in ${source} — expected SKU, Store, Shelf, Item Code, Begin, Out, Avail, Remarks, Model Code.`)
       return
     }
     try {
@@ -410,8 +484,9 @@ export default function Inventory({ embedded = false, branch = '', region = '' }
             <div className="paste-box">
               <p className="saved-hint">
                 Paste rows (Excel = tab-separated):{' '}
-                <strong>SKU, Store, Shelf, Item Code, Begin, Out, Avail, Remarks</strong>. Existing SKUs are updated,
-                new ones added.
+                <strong>SKU, Store, Shelf, Item Code, Begin, Out, Avail, Remarks, Model Code</strong>. Existing SKUs
+                are updated, new ones added. Model Code is last so older exports still import; include a header row to
+                use any other order.
               </p>
               <textarea
                 value={pasteText}
@@ -451,6 +526,44 @@ export default function Inventory({ embedded = false, branch = '', region = '' }
                   Item Code
                   <input value={form.itemCode} onChange={set('itemCode')} />
                 </label>
+                {/* The Model Code is what a fault actually draws this item by.
+                    Left blank the item is SHARED — every model matches it by
+                    name, which is how the whole store worked before this
+                    existed and is still right for most of it.
+
+                    Picking the model writes the code; the field stays editable
+                    for a code that was set by hand and should be left alone. */}
+                <label>
+                  Model
+                  <SearchSelect
+                    value={modelOfCode(form.pairCode)}
+                    options={['', ...codedModels]}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        pairCode: e.target.value ? pairCodeForFault({ model: e.target.value, issue: f.itemCode }, vocab) : '',
+                      }))
+                    }
+                    placeholder="Shared — every model"
+                    ariaLabel="Model this item belongs to"
+                  />
+                </label>
+                <label>
+                  Model Code
+                  <input
+                    value={form.pairCode}
+                    onChange={set('pairCode')}
+                    placeholder="blank = shared"
+                    aria-describedby="inv-paircode-hint"
+                  />
+                </label>
+                <p className="saved-hint wide" id="inv-paircode-hint">
+                  {form.pairCode
+                    ? parsePairCode(form.pairCode)?.provisional
+                      ? `Held by name under ${modelOfCode(form.pairCode) || 'this model'} — it moves to a real code the day the name is given one.`
+                      : `Held by the parts code ${parsePairCode(form.pairCode)?.part ?? ''} under ${modelOfCode(form.pairCode) || 'this model'}.`
+                    : 'Shared — every model draws this item by its Item Code, the way the whole store worked before Model Codes.'}
+                </p>
                 <label>
                   Begin
                   <input type="number" min="0" value={form.begin} onChange={set('begin')} />
@@ -503,6 +616,7 @@ export default function Inventory({ embedded = false, branch = '', region = '' }
                     <th>Store</th>
                     <th>Shelf</th>
                     <th>Item Code</th>
+                    <th>Model Code</th>
                     <th className="num">Begin</th>
                     <th className="num">Out</th>
                     <th className="num">Avail</th>
@@ -517,6 +631,7 @@ export default function Inventory({ embedded = false, branch = '', region = '' }
                       <td className="nowrap">{i.store}</td>
                       <td>{i.shelf}</td>
                       <td className="item">{i.itemCode}</td>
+                      <td className="item">{i.pairCode || <span className="hint">shared</span>}</td>
                       <td className="num">{i.begin}</td>
                       <td className="num">{i.out}</td>
                       <td className="num avail">{i.avail}</td>
@@ -530,7 +645,7 @@ export default function Inventory({ embedded = false, branch = '', region = '' }
                   ))}
                   {filtered.length === 0 && (
                     <tr>
-                      <td colSpan={9} className="empty">
+                      <td colSpan={10} className="empty">
                         No items match the filter.
                       </td>
                     </tr>
@@ -550,6 +665,7 @@ export default function Inventory({ embedded = false, branch = '', region = '' }
                 <h3>Transaction history</h3>
                 <p className="saved-hint">
                   {hist.item.sku} · {hist.item.itemCode}
+                  {hist.item.pairCode ? ` · ${hist.item.pairCode}` : ''}
                 </p>
               </div>
               <button type="button" className="modal-close" onClick={() => setHist(null)} aria-label="Close">
