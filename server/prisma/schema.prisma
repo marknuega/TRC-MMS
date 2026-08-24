@@ -47,6 +47,10 @@ model InventoryItem {
   // the supplier's catalogue; the alias is the one a technician types at the
   // bench, and a fault matches on EITHER. Blank means the item has only the
   // one name, which is most of them.
+  // What the item IS, in words — for the person reading a listing, not for
+  // anything that matches. The names above are what a fault resolves through;
+  // this is the sentence beside them.
+  description    String         @default("")
   alias          String         @default("") @map("alias")
   // Model+Parts pair code — the identity a fault draws this item by:
   // [device letter][parts][variant] (C45A = Speaker, SRG Carkit), or the

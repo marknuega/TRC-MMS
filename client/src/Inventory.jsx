@@ -29,6 +29,7 @@ const BLANK = {
   store: '',
   shelf: '',
   itemCode: '',
+  description: '',
   alias: '',
   pairCode: '',
   begin: 0,
@@ -107,8 +108,21 @@ const COLUMN_KEYS = {
   REMARKS: 'remarks',
   'MODEL CODE': 'pairCode',
   ALIAS: 'alias',
+  DESCRIPTION: 'description',
 }
-const POSITIONAL = ['sku', 'store', 'shelf', 'itemCode', 'begin', 'out', null, 'remarks', 'pairCode', 'alias']
+const POSITIONAL = [
+  'sku',
+  'store',
+  'shelf',
+  'itemCode',
+  'begin',
+  'out',
+  null,
+  'remarks',
+  'pairCode',
+  'alias',
+  'description',
+]
 const NUMERIC = new Set(['begin', 'out'])
 
 const columnKey = (cell) => {
@@ -132,7 +146,18 @@ function parsePaste(text) {
   for (const f of lines) {
     const sku = (f[0] || '').trim()
     if (!sku || sku.toUpperCase() === 'SKU') continue // skip header / blanks
-    const row = { sku: '', store: '', shelf: '', itemCode: '', alias: '', pairCode: '', begin: 0, out: 0, remarks: '' }
+    const row = {
+      sku: '',
+      store: '',
+      shelf: '',
+      itemCode: '',
+      description: '',
+      alias: '',
+      pairCode: '',
+      begin: 0,
+      out: 0,
+      remarks: '',
+    }
     layout.forEach((key, i) => {
       if (!key) return
       const cell = (f[i] || '').trim()
@@ -146,14 +171,28 @@ function parsePaste(text) {
 
 function downloadCsv(filename, items) {
   const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
-  const head = ['SKU', 'Store', 'Shelf', 'Item Code', 'Begin', 'Out', 'Avail', 'Remarks', 'Model Code', 'Alias']
+  const head = [
+    'SKU',
+    'Store',
+    'Shelf',
+    'Item Code',
+    'Begin',
+    'Out',
+    'Avail',
+    'Remarks',
+    'Model Code',
+    'Alias',
+    'Description',
+  ]
   const lines = [head.map(esc).join(',')]
   for (const i of items) {
     // esc() quotes every field, so a Model Code carrying commas of its own
     // ("M:CUR3 DISPLAY, 3RD SHELF") survives the round trip back through
     // parseDelimited.
     lines.push(
-      [i.sku, i.store, i.shelf, i.itemCode, i.begin, i.out, i.avail, i.remarks, i.pairCode, i.alias].map(esc).join(','),
+      [i.sku, i.store, i.shelf, i.itemCode, i.begin, i.out, i.avail, i.remarks, i.pairCode, i.alias, i.description]
+        .map(esc)
+        .join(','),
     )
   }
   const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
@@ -168,12 +207,24 @@ function downloadCsv(filename, items) {
 function exportInventoryPdf(items, branch, store) {
   const title = `TRC ${branch || 'All'} - Inventory`
   const scope = store ? ` · ${store}` : ''
-  const head = ['SKU', 'Store', 'Shelf', 'Item Code', 'Alias', 'Model Code', 'Begin', 'Out', 'Avail', 'Remarks']
+  const head = [
+    'SKU',
+    'Store',
+    'Shelf',
+    'Item Code',
+    'Description',
+    'Alias',
+    'Model Code',
+    'Begin',
+    'Out',
+    'Avail',
+    'Remarks',
+  ]
   const body = items
     .map(
       (i) =>
         `<tr><td>${esc(i.sku)}</td><td>${esc(i.store)}</td><td>${esc(i.shelf)}</td><td>${esc(i.itemCode)}</td>` +
-        `<td>${esc(i.alias)}</td><td>${esc(i.pairCode)}</td>` +
+        `<td>${esc(i.description)}</td><td>${esc(i.alias)}</td><td>${esc(i.pairCode)}</td>` +
         `<td class="c">${esc(i.begin)}</td><td class="c">${esc(i.out)}</td><td class="c">${esc(i.avail)}</td><td>${esc(i.remarks)}</td></tr>`,
     )
     .join('')
@@ -323,7 +374,7 @@ export default function Inventory({ embedded = false, branch = '', region = '', 
       (i) =>
         (!store || i.store === store) &&
         (!q ||
-          `${i.sku} ${i.store} ${i.shelf} ${i.itemCode} ${i.alias ?? ''} ${i.pairCode} ${i.formerPairCode ?? ''} ${i.remarks}`
+          `${i.sku} ${i.store} ${i.shelf} ${i.itemCode} ${i.description ?? ''} ${i.alias ?? ''} ${i.pairCode} ${i.formerPairCode ?? ''} ${i.remarks}`
             .toLowerCase()
             .includes(q)),
     )
@@ -344,6 +395,7 @@ export default function Inventory({ embedded = false, branch = '', region = '', 
       store: it.store,
       shelf: it.shelf,
       itemCode: it.itemCode,
+      description: it.description ?? '',
       alias: it.alias ?? '',
       pairCode: it.pairCode ?? '',
       begin: it.begin,
@@ -382,7 +434,7 @@ export default function Inventory({ embedded = false, branch = '', region = '', 
     const rows = parsePaste(text)
     if (!rows.length) {
       setError(
-        `No rows recognised in ${source} — expected SKU, Store, Shelf, Item Code, Begin, Out, Avail, Remarks, Model Code, Alias.`,
+        `No rows recognised in ${source} — expected SKU, Store, Shelf, Item Code, Begin, Out, Avail, Remarks, Model Code, Alias, Description.`,
       )
       return
     }
@@ -499,9 +551,11 @@ export default function Inventory({ embedded = false, branch = '', region = '', 
             <div className="paste-box">
               <p className="saved-hint">
                 Paste rows (Excel = tab-separated):{' '}
-                <strong>SKU, Store, Shelf, Item Code, Begin, Out, Avail, Remarks, Model Code, Alias</strong>. Existing
-                SKUs are updated, new ones added. Model Code is last so older exports still import; include a header row
-                to use any other order.
+                <strong>
+                  SKU, Store, Shelf, Item Code, Begin, Out, Avail, Remarks, Model Code, Alias, Description
+                </strong>
+                . Existing SKUs are updated, new ones added. Model Code is last so older exports still import; include a
+                header row to use any other order.
               </p>
               <textarea
                 value={pasteText}
@@ -540,6 +594,13 @@ export default function Inventory({ embedded = false, branch = '', region = '', 
                 <label className="wide">
                   Item Code
                   <input value={form.itemCode} onChange={set('itemCode')} />
+                </label>
+                {/* What the item is, in words. Descriptive only — nothing
+                    matches on it, so it can be written for whoever reads the
+                    listing rather than for the resolver. */}
+                <label className="wide">
+                  Description
+                  <input value={form.description} onChange={set('description')} />
                 </label>
                 {/* The name this item is WRITTEN BY on a report. The Item Code
                     is the name on the box and in the supplier's catalogue —
@@ -649,6 +710,7 @@ export default function Inventory({ embedded = false, branch = '', region = '', 
                     <th>Store</th>
                     <th>Shelf</th>
                     <th>Item Code</th>
+                    <th>Description</th>
                     <th>Alias</th>
                     <th>Model Code</th>
                     <th className="num">Begin</th>
@@ -665,6 +727,7 @@ export default function Inventory({ embedded = false, branch = '', region = '', 
                       <td className="nowrap">{i.store}</td>
                       <td>{i.shelf}</td>
                       <td className="item">{i.itemCode}</td>
+                      <td className="rem">{i.description}</td>
                       <td className="item">{i.alias}</td>
                       <td className="item">{i.pairCode || <span className="hint">shared</span>}</td>
                       <td className="num">{i.begin}</td>
@@ -680,7 +743,7 @@ export default function Inventory({ embedded = false, branch = '', region = '', 
                   ))}
                   {filtered.length === 0 && (
                     <tr>
-                      <td colSpan={11} className="empty">
+                      <td colSpan={12} className="empty">
                         No items match the filter.
                       </td>
                     </tr>

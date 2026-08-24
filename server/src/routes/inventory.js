@@ -52,6 +52,7 @@ function parseItem(body) {
       store: clean(body?.store),
       shelf: clean(body?.shelf),
       itemCode: clean(body?.itemCode),
+      description: clean(body?.description),
       alias: clean(body?.alias),
       pairCode: pair.value,
       begin: Math.max(0, int(body?.begin)),
