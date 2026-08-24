@@ -184,7 +184,15 @@ describe('resolveInventoryUsage', () => {
     ],
   }
 
-  const item = (id, sku, itemCode, pairCode = '') => ({ id, sku, itemCode, pairCode, begin: 10, out: 0 })
+  const item = (id, sku, itemCode, pairCode = '', alias = '') => ({
+    id,
+    sku,
+    itemCode,
+    alias,
+    pairCode,
+    begin: 10,
+    out: 0,
+  })
   const entry = (model, ...faults) => ({
     model,
     faults: faults.map((f) => (typeof f === 'string' ? { issue: f, quantity: 1, action: 'CHANGE' } : f)),
@@ -295,6 +303,39 @@ describe('resolveInventoryUsage', () => {
   test('two shared rows under one item code are refused the same way', () => {
     const items = [item(1, 'SPK-A', 'SPEAKER LOW'), item(2, 'SPK-B', 'SPEAKER LOW')]
     assert.throws(() => resolveInventoryUsage([entry('TH1N', 'SPEAKER LOW')], items, VOCAB), /SPK-A, SPK-B/)
+  })
+
+  // The listing name is the one on the box; the alias is the one written at the
+  // bench. Nobody types "BLN-11 BATTERY 3180 MAH" onto a report.
+  describe('alias', () => {
+    const BLN = 'BLN-11 BATTERY 3180 MAH'
+    const items = [item(1, 'BAT-3180', BLN, '', 'BATTERY 3180')]
+
+    test('a fault written by the alias finds the item', () => {
+      assert.deepEqual(drawn(resolveInventoryUsage([entry('TH1N', 'Battery 3180')], items, VOCAB)), [
+        ['BAT-3180', 1, ''],
+      ])
+    })
+
+    test('the listing name still finds it', () => {
+      assert.deepEqual(drawn(resolveInventoryUsage([entry('TH1N', BLN)], items, VOCAB)), [['BAT-3180', 1, '']])
+    })
+
+    // One item under two names is one item. Counted twice it would look like
+    // two candidates and refuse every save that touched it.
+    test('both names on one report draw from the one shelf, and do not read as ambiguous', () => {
+      const snapshot = [entry('TH1N', 'BATTERY 3180'), entry('THR9', BLN)]
+      assert.deepEqual(drawn(resolveInventoryUsage(snapshot, items, VOCAB)), [['BAT-3180', 2, '']])
+    })
+
+    test('a coded item is reached by its alias under its own model only', () => {
+      const coded = [item(1, 'TH1N-BAT', BLN, 'H44D', 'BATTERY 3180')]
+      const vocab = { ...VOCAB, issueTypes: [{ name: 'BATTERY 3180', parts: '44', variant: 'D' }] }
+      assert.deepEqual(drawn(resolveInventoryUsage([entry('TH1N', 'Battery 3180')], coded, vocab)), [
+        ['TH1N-BAT', 1, 'H44D'],
+      ])
+      assert.deepEqual(resolveInventoryUsage([entry('SRG3900 CARKIT', 'Battery 3180')], coded, vocab), [])
+    })
   })
 
   test('tolerates an empty snapshot, empty stock and missing faults', () => {

@@ -24,7 +24,18 @@ const esc = (v) =>
 const signed = (n) => (n > 0 ? `+${n}` : String(n))
 const stamp = (d) => new Date(d).toLocaleString('en-GB')
 
-const BLANK = { sku: '', store: '', shelf: '', itemCode: '', pairCode: '', begin: 0, out: 0, lowStock: 0, remarks: '' }
+const BLANK = {
+  sku: '',
+  store: '',
+  shelf: '',
+  itemCode: '',
+  alias: '',
+  pairCode: '',
+  begin: 0,
+  out: 0,
+  lowStock: 0,
+  remarks: '',
+}
 
 // Tab if the data actually uses tabs (an Excel copy-paste), else comma. Decided
 // from the whole text, not the first line, because a leading header row can look
@@ -95,8 +106,9 @@ const COLUMN_KEYS = {
   AVAIL: null, // derived from begin - out; a pasted value is ignored
   REMARKS: 'remarks',
   'MODEL CODE': 'pairCode',
+  ALIAS: 'alias',
 }
-const POSITIONAL = ['sku', 'store', 'shelf', 'itemCode', 'begin', 'out', null, 'remarks', 'pairCode']
+const POSITIONAL = ['sku', 'store', 'shelf', 'itemCode', 'begin', 'out', null, 'remarks', 'pairCode', 'alias']
 const NUMERIC = new Set(['begin', 'out'])
 
 const columnKey = (cell) => {
@@ -120,7 +132,7 @@ function parsePaste(text) {
   for (const f of lines) {
     const sku = (f[0] || '').trim()
     if (!sku || sku.toUpperCase() === 'SKU') continue // skip header / blanks
-    const row = { sku: '', store: '', shelf: '', itemCode: '', pairCode: '', begin: 0, out: 0, remarks: '' }
+    const row = { sku: '', store: '', shelf: '', itemCode: '', alias: '', pairCode: '', begin: 0, out: 0, remarks: '' }
     layout.forEach((key, i) => {
       if (!key) return
       const cell = (f[i] || '').trim()
@@ -134,14 +146,14 @@ function parsePaste(text) {
 
 function downloadCsv(filename, items) {
   const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`
-  const head = ['SKU', 'Store', 'Shelf', 'Item Code', 'Begin', 'Out', 'Avail', 'Remarks', 'Model Code']
+  const head = ['SKU', 'Store', 'Shelf', 'Item Code', 'Begin', 'Out', 'Avail', 'Remarks', 'Model Code', 'Alias']
   const lines = [head.map(esc).join(',')]
   for (const i of items) {
     // esc() quotes every field, so a Model Code carrying commas of its own
     // ("M:CUR3 DISPLAY, 3RD SHELF") survives the round trip back through
     // parseDelimited.
     lines.push(
-      [i.sku, i.store, i.shelf, i.itemCode, i.begin, i.out, i.avail, i.remarks, i.pairCode].map(esc).join(','),
+      [i.sku, i.store, i.shelf, i.itemCode, i.begin, i.out, i.avail, i.remarks, i.pairCode, i.alias].map(esc).join(','),
     )
   }
   const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
@@ -156,12 +168,12 @@ function downloadCsv(filename, items) {
 function exportInventoryPdf(items, branch, store) {
   const title = `TRC ${branch || 'All'} - Inventory`
   const scope = store ? ` · ${store}` : ''
-  const head = ['SKU', 'Store', 'Shelf', 'Item Code', 'Model Code', 'Begin', 'Out', 'Avail', 'Remarks']
+  const head = ['SKU', 'Store', 'Shelf', 'Item Code', 'Alias', 'Model Code', 'Begin', 'Out', 'Avail', 'Remarks']
   const body = items
     .map(
       (i) =>
         `<tr><td>${esc(i.sku)}</td><td>${esc(i.store)}</td><td>${esc(i.shelf)}</td><td>${esc(i.itemCode)}</td>` +
-        `<td>${esc(i.pairCode)}</td>` +
+        `<td>${esc(i.alias)}</td><td>${esc(i.pairCode)}</td>` +
         `<td class="c">${esc(i.begin)}</td><td class="c">${esc(i.out)}</td><td class="c">${esc(i.avail)}</td><td>${esc(i.remarks)}</td></tr>`,
     )
     .join('')
@@ -311,7 +323,7 @@ export default function Inventory({ embedded = false, branch = '', region = '', 
       (i) =>
         (!store || i.store === store) &&
         (!q ||
-          `${i.sku} ${i.store} ${i.shelf} ${i.itemCode} ${i.pairCode} ${i.formerPairCode ?? ''} ${i.remarks}`
+          `${i.sku} ${i.store} ${i.shelf} ${i.itemCode} ${i.alias ?? ''} ${i.pairCode} ${i.formerPairCode ?? ''} ${i.remarks}`
             .toLowerCase()
             .includes(q)),
     )
@@ -332,6 +344,7 @@ export default function Inventory({ embedded = false, branch = '', region = '', 
       store: it.store,
       shelf: it.shelf,
       itemCode: it.itemCode,
+      alias: it.alias ?? '',
       pairCode: it.pairCode ?? '',
       begin: it.begin,
       out: it.out,
@@ -368,7 +381,9 @@ export default function Inventory({ embedded = false, branch = '', region = '', 
   async function importText(text, source) {
     const rows = parsePaste(text)
     if (!rows.length) {
-      setError(`No rows recognised in ${source} — expected SKU, Store, Shelf, Item Code, Begin, Out, Avail, Remarks, Model Code.`)
+      setError(
+        `No rows recognised in ${source} — expected SKU, Store, Shelf, Item Code, Begin, Out, Avail, Remarks, Model Code, Alias.`,
+      )
       return
     }
     try {
@@ -484,9 +499,9 @@ export default function Inventory({ embedded = false, branch = '', region = '', 
             <div className="paste-box">
               <p className="saved-hint">
                 Paste rows (Excel = tab-separated):{' '}
-                <strong>SKU, Store, Shelf, Item Code, Begin, Out, Avail, Remarks, Model Code</strong>. Existing SKUs
-                are updated, new ones added. Model Code is last so older exports still import; include a header row to
-                use any other order.
+                <strong>SKU, Store, Shelf, Item Code, Begin, Out, Avail, Remarks, Model Code, Alias</strong>. Existing
+                SKUs are updated, new ones added. Model Code is last so older exports still import; include a header row
+                to use any other order.
               </p>
               <textarea
                 value={pasteText}
@@ -526,6 +541,19 @@ export default function Inventory({ embedded = false, branch = '', region = '', 
                   Item Code
                   <input value={form.itemCode} onChange={set('itemCode')} />
                 </label>
+                {/* The name this item is WRITTEN BY on a report. The Item Code
+                    is the name on the box and in the supplier's catalogue —
+                    "BLN-11 BATTERY 3180 MAH" — and nobody types that at the
+                    bench. A fault matches on either name, so filling this in
+                    is what lets "Battery 3180" find this shelf. */}
+                <label className="wide">
+                  Alias
+                  <input
+                    value={form.alias}
+                    onChange={set('alias')}
+                    placeholder="the short name it is written by — e.g. Battery 3180"
+                  />
+                </label>
                 {/* The Model Code is what a fault actually draws this item by.
                     Left blank the item is SHARED — every model matches it by
                     name, which is how the whole store worked before this
@@ -541,7 +569,12 @@ export default function Inventory({ embedded = false, branch = '', region = '', 
                     onChange={(e) =>
                       setForm((f) => ({
                         ...f,
-                        pairCode: e.target.value ? pairCodeForFault({ model: e.target.value, issue: f.itemCode }, vocab) : '',
+                        pairCode: e.target.value
+                          ? // The alias, when there is one: it is the name a
+                            // fault is written by, so it is the name the code
+                            // has to be built from.
+                            pairCodeForFault({ model: e.target.value, issue: f.alias || f.itemCode }, vocab)
+                          : '',
                       }))
                     }
                     placeholder="Shared — every model"
@@ -616,6 +649,7 @@ export default function Inventory({ embedded = false, branch = '', region = '', 
                     <th>Store</th>
                     <th>Shelf</th>
                     <th>Item Code</th>
+                    <th>Alias</th>
                     <th>Model Code</th>
                     <th className="num">Begin</th>
                     <th className="num">Out</th>
@@ -631,6 +665,7 @@ export default function Inventory({ embedded = false, branch = '', region = '', 
                       <td className="nowrap">{i.store}</td>
                       <td>{i.shelf}</td>
                       <td className="item">{i.itemCode}</td>
+                      <td className="item">{i.alias}</td>
                       <td className="item">{i.pairCode || <span className="hint">shared</span>}</td>
                       <td className="num">{i.begin}</td>
                       <td className="num">{i.out}</td>
@@ -645,7 +680,7 @@ export default function Inventory({ embedded = false, branch = '', region = '', 
                   ))}
                   {filtered.length === 0 && (
                     <tr>
-                      <td colSpan={10} className="empty">
+                      <td colSpan={11} className="empty">
                         No items match the filter.
                       </td>
                     </tr>

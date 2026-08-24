@@ -121,8 +121,12 @@ export function resolveInventoryUsage(snapshot, items, vocab = {}) {
       push(byPair, pair, it)
       continue
     }
-    const name = upTrim(it.itemCode)
-    if (name) push(byName, name, it)
+    // Both names. The listing name is the one on the box, the alias is the one
+    // written on a report ("Battery 3180" for "BLN-11 BATTERY 3180 MAH"), and
+    // a fault carries whichever the technician typed.
+    for (const name of [upTrim(it.itemCode), upTrim(it.alias)]) {
+      if (name) push(byName, name, it)
+    }
   }
 
   const wanted = new Map() // item id -> { item, qty, pairCode }
@@ -143,6 +147,9 @@ export function resolveInventoryUsage(snapshot, items, vocab = {}) {
         matchedBy = ''
       }
       if (hits.length === 0) continue // nothing stocks it — ignored, as before
+      // One item indexed under both of its names is still one item — dedupe
+      // before the ambiguity check, or every aliased row would look like two.
+      hits = [...new Map(hits.map((h) => [h.id, h])).values()]
       if (hits.length > 1) {
         const where = matchedBy ? `pair code ${matchedBy}` : `item code "${upTrim(issue)}"`
         throw ambiguous(
@@ -188,7 +195,7 @@ async function applyInventoryUsage(tx, snapshot, reference, branch) {
   // Only the saving branch's own stock (each branch has separate inventory).
   const items = await tx.inventoryItem.findMany({
     where: { branch: branch ?? '' },
-    select: { id: true, sku: true, itemCode: true, pairCode: true, begin: true, out: true },
+    select: { id: true, sku: true, itemCode: true, alias: true, pairCode: true, begin: true, out: true },
   })
   if (items.length === 0) return
 

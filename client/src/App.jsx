@@ -720,11 +720,21 @@ function App({ user, onLogout }) {
     document.title = `TRC ${isTransmittal ? 'Transmittal' : 'Maintenance'} Report-${nextShortId}`
   }, [isTransmittal, nextShortId])
 
-  // Inventory item names, offered as suggestions in the issue/material fields.
+  // Every name an inventory item answers to: the listing name on the box, and
+  // the alias it is written by on a report ("Battery 3180" for "BLN-11 BATTERY
+  // 3180 MAH"). Both are offered, because a fault matches on either and the
+  // field should suggest whichever the technician reaches for.
   const inventoryNames = useMemo(
-    () => [...new Set((inventory ?? []).map((i) => String(i.itemCode || '').trim()).filter(Boolean))].sort(),
+    () =>
+      [...new Set((inventory ?? []).flatMap((i) => [String(i.alias || '').trim(), String(i.itemCode || '').trim()]))]
+        .filter(Boolean)
+        .sort(),
     [inventory],
   )
+
+  // The names one item answers to, listing name and alias, upper-cased.
+  const namesOfItem = (it) =>
+    [String(it.itemCode || ''), String(it.alias || '')].map((n) => n.trim().toUpperCase()).filter(Boolean)
   // Material name (UPPER) -> Description, for the transmittal DESCRIPTION column.
   const descByMaterial = useMemo(() => materialDescMap(options.materials), [options.materials])
 
@@ -766,14 +776,13 @@ function App({ user, onLogout }) {
   const pairCodesByPart = useMemo(() => {
     const index = new Map()
     for (const it of inventory ?? []) {
-      const name = String(it.itemCode || '')
-        .trim()
-        .toUpperCase()
       const code = normalizePairCode(it.pairCode)
-      if (!name || !code) continue
-      const at = index.get(name)
-      if (at) at.add(code)
-      else index.set(name, new Set([code]))
+      if (!code) continue
+      for (const name of namesOfItem(it)) {
+        const at = index.get(name)
+        if (at) at.add(code)
+        else index.set(name, new Set([code]))
+      }
     }
     return new Map([...index].map(([name, codes]) => [name, [...codes].sort()]))
   }, [inventory])
@@ -787,19 +796,18 @@ function App({ user, onLogout }) {
     }
     const index = new Map()
     for (const it of inventory ?? []) {
-      const name = String(it.itemCode || '')
-        .trim()
-        .toUpperCase()
       const letter = parsePairCode(it.pairCode)?.letter
-      if (!name || !letter) continue
+      if (!letter) continue
       const model = letterToModel.get(letter)
       if (!model) continue
-      if (index.has(name)) {
-        // Stocked for a second model — from here on the part names neither.
-        if (index.get(name)?.model !== model) index.set(name, null)
-        continue
+      for (const name of namesOfItem(it)) {
+        if (index.has(name)) {
+          // Stocked for a second model — from here on the part names neither.
+          if (index.get(name)?.model !== model) index.set(name, null)
+          continue
+        }
+        index.set(name, { model, pairCode: it.pairCode })
       }
-      index.set(name, { model, pairCode: it.pairCode })
     }
     return index
   }, [inventory, options.models, equipmentCodes])
@@ -968,13 +976,12 @@ function App({ user, onLogout }) {
     const key = String(name ?? '')
       .trim()
       .toUpperCase()
-    const items = (inventory ?? []).filter(
-      (i) =>
-        String(i.itemCode || '')
-          .trim()
-          .toUpperCase() === key,
-    )
-    if (items.length === 0) return `No inventory item is named "${name}" — add it under Inventory first.`
+    // Either name finds it: an entry carries the alias far more often than the
+    // listing name — "Battery 3180" rather than "BLN-11 BATTERY 3180 MAH".
+    const items = (inventory ?? []).filter((i) => namesOfItem(i).includes(key))
+    if (items.length === 0) {
+      return `No inventory item is named "${name}" — add it under Inventory, or set it as an item's Alias.`
+    }
 
     const seen = new Set()
     for (const it of items) {

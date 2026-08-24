@@ -42,6 +42,12 @@ model InventoryItem {
   store          String         @default("")
   shelf          String         @default("")
   itemCode       String         @default("") @map("item_code")
+  // The short name this item is written by on a report — "Battery 3180" for
+  // "BLN-11 BATTERY 3180 MAH". The listing name is the one on the box and in
+  // the supplier's catalogue; the alias is the one a technician types at the
+  // bench, and a fault matches on EITHER. Blank means the item has only the
+  // one name, which is most of them.
+  alias          String         @default("") @map("alias")
   // Model+Parts pair code — the identity a fault draws this item by:
   // [device letter][parts][variant] (C45A = Speaker, SRG Carkit), or the
   // provisional [letter]:[name] form (M:CUR3 DISPLAY FOR TMR880I - HT10280AA)
