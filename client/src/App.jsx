@@ -407,8 +407,23 @@ const emptyForm = () => {
     agency: last.agency ?? '',
     telNumber: '',
     issiNumber: '',
-    type: last.type ?? '',
-    model: last.model ?? '',
+    // Model and Type start EMPTY on every fresh entry, and after a reload.
+    //
+    // They used to carry over from the last device, which read as an answer
+    // when it was only a leftover — the previous radio's Model sitting in the
+    // box, indistinguishable from one somebody chose. A wrong one is invisible
+    // precisely because a filled field looks decided.
+    //
+    // Empty is the honest state, and the form is no slower for it: the Tel
+    // number's prefix and the part being picked each select the Model on their
+    // own, and Type follows the Model through MODEL_TYPE. So the field fills
+    // itself the moment anything says what the device is — and until something
+    // does, it says nothing rather than the wrong thing.
+    //
+    // The Agency still carries over: it comes off the ISSI, not the device, and
+    // a technician works an agency's radios in a run.
+    type: '',
+    model: '',
     comment: '',
     faults: [emptyFault()],
   }
@@ -1402,11 +1417,12 @@ function App({ user, onLogout }) {
   // Whether Model or Type has been set BY HAND for the entry being typed, which
   // is what stops the Tel auto-select below from writing over it.
   //
-  // It has to be a flag, not a look at whether the fields are empty: a fresh
-  // form arrives with the previous entry's Model and Type already in it
-  // (emptyForm reads saveLast), so "still blank" would be false almost always
-  // and the auto-select would effectively never fire. A value carried over from
-  // the last device is not a choice about this one.
+  // It has to be a flag, not a look at whether the fields are empty. A fresh
+  // form starts blank now, so "still blank" would answer this correctly for
+  // about one keystroke: the moment a Tel prefix or a part selects the Model,
+  // the field is full and every later digit would read as a human choice and
+  // stop the auto-select mid-number. What matters is who filled it, and only a
+  // flag set by the handlers knows that.
   const devicePicked = useRef(false)
 
   // Choosing a model auto-fills Type from the model→type map (if the model is mapped).
@@ -1460,11 +1476,10 @@ function App({ user, onLogout }) {
   // The Model a Tel number selected on its own: { model, changed }, or null
   // when no number has named one on this entry.
   //
-  // State for the same reason autoAgency is: it is RENDERED. A fresh form
-  // arrives carrying the last entry's Model (emptyForm reads saveLast), so the
-  // field reads a model either way and the box alone cannot say whether this
-  // number chose it or the previous device left it there. devicePicked answers
-  // a different question — whether a HUMAN chose it — and is a ref because
+  // State for the same reason autoAgency is: it is RENDERED. The field shows a
+  // model however it got there, and the box alone cannot say whether this
+  // number chose it, a part did, or a hand did. devicePicked answers a
+  // different question — whether a HUMAN chose it — and is a ref because
   // nothing draws it.
   //
   // `changed` is why this is a pair rather than a name. A number that selects
@@ -1682,17 +1697,18 @@ function App({ user, onLogout }) {
       // after the write, never before it: the entry is the user's business and
       // teaching the auto-select is a separate, optional favour.
       if (!isTransmittal) setWire(issiWireOffer(payload.issiNumber, payload.agency, options.agencies))
-      // Remember Model/Type/Agency so the next entry pre-selects them.
-      saveLast({ model: form.model, type: form.type, agency: payload.agency })
+      // The Agency only. Model and Type are deliberately NOT remembered — see
+      // emptyForm: the next entry starts blank and lets the Tel number or the
+      // part say what the device is.
+      saveLast({ agency: payload.agency })
       // Mirrored into state so the Agency dropdown re-sorts straight away —
       // localStorage on its own would not re-render anything.
       setLastAgency(payload.agency)
-      // A new entry, so the carried-over Model/Type/Agency are nobody's choice
-      // yet and the next Tel number is free to say what the device is and whose.
+      // A new entry: nothing on it has been chosen yet, so the next Tel number
+      // is free to say what the device is and whose.
       devicePicked.current = false
       agencyPicked.current = false
-      // Nothing has been auto-selected onto the fresh form yet — the Model it
-      // carries over is the last entry's, which is nobody's choice about this one.
+      // Nothing has been auto-selected onto the fresh form yet.
       setAutoAgency('')
       setAutoModel(null)
       setForm((f) => ({
@@ -1731,11 +1747,9 @@ function App({ user, onLogout }) {
         mode,
         branch: isAllBranches ? '' : branch,
       })
-      saveLast({
-        model: decoded.model,
-        type: decoded.type,
-        agency: decoded.agency,
-      })
+      // Agency only, the same as handleSubmit — Model and Type are not carried
+      // to the next entry, see emptyForm.
+      saveLast({ agency: decoded.agency })
       setLastAgency(decoded.agency)
       setError(null)
       refresh()
