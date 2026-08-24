@@ -2359,6 +2359,34 @@ button.sync-pill {
   line-height: 1;
   color: var(--primary);
 }
+/* The Model Code, in the same badge language as the parts code beside it but
+   filled rather than outlined, so the pair reads as "this part, on that radio"
+   at a glance without the two competing. Light orange because it is the newer,
+   softer fact of the two — the parts code is the identity, this is where it
+   lives. Both tokens are theme-aware, so the fill stays light on a light page
+   and dark on a dark one.
+   Auto width with a floor, not a fixed square: it holds a full four-character
+   code (C99A) or a lone device letter, and both have to look deliberate. The
+   floor is .issue-code's diameter, so a single letter is exactly the same
+   circle as the code next to it. */
+.issue-pair-code {
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.2rem;
+  height: 1.2rem;
+  padding: 0 0.3rem;
+  border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--border));
+  border-radius: 999px;
+  background: var(--warn-soft);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.56rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--warn-ink);
+}
 /* One control per row, and deliberately quiet: it opens an editor, it does not
    change anything by itself. Faint until the row is hovered or arrowed onto, so
    a list being read does not look like a list being edited. */

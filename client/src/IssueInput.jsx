@@ -25,6 +25,7 @@
  */
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { parsePairCode } from './pairCode.js'
 
 // A code is two digits and a letter — "72" + "A". Half a code is not a code
 // (issueCode in options.js says the same), so both halves are required here.
@@ -34,7 +35,7 @@ const VARIANT_RE = /^[A-Z]$/
 export default function IssueInput({
   value,
   onChange,
-  suggestions = [], // [{ name, code, source, removable }] — code '' when it has none
+  suggestions = [], // [{ name, code, pairCode, source, removable }] — either code '' when it has none
   onAssignCode, // (name, parts, variant) => string|void — a string is an error
   onRemove, // (suggestion) => void — drops it from the list it came from
   placeholder,
@@ -256,6 +257,20 @@ export default function IssueInput({
                       width that name happens to be — a ragged edge you have to
                       read across rather than a list you can scan down. */}
                   <span className="issue-opt-spacer" />
+                  {/* The Model Code, beside the parts code it is built from —
+                      the parts code says WHAT the item is, this says which
+                      radio's shelf it comes off. A real code (C99A) is shown
+                      whole; a provisional one is shown as its device letter
+                      alone, because the rest of it is the item's own name and
+                      that is already the text on the left of this row. */}
+                  {s.pairCode && (
+                    <span
+                      className="issue-pair-code"
+                      title={`Model Code ${s.pairCode}`}
+                    >
+                      {parsePairCode(s.pairCode)?.provisional ? parsePairCode(s.pairCode).letter : s.pairCode}
+                    </span>
+                  )}
                   {s.code && <span className="issue-code">{s.code}</span>}
                   {/* One control per row, and it is the mild one. Setting a
                       code, changing it and deleting the entry are all edits to

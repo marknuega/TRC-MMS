@@ -24,6 +24,8 @@ import {
   syncNow,
 } from './api'
 import { onSyncChange } from './offline'
+import { FALLBACK, useCodeMap } from './codes.js'
+import { deviceLetterFor, pairCodeForFault, parsePairCode } from './pairCode.js'
 import { advanceOnEnter, isAddFaultShortcut, isSaveShortcut } from './focusNav'
 import {
   DEFAULT_OPTIONS,
@@ -718,6 +720,49 @@ function App({ user, onLogout }) {
   // Material name (UPPER) -> Description, for the transmittal DESCRIPTION column.
   const descByMaterial = useMemo(() => materialDescMap(options.materials), [options.materials])
 
+  // ---- What a PART says about the device -----------------------------------
+  // An inventory item's Model Code carries the device letter of the model it
+  // belongs to, so a part that is stocked for exactly one model names that
+  // model — the second thing on this form that can select it, after the Tel
+  // number's prefix.
+  //
+  // Exactly ONE. A part stocked under two models cannot say which is on the
+  // bench, so it says nothing at all rather than leading with whichever row
+  // came back first — the same refusal deviceLetterFor makes, for the same
+  // reason: a wrong guess here is a fault filed against the wrong radio.
+  const { map: codeMap } = useCodeMap()
+  const equipmentCodes = codeMap?.equipmentCodes ?? FALLBACK.equipmentCodes
+  const pairVocab = useMemo(
+    () => ({ equipmentCodes, issueTypes: options.issueTypes }),
+    [equipmentCodes, options.issueTypes],
+  )
+
+  // Item name (UPPER) -> { model, pairCode }, or null where it is ambiguous.
+  const modelByPart = useMemo(() => {
+    const letterToModel = new Map()
+    for (const m of optionNames(options.models)) {
+      const letter = deviceLetterFor(m, equipmentCodes)
+      if (letter && !letterToModel.has(letter)) letterToModel.set(letter, m)
+    }
+    const index = new Map()
+    for (const it of inventory ?? []) {
+      const name = String(it.itemCode || '')
+        .trim()
+        .toUpperCase()
+      const letter = parsePairCode(it.pairCode)?.letter
+      if (!name || !letter) continue
+      const model = letterToModel.get(letter)
+      if (!model) continue
+      if (index.has(name)) {
+        // Stocked for a second model — from here on the part names neither.
+        if (index.get(name)?.model !== model) index.set(name, null)
+        continue
+      }
+      index.set(name, { model, pairCode: it.pairCode })
+    }
+    return index
+  }, [inventory, options.models, equipmentCodes])
+
   // ---- ISSUE suggestions ---------------------------------------------------
   // Coded issues first — they are the ones a code can be typed for later, and
   // the ones the WhatsApp decoder can read back — then everything else that is
@@ -779,8 +824,19 @@ function App({ user, onLogout }) {
       .sort((a, b) => uses(b) - uses(a))
       .slice(0, 4)
     const topNames = new Set(top.map((s) => s.name.trim().toUpperCase()))
-    return [...top, ...issueSuggestions.filter((s) => !topNames.has(s.name.trim().toUpperCase()))]
-  }, [issueSuggestions, saved, entries])
+    const ordered = [...top, ...issueSuggestions.filter((s) => !topNames.has(s.name.trim().toUpperCase()))]
+    // The Model Code each row would draw stock by — the parts code with the
+    // device in front of it. Once a Model is chosen it is that model's code,
+    // because that is what the save will look up; before one is chosen it is
+    // the code the part is actually stocked under, which is the same answer
+    // the auto-select is about to give.
+    return ordered.map((s) => ({
+      ...s,
+      pairCode: form.model
+        ? pairCodeForFault({ model: form.model, issue: s.name }, pairVocab)
+        : (modelByPart.get(s.name.trim().toUpperCase())?.pairCode ?? ''),
+    }))
+  }, [issueSuggestions, saved, entries, form.model, modelByPart, pairVocab])
 
   /**
    * Drop a suggestion from the admin-managed list it belongs to.
@@ -1422,8 +1478,22 @@ function App({ user, onLogout }) {
   const setFault = (i, field) => (e) => {
     // Remember the last Company so new fault rows (and the next entry) pre-select it.
     if (field === 'company') saveLast({ company: e.target.value })
+    // A part stocked for exactly one model selects that model — the same
+    // courtesy the Tel number does, from the other end of the entry. Held to
+    // the same rules: only on a hit, and never once the device has been chosen
+    // by hand, so a correction stands however many parts are added after it.
+    const named =
+      field === 'issue' && !devicePicked.current
+        ? modelByPart.get(String(e.target.value ?? '').trim().toUpperCase())
+        : null
+    if (named) {
+      setAutoModel((prev) =>
+        prev?.model === named.model ? prev : { model: named.model, changed: named.model !== form.model },
+      )
+    }
     setForm((f) => ({
       ...f,
+      ...(named && { model: named.model, type: MODEL_TYPE[named.model.toUpperCase()] ?? f.type }),
       faults: f.faults.map((fault, idx) => (idx === i ? nextFault(fault, field, e.target.value) : fault)),
     }))
   }
