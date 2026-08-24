@@ -2387,6 +2387,17 @@ button.sync-pill {
   line-height: 1;
   color: var(--warn-ink);
 }
+/* The same badge, sitting inside the ISSUE field for the value already chosen.
+   The wrapper is already positioned (see .issue-input above, which the menu
+   hangs off). Click-through, so the badge is not a hole in the middle of the
+   control it labels. */
+.issue-pair-code-inline {
+  position: absolute;
+  top: 50%;
+  right: 0.6rem;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
 /* One control per row, and deliberately quiet: it opens an editor, it does not
    change anything by itself. Faint until the row is hovered or arrowed onto, so
    a list being read does not look like a list being edited. */
@@ -2415,6 +2426,21 @@ button.sync-pill {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.25rem;
+}
+/* The device, at the head of the code editor. Sized to the parts field beside
+   it so the three controls read as one code being typed rather than a select
+   bolted onto two inputs — the list inside can be as wordy as it likes, since
+   only the letter is ever on screen. */
+.issue-code-device {
+  flex: 0 0 auto;
+  width: 2.6rem;
+  padding: 0.15rem 0.1rem 0.15rem 0.25rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.75rem;
 }
 .issue-code-form input {
   width: 2.6rem;

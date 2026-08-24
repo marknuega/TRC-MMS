@@ -21,11 +21,12 @@ import {
   saveMonthly,
   clearMonthly,
   getInventory,
+  updateInventory,
   syncNow,
 } from './api'
 import { onSyncChange } from './offline'
 import { FALLBACK, useCodeMap } from './codes.js'
-import { deviceLetterFor, pairCodeForFault, parsePairCode } from './pairCode.js'
+import { claimedPartsCode, deviceLetterFor, makePairCode, pairCodeForFault, parsePairCode } from './pairCode.js'
 import { advanceOnEnter, isAddFaultShortcut, isSaveShortcut } from './focusNav'
 import {
   DEFAULT_OPTIONS,
@@ -737,6 +738,18 @@ function App({ user, onLogout }) {
     [equipmentCodes, options.issueTypes],
   )
 
+  // The device letters the code map names, for the picker on an issue row.
+  // Labelled with the map's own device name, because a letter on its own is
+  // not something anyone should be expected to know by heart.
+  const deviceLetters = useMemo(
+    () =>
+      Object.entries(equipmentCodes ?? {})
+        .map(([letter, label]) => ({ letter: String(letter).toUpperCase().slice(0, 1), label: String(label) }))
+        .filter((d) => /^[A-Z]$/.test(d.letter))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    [equipmentCodes],
+  )
+
   // Item name (UPPER) -> { model, pairCode }, or null where it is ambiguous.
   const modelByPart = useMemo(() => {
     const letterToModel = new Map()
@@ -825,17 +838,24 @@ function App({ user, onLogout }) {
       .slice(0, 4)
     const topNames = new Set(top.map((s) => s.name.trim().toUpperCase()))
     const ordered = [...top, ...issueSuggestions.filter((s) => !topNames.has(s.name.trim().toUpperCase()))]
-    // The Model Code each row would draw stock by — the parts code with the
-    // device in front of it. Once a Model is chosen it is that model's code,
-    // because that is what the save will look up; before one is chosen it is
-    // the code the part is actually stocked under, which is the same answer
-    // the auto-select is about to give.
-    return ordered.map((s) => ({
-      ...s,
-      pairCode: form.model
-        ? pairCodeForFault({ model: form.model, issue: s.name }, pairVocab)
-        : (modelByPart.get(s.name.trim().toUpperCase())?.pairCode ?? ''),
-    }))
+    // The Model Code on each row.
+    //
+    // A part that is STOCKED shows the code it is stocked under, because that
+    // is its identity — the thing the row's editor changes, and the thing an
+    // audit reads back. A part that is not shows the code this entry's Model
+    // would look it up by, which is the same answer the auto-select gives.
+    //
+    // So a row can show H99T while the Model says Carkit. That is not a
+    // glitch; it is the part telling you it lives on the TH1n's shelf and the
+    // radio in front of you is not a TH1n.
+    return ordered.map((s) => {
+      const stocked = modelByPart.get(s.name.trim().toUpperCase())?.pairCode
+      return {
+        ...s,
+        pairCode: stocked || (form.model ? pairCodeForFault({ model: form.model, issue: s.name }, pairVocab) : ''),
+        stocked: Boolean(stocked),
+      }
+    })
   }, [issueSuggestions, saved, entries, form.model, modelByPart, pairVocab])
 
   /**
@@ -896,6 +916,59 @@ function App({ user, onLogout }) {
     const next = at >= 0 ? list.map((it, i) => (i === at ? coded : it)) : [...list, coded]
     setCategory('issueTypes', next)
     return ''
+  }
+
+  /**
+   * Put the inventory item behind an issue on a model's shelf.
+   *
+   * The device letter chosen on an issue row is not a fact about the ISSUE —
+   * 99T means the same part on every radio, and the code map is read by the
+   * WhatsApp decoder on that promise. It is a fact about the ITEM: which
+   * model's stock this part is. So it is written to inventory, where the Model
+   * Code lives, and not to the shared vocabulary.
+   *
+   * Every branch stocking that part is moved together, because "the Charger12
+   * is a TH1n part" is true of the part, while the boxes it sits in are per
+   * branch. A branch stocking two items under one name is refused rather than
+   * guessed between — the same refusal a save makes when two rows answer one
+   * fault.
+   *
+   * Answers '' or an error string, the same contract assignIssueCode uses, so
+   * the row can show the reason without losing the half-typed entry behind it.
+   */
+  async function assignPartModel(name, letter) {
+    const key = String(name ?? '')
+      .trim()
+      .toUpperCase()
+    const items = (inventory ?? []).filter(
+      (i) =>
+        String(i.itemCode || '')
+          .trim()
+          .toUpperCase() === key,
+    )
+    if (items.length === 0) return `No inventory item is named "${name}" — add it under Inventory first.`
+
+    const seen = new Set()
+    for (const it of items) {
+      if (seen.has(it.branch)) {
+        return `${it.branch || 'That branch'} stocks two items named "${name}" — set their Model Codes in Inventory.`
+      }
+      seen.add(it.branch)
+    }
+
+    // The parts code the name claims, or the name itself while it claims none
+    // — exactly what a save derives, so the item is filed under the code that
+    // will look it up.
+    const pairCode = makePairCode(letter, claimedPartsCode(name, options.issueTypes) || name)
+    if (!pairCode) return 'Pick a device.'
+
+    try {
+      for (const it of items) await updateInventory(it.id, { ...it, pairCode })
+      setInventory(await getInventory(isAllBranches ? '' : branch, region))
+      return ''
+    } catch (err) {
+      return err.message
+    }
   }
 
   function changeMode(e) {
@@ -1484,7 +1557,11 @@ function App({ user, onLogout }) {
     // by hand, so a correction stands however many parts are added after it.
     const named =
       field === 'issue' && !devicePicked.current
-        ? modelByPart.get(String(e.target.value ?? '').trim().toUpperCase())
+        ? modelByPart.get(
+            String(e.target.value ?? '')
+              .trim()
+              .toUpperCase(),
+          )
         : null
     if (named) {
       setAutoModel((prev) =>
@@ -2797,6 +2874,8 @@ function App({ user, onLogout }) {
                                     onChange={setFault(i, 'issue')}
                                     suggestions={rankedIssueSuggestions}
                                     onAssignCode={assignIssueCode}
+                                    onAssignPairCode={assignPartModel}
+                                    deviceLetters={deviceLetters}
                                     onRemove={removeIssueSuggestion}
                                     placeholder="e.g. A COVER"
                                   />
@@ -3143,6 +3222,8 @@ function App({ user, onLogout }) {
                                   onChange={eSetFault(i, 'issue')}
                                   suggestions={rankedIssueSuggestions}
                                   onAssignCode={assignIssueCode}
+                                  onAssignPairCode={assignPartModel}
+                                  deviceLetters={deviceLetters}
                                   onRemove={removeIssueSuggestion}
                                   placeholder="e.g. A COVER"
                                 />

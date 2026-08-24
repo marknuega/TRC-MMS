@@ -37,6 +37,8 @@ export default function IssueInput({
   onChange,
   suggestions = [], // [{ name, code, pairCode, source, removable }] — either code '' when it has none
   onAssignCode, // (name, parts, variant) => string|void — a string is an error
+  onAssignPairCode, // async (name, letter) => string|'' — puts the item on that model's shelf
+  deviceLetters = [], // [{ letter, label }] — the devices the code map names
   onRemove, // (suggestion) => void — drops it from the list it came from
   placeholder,
   ariaLabel = 'Issue',
@@ -84,11 +86,30 @@ export default function IssueInput({
         s.name.toLowerCase().includes(q) ||
         String(s.code ?? '')
           .toLowerCase()
+          .startsWith(q) ||
+        // The Model Code too, from the start for the same reason the parts code
+        // is: "C99" should find C99T, and a lone "C" should bring up every part
+        // that lives on the Carkit's shelf.
+        String(s.pairCode ?? '')
+          .toLowerCase()
           .startsWith(q),
     )
   }, [suggestions, q])
 
   useEffect(() => setActiveIndex(filtered.length ? 0 : -1), [q, open]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The Model Code of the issue now IN the field, so the code stays on screen
+  // after the menu closes. Read back off the suggestions rather than stored on
+  // the fault: the field's value is the issue NAME and must stay exactly that
+  // — it is what a save resolves through, what a report prints, and what the
+  // WhatsApp decoder reads. This is a label beside it, not part of it.
+  const selectedPairCode = useMemo(() => {
+    const want = String(value ?? '')
+      .trim()
+      .toUpperCase()
+    if (!want) return ''
+    return suggestions.find((s) => s.name.trim().toUpperCase() === want)?.pairCode ?? ''
+  }, [value, suggestions])
 
   const commit = (name) => {
     onChange({ target: { value: name } })
@@ -119,7 +140,19 @@ export default function IssueInput({
   function startEditing(e, s) {
     e.stopPropagation() // the row underneath would otherwise select and close
     const code = String(s.code ?? '')
-    setCoding({ name: s.name, parts: code.slice(0, 2), variant: code.slice(2, 3), error: '', row: s })
+    setCoding({
+      name: s.name,
+      parts: code.slice(0, 2),
+      variant: code.slice(2, 3),
+      // Prefilled from the code the row is showing, so the picker opens on the
+      // device it already says rather than on nothing.
+      letter: parsePairCode(s.pairCode)?.letter ?? '',
+      // Remembered so Save can tell a device that was CHOSEN from one that was
+      // merely displayed — only a change writes to inventory.
+      letterWas: parsePairCode(s.pairCode)?.letter ?? '',
+      error: '',
+      row: s,
+    })
   }
 
   // Enter saves the code and Escape abandons it, so the editor can be finished
@@ -135,19 +168,37 @@ export default function IssueInput({
     }
   }
 
-  function saveCode(e) {
+  async function saveCode(e) {
     e.preventDefault()
     e.stopPropagation()
     const parts = String(coding.parts ?? '').trim()
     const variant = String(coding.variant ?? '')
       .trim()
       .toUpperCase()
-    if (!PARTS_RE.test(parts)) return setCoding((c) => ({ ...c, error: 'Parts is two digits, e.g. 72' }))
-    if (!VARIANT_RE.test(variant)) return setCoding((c) => ({ ...c, error: 'Variant is one letter, e.g. A' }))
-    // The parent owns the list, so it owns the clash check too — it is the only
-    // side that can see every code already claimed.
-    const error = onAssignCode?.(coding.name, parts, variant)
-    if (error) return setCoding((c) => ({ ...c, error }))
+    const letter = String(coding.letter ?? '').trim()
+    const movingShelf = letter && letter !== coding.letterWas
+
+    // Both halves of the code, or neither. Neither is a real save when the
+    // device changed: a part with no code of its own is held by its name, and
+    // moving it to another shelf is exactly what this row is for.
+    const coded = parts || variant
+    if (coded && !PARTS_RE.test(parts)) return setCoding((c) => ({ ...c, error: 'Parts is two digits, e.g. 72' }))
+    if (coded && !VARIANT_RE.test(variant)) return setCoding((c) => ({ ...c, error: 'Variant is one letter, e.g. A' }))
+    if (!coded && !movingShelf) return setCoding((c) => ({ ...c, error: 'Give it a code, or pick a device.' }))
+
+    if (coded) {
+      // The parent owns the list, so it owns the clash check too — it is the
+      // only side that can see every code already claimed.
+      const error = onAssignCode?.(coding.name, parts, variant)
+      if (error) return setCoding((c) => ({ ...c, error }))
+    }
+    // Second, and only on a change: the device is a fact about the ITEM, not
+    // about the issue, so it is written to inventory. After the code, because
+    // the Model Code is built from the code that was just claimed.
+    if (movingShelf) {
+      const error = await onAssignPairCode?.(coding.name, letter)
+      if (error) return setCoding((c) => ({ ...c, error }))
+    }
     commit(coding.name) // coded and chosen in one move — "update the code to proceed"
   }
 
@@ -169,8 +220,19 @@ export default function IssueInput({
         aria-autocomplete="list"
         autoComplete="off"
         list={list}
+        style={selectedPairCode ? { paddingRight: '3.9rem' } : undefined}
         {...rest}
       />
+      {/* Pinned inside the right edge of the field rather than after it: it
+          belongs to this value, and a badge sitting outside would be read as
+          belonging to the QTY box next door. The input reserves room for it,
+          so a long issue name ellipsises before it reaches the badge instead
+          of sliding underneath. */}
+      {selectedPairCode && (
+        <span className="issue-pair-code issue-pair-code-inline" title={`Model Code ${selectedPairCode}`}>
+          {parsePairCode(selectedPairCode)?.provisional ? parsePairCode(selectedPairCode).letter : selectedPairCode}
+        </span>
+      )}
       {open && filtered.length > 0 && (
         <div className="issue-menu" role="listbox" id={listId}>
           {filtered.map((s, i) => (
@@ -199,6 +261,28 @@ export default function IssueInput({
                 // decided by which row this is, so the only questions left are
                 // the two halves of the code — both on screen with it.
                 <span className="issue-code-form" onClick={(e) => e.stopPropagation()}>
+                  {/* The device first, because it reads in the order the code
+                      does: C then 99 then T. Labelled by the map's own device
+                      name in the list — a bare letter is not something to
+                      expect anyone to know by heart — and shown as the letter
+                      alone once chosen, so it stays the width of the code. */}
+                  {deviceLetters.length > 0 && (
+                    <select
+                      className="issue-code-device"
+                      value={coding.letter}
+                      onChange={(e) => setCoding((c) => ({ ...c, letter: e.target.value, error: '' }))}
+                      onKeyDown={onCodeKeyDown}
+                      aria-label={`Device this part is stocked for, for ${s.name}`}
+                      title="Which model's shelf this part comes off"
+                    >
+                      <option value="">–</option>
+                      {deviceLetters.map((d) => (
+                        <option key={d.letter} value={d.letter}>
+                          {d.letter} — {d.label}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                   <input
                     value={coding.parts}
                     onChange={(e) => setCoding((c) => ({ ...c, parts: e.target.value, error: '' }))}
@@ -264,10 +348,7 @@ export default function IssueInput({
                       alone, because the rest of it is the item's own name and
                       that is already the text on the left of this row. */}
                   {s.pairCode && (
-                    <span
-                      className="issue-pair-code"
-                      title={`Model Code ${s.pairCode}`}
-                    >
+                    <span className="issue-pair-code" title={`Model Code ${s.pairCode}`}>
                       {parsePairCode(s.pairCode)?.provisional ? parsePairCode(s.pairCode).letter : s.pairCode}
                     </span>
                   )}
