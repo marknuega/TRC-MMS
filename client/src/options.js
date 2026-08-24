@@ -836,6 +836,18 @@ export const issueModels = (v) => {
   return Array.isArray(raw) ? raw.map((m) => String(m ?? '').trim()).filter(Boolean) : []
 }
 
+/**
+ * Whether a part has been narrowed at all — whether somebody has answered the
+ * question, rather than what the answer was.
+ *
+ * The list being ABSENT is "every device", the state every part starts in. The
+ * list being EMPTY is "no device", which is a different thing: someone cleared
+ * the row, usually on the way to ticking the two devices the part is really
+ * on. Reading both as an empty array would make the second one silently mean
+ * the first, and a part cleared to none would go on being offered everywhere.
+ */
+export const issueNarrowed = (v) => Array.isArray(asObj(v)?.models)
+
 // Case and punctuation carry no meaning when comparing two model names —
 // "TMR 880i" and "TMR880I" are the one device.
 const modelKey = (v) => upTrim(v).replace(/[^A-Z0-9]/g, '')
@@ -846,11 +858,10 @@ const modelKey = (v) => upTrim(v).replace(/[^A-Z0-9]/g, '')
  * because there is nothing yet to narrow against.
  */
 export function issueFitsModel(v, model) {
-  const models = issueModels(v)
-  if (models.length === 0) return true
+  if (!issueNarrowed(v)) return true // nobody has narrowed it — every device
   const want = modelKey(model)
-  if (!want) return true
-  return models.some((m) => modelKey(m) === want)
+  if (!want) return true // no device chosen, so nothing to narrow against
+  return issueModels(v).some((m) => modelKey(m) === want)
 }
 
 /** Just the names, for the dropdowns and for matchOption. */

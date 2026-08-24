@@ -3241,6 +3241,42 @@ button.sync-pill {
 .matrix-cell input {
   cursor: pointer;
 }
+/* All / None for one part, in its own column at the head of the ticks. Sticky
+   with the part name, because clearing a row and then ticking two devices is
+   the point of it and the button has to stay put while you do the second
+   half. */
+.matrix-table th.matrix-all,
+.matrix-table td.matrix-all {
+  position: sticky;
+  left: 13rem;
+  z-index: 1;
+  border-right: 1px solid var(--border);
+}
+.matrix-table thead th.matrix-all {
+  z-index: 3;
+}
+.matrix-all-btn {
+  min-width: 3rem;
+  padding: 0.1rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+.matrix-all-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+/* A row ticked for nothing looks exactly like a row nobody has reached, so it
+   says which it is. */
+.matrix-none {
+  margin-left: 0.4rem;
+  color: var(--warn-ink);
+  font-size: 0.7rem;
+}
 /* A part somebody has narrowed, so a scan down the grid finds the rows that
    have been decided among the many that are simply still open. */
 .matrix-table tr.narrowed th.matrix-part {

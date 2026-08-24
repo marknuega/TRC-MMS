@@ -6,6 +6,7 @@ import {
   issueCodeIndex,
   issueFitsModel,
   issueModels,
+  issueNarrowed,
   optionNames,
   optionPrefixes,
   optionIssiPrefixes,
@@ -857,6 +858,23 @@ describe('issueFitsModel', () => {
   test('no model chosen offers everything', () => {
     assert.equal(issueFitsModel(charger, ''), true)
     assert.equal(issueFitsModel(charger, undefined), true)
+  })
+
+  // Cleared to none, on the way to ticking the two devices it is really on.
+  // An empty list is NOT the untouched state, however alike they look.
+  test('a part cleared to no devices is offered nowhere', () => {
+    const cleared = { name: 'Charger-DEY', parts: '99', variant: 'D', models: [] }
+    assert.equal(issueFitsModel(cleared, 'TH1N'), false)
+    assert.equal(issueFitsModel(cleared, 'SRG3900 CARKIT'), false)
+    // Still true with no model chosen: the menu has nothing to narrow against.
+    assert.equal(issueFitsModel(cleared, ''), true)
+  })
+
+  test('narrowed says whether the question was answered, not what the answer was', () => {
+    assert.equal(issueNarrowed({ name: 'X', models: [] }), true)
+    assert.equal(issueNarrowed({ name: 'X', models: ['TH1N'] }), true)
+    assert.equal(issueNarrowed({ name: 'X' }), false)
+    assert.equal(issueNarrowed('X'), false)
   })
 
   test('reads the list back, ignoring blanks', () => {

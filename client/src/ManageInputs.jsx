@@ -10,6 +10,7 @@ import {
   TECH_INITIALS3_RE,
   issueCode,
   issueModels,
+  issueNarrowed,
   issueName,
   issueParts,
   issueVariant,
@@ -42,7 +43,11 @@ const MAX_PAIR_BADGES = 4
 // the shape it has always had.
 const withModels = (value, models) => {
   const base = typeof value === 'string' ? { name: value } : { ...value }
-  if (models.length === 0) delete base.models
+  // `null` is "every device", stored by leaving the key off — the state every
+  // part starts in. An array is stored as it is, empty included: a row cleared
+  // to none is on the way to being ticked back up, and must not read as the
+  // untouched state it looks like.
+  if (models === null) delete base.models
   else base.models = models
   // A plain string that gained nothing stays a plain string.
   return typeof value === 'string' && !base.models ? value : base
@@ -86,10 +91,11 @@ export default function ManageInputs({
   // edited — it belongs to the inventory item — so it is held apart from the
   // editFields the rest of this form is built from, and `Was` is what lets
   // Save tell a device that was CHOSEN from one that was merely shown.
-  // Which models a part appears on. [] means every one of them, which is
-  // what every part means until somebody says otherwise.
-  const [newModels, setNewModels] = useState([])
-  const [editModels, setEditModels] = useState([])
+  // Which models a part appears on, carried through an edit of the card so
+  // renaming a part does not quietly re-open it to every device. `null` is
+  // "not narrowed", an array is the devices it is on — see withModels.
+  const [newModels, setNewModels] = useState(null)
+  const [editModels, setEditModels] = useState(null)
   const [editLetter, setEditLetter] = useState('')
   const [editLetterWas, setEditLetterWas] = useState('')
   const [editPrefixes, setEditPrefixes] = useState('')
@@ -200,15 +206,12 @@ export default function ManageInputs({
   ]
   const makeItem = (name, f) => {
     if (isIssues) {
-      const models = (f.models ?? []).filter(Boolean)
-      // Omitted rather than stored empty, so a part nobody has narrowed
-      // stays the shape it has always been.
-      return {
-        name,
-        parts: f.parts.trim(),
-        variant: f.variant.trim().toUpperCase(),
-        ...(models.length && { models }),
-      }
+      // The device list is not edited on the card — it is a grid of its own —
+      // so it is carried through untouched. `null` means the part was never
+      // narrowed and the key stays off; an array is stored as it is, EMPTY
+      // included, or a part cleared to no devices would come back from a
+      // rename offered on every one of them.
+      return withModels({ name, parts: f.parts.trim(), variant: f.variant.trim().toUpperCase() }, f.models ?? null)
     }
     if (isMaterials) return { name, description: f.desc.trim() }
     if (hasPrefixes) {
@@ -438,30 +441,44 @@ export default function ManageInputs({
     deviceLetterFor(m, map?.equipmentCodes ?? FALLBACK.equipmentCodes),
   )
 
-  function toggleIssueModel(index, model) {
-    const current = issueModels(list[index])
-    // Untouched means every device, so that is the set the first untick works
-    // from — otherwise the first click would narrow the part to the ONE device
-    // just clicked, which is the opposite of what unticking one means.
-    const set = new Set(current.length ? current : deviceModels)
-    if (set.has(model)) set.delete(model)
-    else set.add(model)
-    if (set.size === 0) {
-      return flash(`"${nameOf(list[index])}" has to appear on at least one device.`, 'name')
-    }
-    const models = set.size === deviceModels.length ? [] : deviceModels.filter((m) => set.has(m))
+  // The devices a row is currently ticked for. An untouched part is ticked
+  // everywhere, because that is what it means.
+  const modelsTickedOn = (value) => (issueNarrowed(value) ? issueModels(value) : deviceModels)
+
+  function setIssueModels(index, models) {
     onChange(
       cat,
       list.map((v, i) => (i === index ? withModels(v, models) : v)),
     )
   }
 
+  function toggleIssueModel(index, model) {
+    // Untouched means every device, so that is the set the first untick works
+    // from — otherwise the first click would narrow the part to the ONE device
+    // just clicked, which is the opposite of what unticking one means.
+    const set = new Set(modelsTickedOn(list[index]))
+    if (set.has(model)) set.delete(model)
+    else set.add(model)
+    // Ticked everywhere is stored as "not narrowed", so a row ticked back up
+    // returns to the shape it started in rather than carrying a list that
+    // happens to name everything.
+    const models = set.size === deviceModels.length ? null : deviceModels.filter((m) => set.has(m))
+    setIssueModels(index, models)
+  }
+
+  // All or nothing for one part. Clearing a row is how narrowing to one or two
+  // devices is actually done — untick ten to reach two, or clear and tick the
+  // two — so an empty row is a state to pass through, not one to refuse. A row
+  // left empty is offered nowhere, and says so.
+  const toggleIssueAllModels = (index) =>
+    setIssueModels(index, modelsTickedOn(list[index]).length === deviceModels.length ? [] : null)
+
   function clearNew() {
     setNewValue('')
     setNewDesc('')
     setNewParts('')
     setNewVariant('')
-    setNewModels([])
+    setNewModels(null)
     setNewPrefixes('')
     setNewIssiPrefixes('')
     setNewStandIn('')
@@ -540,7 +557,7 @@ export default function ManageInputs({
     // Only when the part sits on exactly one shelf. On two there is no single
     // answer to show, and a picker opening on one of them would look like an
     // offer to move the other.
-    setEditModels(isIssues ? issueModels(list[i]) : [])
+    setEditModels(isIssues && issueNarrowed(list[i]) ? issueModels(list[i]) : null)
     const stocked = isIssues ? (pairCodesByPart?.get(nameOf(list[i]).trim().toUpperCase()) ?? []) : []
     const letter = stocked.length === 1 ? (parsePairCode(stocked[0])?.letter ?? '') : ''
     setEditLetter(letter)
@@ -582,7 +599,7 @@ export default function ManageInputs({
     setEditDesc('')
     setEditParts('')
     setEditVariant('')
-    setEditModels([])
+    setEditModels(null)
     setEditLetter('')
     setEditLetterWas('')
     setEditPrefixes('')
@@ -1266,6 +1283,7 @@ export default function ManageInputs({
                   <thead>
                     <tr>
                       <th className="matrix-part">Part</th>
+                      <th className="matrix-all">All</th>
                       {deviceModels.map((m) => (
                         <th key={m} className="matrix-device" title={m}>
                           {m}
@@ -1275,16 +1293,37 @@ export default function ManageInputs({
                   </thead>
                   <tbody>
                     {displayList.map(({ value, i }) => {
-                      const models = issueModels(value)
-                      const all = models.length === 0
+                      const ticked = modelsTickedOn(value)
+                      const every = ticked.length === deviceModels.length
+                      const none = ticked.length === 0
                       return (
-                        <tr key={`${nameOf(value)}-${i}`} className={all ? undefined : 'narrowed'}>
+                        <tr key={`${nameOf(value)}-${i}`} className={every ? undefined : 'narrowed'}>
                           <th className="matrix-part" scope="row">
                             {issueCode(value) && <span className="manage-item-code">{issueCode(value)}</span>}
                             <span className="matrix-part-name">{nameOf(value)}</span>
+                            {/* Said out loud, because a row of empty boxes is
+                                also what a row nobody has reached looks like,
+                                and these two mean opposite things. */}
+                            {none && <span className="matrix-none">offered nowhere</span>}
                           </th>
+                          <td className="matrix-cell matrix-all">
+                            {/* One button, and its label is what the click
+                                does — not what the row currently is. */}
+                            <button
+                              type="button"
+                              className="matrix-all-btn"
+                              onClick={() => toggleIssueAllModels(i)}
+                              title={
+                                every
+                                  ? `Clear every device for "${nameOf(value)}"`
+                                  : `Tick every device for "${nameOf(value)}"`
+                              }
+                            >
+                              {every ? 'None' : 'All'}
+                            </button>
+                          </td>
                           {deviceModels.map((m) => {
-                            const on = all || models.includes(m)
+                            const on = ticked.includes(m)
                             return (
                               <td key={m} className="matrix-cell">
                                 <input
