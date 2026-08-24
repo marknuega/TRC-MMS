@@ -27,13 +27,25 @@ import {
   technicianInitials3,
 } from './options'
 import { FALLBACK, useCodeMap } from './codes'
+import { parsePairCode } from './pairCode.js'
+
+// How many Model Codes fit on a card before the rest become a count.
+const MAX_PAIR_BADGES = 4
 import SearchSelect from './SearchSelect'
 import { advanceOnEnter } from './focusNav'
 
 // Add / edit / delete the dropdown option lists. Changes are pushed up via
 // onChange(categoryKey, newList); the parent persists them to the backend.
 // onToggleChart(key, bool) flips a pie-chart's visibility.
-export default function ManageInputs({ options, onChange, onToggleChart, embedded = false }) {
+export default function ManageInputs({
+  options,
+  onChange,
+  onToggleChart,
+  pairCodesByPart,
+  onAssignPairCode, // async (name, letter) => string|'' — puts the item on that model's shelf
+  deviceLetters = [], // [{ letter, label }] — the devices the code map names
+  embedded = false,
+}) {
   const [openState, setOpen] = useState(false)
   const open = embedded || openState
   const [cat, setCat] = useState(CATEGORIES[0].key)
@@ -54,6 +66,12 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
   const [editDesc, setEditDesc] = useState('')
   const [editParts, setEditParts] = useState('')
   const [editVariant, setEditVariant] = useState('')
+  // The device this part is stocked for. Not part of the option row being
+  // edited — it belongs to the inventory item — so it is held apart from the
+  // editFields the rest of this form is built from, and `Was` is what lets
+  // Save tell a device that was CHOSEN from one that was merely shown.
+  const [editLetter, setEditLetter] = useState('')
+  const [editLetterWas, setEditLetterWas] = useState('')
   const [editPrefixes, setEditPrefixes] = useState('')
   const [editIssiPrefixes, setEditIssiPrefixes] = useState('')
   const [editStandIn, setEditStandIn] = useState('')
@@ -461,12 +479,19 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
     // opening an agency to edit it offers the full form rather than a blank box
     // that would silently drop what the card was showing a moment ago.
     setEditFullForm(isAgencies ? optionFullForm(list[i]) || mappedFullForm(list[i]) : '')
+    // Only when the part sits on exactly one shelf. On two there is no single
+    // answer to show, and a picker opening on one of them would look like an
+    // offer to move the other.
+    const stocked = isIssues ? (pairCodesByPart?.get(nameOf(list[i]).trim().toUpperCase()) ?? []) : []
+    const letter = stocked.length === 1 ? (parsePairCode(stocked[0])?.letter ?? '') : ''
+    setEditLetter(letter)
+    setEditLetterWas(letter)
     setEditId(isTechnicians ? technicianId(list[i]) : '')
     setEditInitials2(isTechnicians ? technicianInitials2(list[i]) : '')
     setEditInitials3(isTechnicians ? technicianInitials3(list[i]) : '')
   }
 
-  function saveEdit() {
+  async function saveEdit() {
     const value = editValue.trim()
     if (!value) return
     if (exists(value, editIndex)) {
@@ -478,6 +503,17 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
       flash(problem, field)
       return
     }
+    // The device goes to INVENTORY, where a Model Code lives — a code claimed
+    // here is claimed without a device on purpose, and that stays true. Done
+    // before the list is written and the row closed, so a refusal leaves the
+    // edit open with its reason on screen instead of half-applied.
+    //
+    // Looked up by the name inventory HOLDS, which is the name this row had
+    // when it was opened: renaming an issue does not rename the stock.
+    if (editLetter && editLetter !== editLetterWas) {
+      const error = await onAssignPairCode?.(nameOf(list[editIndex]), editLetter)
+      if (error) return flash(error, 'name')
+    }
     onChange(
       cat,
       list.map((v, i) => (i === editIndex ? makeItem(value, editFields) : v)),
@@ -487,6 +523,8 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
     setEditDesc('')
     setEditParts('')
     setEditVariant('')
+    setEditLetter('')
+    setEditLetterWas('')
     setEditPrefixes('')
     setEditIssiPrefixes('')
     setEditStandIn('')
@@ -861,6 +899,30 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                     <div className="edit-fields" onKeyDown={(e) => advanceOnEnter(e, saveEdit)}>
                       {isIssues && (
                         <div className="edit-code-row">
+                          {/* The device that owns the stock, beside the code
+                              that names the part — the two halves of the Model
+                              Code, editable in the place the card shows them.
+                              Blank leaves the shelves exactly as they are; it
+                              is not an instruction to un-stock anything. */}
+                          {deviceLetters.length > 0 && (
+                            <label className="field-code">
+                              Model Code
+                              <select
+                                className="edit-input"
+                                value={editLetter}
+                                onChange={(e) => setEditLetter(e.target.value)}
+                                onKeyDown={cancelOnEscape}
+                                title="Which model's shelf this part comes off"
+                              >
+                                <option value="">— leave as is —</option>
+                                {deviceLetters.map((d) => (
+                                  <option key={d.letter} value={d.letter}>
+                                    {d.letter} — {d.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          )}
                           <label className="field-code">
                             Parts Code
                             <input
@@ -1049,6 +1111,32 @@ export default function ManageInputs({ options, onChange, onToggleChart, embedde
                   <>
                     <span className="manage-item-label">
                       {isIssues && issueCode(value) && <span className="manage-item-code">{issueCode(value)}</span>}
+                      {/* The Model Codes this part is STOCKED under — the
+                          parts code beside it says what the part is, these say
+                          whose shelves it sits on. Read from inventory, not
+                          from this list: a code here is claimed without a
+                          device on purpose (see the note above the Add row),
+                          and that stays true. A part on no shelf shows none,
+                          which is most of them until the Model Codes are set.
+                          Capped, because a part stocked for every radio would
+                          otherwise bury the name under ten badges. */}
+                      {isIssues &&
+                        (pairCodesByPart?.get(nameOf(value).trim().toUpperCase()) ?? [])
+                          .slice(0, MAX_PAIR_BADGES)
+                          .map((code) => (
+                            <span key={code} className="issue-pair-code" title={`Model Code ${code}`}>
+                              {parsePairCode(code)?.provisional ? parsePairCode(code).letter : code}
+                            </span>
+                          ))}
+                      {isIssues &&
+                        (pairCodesByPart?.get(nameOf(value).trim().toUpperCase()) ?? []).length > MAX_PAIR_BADGES && (
+                          <span
+                            className="issue-pair-code"
+                            title={(pairCodesByPart?.get(nameOf(value).trim().toUpperCase()) ?? []).join(', ')}
+                          >
+                            +{(pairCodesByPart?.get(nameOf(value).trim().toUpperCase()) ?? []).length - MAX_PAIR_BADGES}
+                          </span>
+                        )}
                       {hasTelPrefixes && optionPrefixes(value).length > 0 && (
                         <span className="manage-item-code" title="Tel prefixes">
                           {optionPrefixes(value).join(' / ')}

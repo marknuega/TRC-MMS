@@ -26,7 +26,14 @@ import {
 } from './api'
 import { onSyncChange } from './offline'
 import { FALLBACK, useCodeMap } from './codes.js'
-import { claimedPartsCode, deviceLetterFor, makePairCode, pairCodeForFault, parsePairCode } from './pairCode.js'
+import {
+  claimedPartsCode,
+  deviceLetterFor,
+  makePairCode,
+  normalizePairCode,
+  pairCodeForFault,
+  parsePairCode,
+} from './pairCode.js'
 import { advanceOnEnter, isAddFaultShortcut, isSaveShortcut } from './focusNav'
 import {
   DEFAULT_OPTIONS,
@@ -749,6 +756,27 @@ function App({ user, onLogout }) {
         .sort((a, b) => a.label.localeCompare(b.label)),
     [equipmentCodes],
   )
+
+  // Item name (UPPER) -> every distinct Model Code it is stocked under.
+  //
+  // Every one, not the first: a part genuinely can live on two shelves, and on
+  // a reference page that is the fact worth showing. The picker that has to
+  // choose ONE model (modelByPart, below) is the one that refuses an ambiguous
+  // answer; a list of them has no such problem.
+  const pairCodesByPart = useMemo(() => {
+    const index = new Map()
+    for (const it of inventory ?? []) {
+      const name = String(it.itemCode || '')
+        .trim()
+        .toUpperCase()
+      const code = normalizePairCode(it.pairCode)
+      if (!name || !code) continue
+      const at = index.get(name)
+      if (at) at.add(code)
+      else index.set(name, new Set([code]))
+    }
+    return new Map([...index].map(([name, codes]) => [name, [...codes].sort()]))
+  }, [inventory])
 
   // Item name (UPPER) -> { model, pairCode }, or null where it is ambiguous.
   const modelByPart = useMemo(() => {
@@ -3753,7 +3781,15 @@ function App({ user, onLogout }) {
           {page === 'reference' && <ReferenceCard isAdmin={isAdmin} issueTypes={options.issueTypes} />}
 
           {page === 'manage' && isAdmin && (
-            <ManageInputs options={options} onChange={setCategory} onToggleChart={setChart} embedded />
+            <ManageInputs
+              options={options}
+              onChange={setCategory}
+              onToggleChart={setChart}
+              pairCodesByPart={pairCodesByPart}
+              onAssignPairCode={assignPartModel}
+              deviceLetters={deviceLetters}
+              embedded
+            />
           )}
 
           {page === 'admin' && (isAdmin || isDirector) && (
