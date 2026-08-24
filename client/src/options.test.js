@@ -4,6 +4,8 @@ import {
   mergeOptions,
   DEFAULT_OPTIONS,
   issueCodeIndex,
+  issueFitsModel,
+  issueModels,
   optionNames,
   optionPrefixes,
   optionIssiPrefixes,
@@ -819,5 +821,46 @@ describe('offering to wire a new ISSI range to its agency', () => {
       assert.equal(issiPick('77712345', agencies), '')
       assert.equal(issiPick('77712345', withIssiPrefix(agencies, 'DOT', '777')), 'DOT')
     })
+  })
+})
+
+// Which devices a part exists on. A parts code still means the same component
+// on every radio — this says whether that component is fitted to a given one.
+describe('issueFitsModel', () => {
+  const charger = { name: 'Charger-DEY', parts: '99', variant: 'D', models: ['SRG3900 CARKIT', 'TMR 880i'] }
+  const sidegrip = { name: 'Sidegrip', parts: '43', variant: 'S' }
+
+  test('a narrowed part fits only the devices it names', () => {
+    assert.equal(issueFitsModel(charger, 'SRG3900 CARKIT'), true)
+    assert.equal(issueFitsModel(charger, 'TMR 880i'), true)
+    assert.equal(issueFitsModel(charger, 'TH1N'), false)
+  })
+
+  // The two vocabularies do not always agree to the character — the decoder
+  // writes "TMR880i" where Manage inputs writes "TMR 880i" — and they are the
+  // one device.
+  test('matches a model however it is spelled', () => {
+    assert.equal(issueFitsModel(charger, 'TMR880i'), true)
+    assert.equal(issueFitsModel(charger, 'srg3900-carkit'), true)
+  })
+
+  // Nobody has narrowed it, so it is on everything — which is every part in
+  // the list until someone says otherwise.
+  test('a part naming no devices fits them all', () => {
+    assert.equal(issueFitsModel(sidegrip, 'TH1N'), true)
+    assert.equal(issueFitsModel('ANTENNA', 'TH1N'), true)
+    assert.deepEqual(issueModels(sidegrip), [])
+  })
+
+  // With no device chosen there is nothing to narrow against, so the menu
+  // offers everything rather than nothing.
+  test('no model chosen offers everything', () => {
+    assert.equal(issueFitsModel(charger, ''), true)
+    assert.equal(issueFitsModel(charger, undefined), true)
+  })
+
+  test('reads the list back, ignoring blanks', () => {
+    assert.deepEqual(issueModels({ name: 'X', models: ['TH1N', '', '  THR9  '] }), ['TH1N', 'THR9'])
+    assert.deepEqual(issueModels({ name: 'X', models: 'TH1N' }), [])
   })
 })

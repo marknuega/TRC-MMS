@@ -9,12 +9,14 @@ import {
   TECH_INITIALS2_RE,
   TECH_INITIALS3_RE,
   issueCode,
+  issueModels,
   issueName,
   issueParts,
   issueVariant,
   materialName,
   materialDesc,
   optionName,
+  optionNames,
   prefixIndex,
   optionPrefixes,
   optionIssiPrefixes,
@@ -27,10 +29,24 @@ import {
   technicianInitials3,
 } from './options'
 import { FALLBACK, useCodeMap } from './codes'
-import { parsePairCode } from './pairCode.js'
+import { deviceLetterFor, parsePairCode } from './pairCode.js'
 
 // How many Model Codes fit on a card before the rest become a count.
 const MAX_PAIR_BADGES = 4
+
+// Which models a part appears on is stored on the part, and shown as a grid:
+// parts down, devices across. An untouched part is ticked everywhere, because
+// that is what it means — every device — and narrowing it is unticking the
+// ones it was never on. Stored the other way round, as the list of devices it
+// IS on, with the whole set stored as none: a part nobody has narrowed keeps
+// the shape it has always had.
+const withModels = (value, models) => {
+  const base = typeof value === 'string' ? { name: value } : { ...value }
+  if (models.length === 0) delete base.models
+  else base.models = models
+  // A plain string that gained nothing stays a plain string.
+  return typeof value === 'string' && !base.models ? value : base
+}
 import SearchSelect from './SearchSelect'
 import { advanceOnEnter } from './focusNav'
 
@@ -70,6 +86,10 @@ export default function ManageInputs({
   // edited — it belongs to the inventory item — so it is held apart from the
   // editFields the rest of this form is built from, and `Was` is what lets
   // Save tell a device that was CHOSEN from one that was merely shown.
+  // Which models a part appears on. [] means every one of them, which is
+  // what every part means until somebody says otherwise.
+  const [newModels, setNewModels] = useState([])
+  const [editModels, setEditModels] = useState([])
   const [editLetter, setEditLetter] = useState('')
   const [editLetterWas, setEditLetterWas] = useState('')
   const [editPrefixes, setEditPrefixes] = useState('')
@@ -179,7 +199,17 @@ export default function ManageInputs({
     ),
   ]
   const makeItem = (name, f) => {
-    if (isIssues) return { name, parts: f.parts.trim(), variant: f.variant.trim().toUpperCase() }
+    if (isIssues) {
+      const models = (f.models ?? []).filter(Boolean)
+      // Omitted rather than stored empty, so a part nobody has narrowed
+      // stays the shape it has always been.
+      return {
+        name,
+        parts: f.parts.trim(),
+        variant: f.variant.trim().toUpperCase(),
+        ...(models.length && { models }),
+      }
+    }
     if (isMaterials) return { name, description: f.desc.trim() }
     if (hasPrefixes) {
       // Built fresh from the fields on show, so an agency saved here also
@@ -375,6 +405,7 @@ export default function ManageInputs({
   const newFields = {
     desc: newDesc,
     parts: newParts,
+    models: newModels,
     variant: newVariant,
     prefixes: newPrefixes,
     issiPrefixes: newIssiPrefixes,
@@ -388,6 +419,7 @@ export default function ManageInputs({
   const editFields = {
     desc: editDesc,
     parts: editParts,
+    models: editModels,
     variant: editVariant,
     prefixes: editPrefixes,
     issiPrefixes: editIssiPrefixes,
@@ -399,11 +431,37 @@ export default function ManageInputs({
     initials3: editInitials3,
   }
 
+  // The devices a part can be ticked against: the models the code map names a
+  // letter for. "For Record Purpose Only." is a real Model on a real entry and
+  // is not a device, so it is not a column.
+  const deviceModels = optionNames(options.models).filter((m) =>
+    deviceLetterFor(m, map?.equipmentCodes ?? FALLBACK.equipmentCodes),
+  )
+
+  function toggleIssueModel(index, model) {
+    const current = issueModels(list[index])
+    // Untouched means every device, so that is the set the first untick works
+    // from — otherwise the first click would narrow the part to the ONE device
+    // just clicked, which is the opposite of what unticking one means.
+    const set = new Set(current.length ? current : deviceModels)
+    if (set.has(model)) set.delete(model)
+    else set.add(model)
+    if (set.size === 0) {
+      return flash(`"${nameOf(list[index])}" has to appear on at least one device.`, 'name')
+    }
+    const models = set.size === deviceModels.length ? [] : deviceModels.filter((m) => set.has(m))
+    onChange(
+      cat,
+      list.map((v, i) => (i === index ? withModels(v, models) : v)),
+    )
+  }
+
   function clearNew() {
     setNewValue('')
     setNewDesc('')
     setNewParts('')
     setNewVariant('')
+    setNewModels([])
     setNewPrefixes('')
     setNewIssiPrefixes('')
     setNewStandIn('')
@@ -482,6 +540,7 @@ export default function ManageInputs({
     // Only when the part sits on exactly one shelf. On two there is no single
     // answer to show, and a picker opening on one of them would look like an
     // offer to move the other.
+    setEditModels(isIssues ? issueModels(list[i]) : [])
     const stocked = isIssues ? (pairCodesByPart?.get(nameOf(list[i]).trim().toUpperCase()) ?? []) : []
     const letter = stocked.length === 1 ? (parsePairCode(stocked[0])?.letter ?? '') : ''
     setEditLetter(letter)
@@ -523,6 +582,7 @@ export default function ManageInputs({
     setEditDesc('')
     setEditParts('')
     setEditVariant('')
+    setEditModels([])
     setEditLetter('')
     setEditLetterWas('')
     setEditPrefixes('')
@@ -1191,6 +1251,60 @@ export default function ManageInputs({
               </li>
             ))}
           </ul>
+
+          {isIssues && deviceModels.length > 0 && displayList.length > 0 && (
+            <div className="manage-matrix">
+              <h3 className="manage-charts-h">Which devices use each part</h3>
+              <p className="manage-hint">
+                A part is offered in the ISSUE field only for the devices ticked here. Everything starts ticked
+                everywhere, which is what an unnarrowed part means — untick the devices a part was never on, and it
+                stops being offered for them. A Charger-DEY is a real part with a real code, and a TH1n has never had
+                one. Changes save as you tick.
+              </p>
+              <div className="matrix-scroll">
+                <table className="matrix-table">
+                  <thead>
+                    <tr>
+                      <th className="matrix-part">Part</th>
+                      {deviceModels.map((m) => (
+                        <th key={m} className="matrix-device" title={m}>
+                          {m}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {displayList.map(({ value, i }) => {
+                      const models = issueModels(value)
+                      const all = models.length === 0
+                      return (
+                        <tr key={`${nameOf(value)}-${i}`} className={all ? undefined : 'narrowed'}>
+                          <th className="matrix-part" scope="row">
+                            {issueCode(value) && <span className="manage-item-code">{issueCode(value)}</span>}
+                            <span className="matrix-part-name">{nameOf(value)}</span>
+                          </th>
+                          {deviceModels.map((m) => {
+                            const on = all || models.includes(m)
+                            return (
+                              <td key={m} className="matrix-cell">
+                                <input
+                                  type="checkbox"
+                                  checked={on}
+                                  onChange={() => toggleIssueModel(i, m)}
+                                  aria-label={`${nameOf(value)} on ${m}`}
+                                  title={`${nameOf(value)} on ${m}`}
+                                />
+                              </td>
+                            )
+                          })}
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           {onToggleChart && (
             <div className="manage-charts">

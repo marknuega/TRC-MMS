@@ -819,6 +819,40 @@ export function issueCode(v) {
   return PARTS_RE.test(parts) && VARIANT_RE.test(variant) ? parts + variant : ''
 }
 
+/**
+ * The models a part can appear on, or [] for one that appears on all of them.
+ *
+ * A parts code still means the same component on every radio — the claim is
+ * keyed without a device and the WhatsApp decoder reads it that way. This says
+ * something different and narrower: whether that component EXISTS on a given
+ * device. A Charger-DEY is a real part with a real code, and a TH1n has never
+ * had one, so offering it under a TH1n is offering a fault nobody can file.
+ *
+ * Empty is "every model", so a part nobody has narrowed keeps behaving exactly
+ * as it did before this field existed — which is all of them today.
+ */
+export const issueModels = (v) => {
+  const raw = asObj(v)?.models
+  return Array.isArray(raw) ? raw.map((m) => String(m ?? '').trim()).filter(Boolean) : []
+}
+
+// Case and punctuation carry no meaning when comparing two model names —
+// "TMR 880i" and "TMR880I" are the one device.
+const modelKey = (v) => upTrim(v).replace(/[^A-Z0-9]/g, '')
+
+/**
+ * Whether a part may be offered for a model. A part that names no models is
+ * offered for every one of them; so is any part when no model is chosen yet,
+ * because there is nothing yet to narrow against.
+ */
+export function issueFitsModel(v, model) {
+  const models = issueModels(v)
+  if (models.length === 0) return true
+  const want = modelKey(model)
+  if (!want) return true
+  return models.some((m) => modelKey(m) === want)
+}
+
 /** Just the names, for the dropdowns and for matchOption. */
 export const issueNames = (list) => (list ?? []).map(issueName).filter(Boolean)
 

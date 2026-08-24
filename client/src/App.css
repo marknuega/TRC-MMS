@@ -3182,6 +3182,70 @@ button.sync-pill {
 }
 
 /* Chart visibility toggles in Manage inputs. */
+/* ---- Parts x Devices grid ------------------------------------------------
+   Wide by nature — every device is a column — so it scrolls inside its own
+   box rather than pushing the panel sideways. The part column and the header
+   row both stick, because a tick in the middle of a 10-column grid means
+   nothing if you cannot see which part and which device it belongs to. */
+.manage-matrix {
+  margin-top: 1.25rem;
+}
+.matrix-scroll {
+  overflow: auto;
+  max-height: 60vh;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.matrix-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: max-content;
+  min-width: 100%;
+  font-size: 0.8rem;
+}
+.matrix-table th,
+.matrix-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 0.3rem 0.5rem;
+  background: var(--surface);
+}
+.matrix-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--surface-2);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.matrix-table th.matrix-part {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  display: table-cell;
+  min-width: 13rem;
+  text-align: left;
+  font-weight: 500;
+}
+.matrix-table thead th.matrix-part {
+  z-index: 3; /* the corner sits above both sticky edges */
+}
+.matrix-part-name {
+  margin-left: 0.4rem;
+}
+.matrix-device {
+  text-align: center;
+}
+.matrix-cell {
+  text-align: center;
+}
+.matrix-cell input {
+  cursor: pointer;
+}
+/* A part somebody has narrowed, so a scan down the grid finds the rows that
+   have been decided among the many that are simply still open. */
+.matrix-table tr.narrowed th.matrix-part {
+  background: var(--warn-soft);
+}
 .manage-charts {
   margin-top: 1.6rem;
   padding-top: 1.2rem;

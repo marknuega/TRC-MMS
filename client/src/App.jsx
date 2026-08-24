@@ -46,6 +46,7 @@ import {
   materialDescMap,
   issueName,
   issueCode,
+  issueFitsModel,
   technicianName,
   optionNames,
   telPick,
@@ -823,6 +824,7 @@ function App({ user, onLogout }) {
   // that silently dropped them would send someone to Manage Inputs mid-entry.
   // Each carries the way to give it a code instead — see IssueInput.
   const issueSuggestions = useMemo(() => {
+    const model = form.model
     const out = []
     const seen = new Set()
     // `source` is which admin-managed list the row came from, and it is what
@@ -842,17 +844,22 @@ function App({ user, onLogout }) {
         removable: source !== 'inventory',
       })
     }
+    // Only the parts this device actually has. A part that names no models is
+    // on every device, which is what all of them mean until somebody says
+    // otherwise in Manage inputs -> Which devices use each part. With no Model
+    // chosen there is nothing to narrow against, so everything is offered.
+    const fits = (it) => issueFitsModel(it, model)
     for (const it of options.issueTypes ?? []) {
       const code = issueCode(it)
-      if (code) add(issueName(it), code)
+      if (code && fits(it)) add(issueName(it), code)
     }
-    for (const it of options.issueTypes ?? []) if (!issueCode(it)) add(issueName(it))
+    for (const it of options.issueTypes ?? []) if (!issueCode(it) && fits(it)) add(issueName(it))
     for (const a of options.actions ?? []) {
       if (!['CHANGE', 'REPAIR', 'NEW'].includes(String(a).toUpperCase())) add(a, '', 'action')
     }
     for (const n of inventoryNames) add(n, '', 'inventory')
     return out
-  }, [options.issueTypes, options.actions, inventoryNames])
+  }, [options.issueTypes, options.actions, inventoryNames, form.model])
 
   // The 4 most-used issues float to the top of the menu — same idea as the
   // Agency quick-picks below, counted the same way: from saved reports plus
