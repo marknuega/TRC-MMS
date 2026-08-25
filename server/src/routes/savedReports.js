@@ -14,6 +14,8 @@ import { shortIdOf } from '../../../client/src/report.js'
 // the code an item is listed under and the code a save looks it up by can
 // never drift apart.
 import { normalizePairCode, pairCodeForFault } from '../../../client/src/pairCode.js'
+// Which company's shelf a fault draws from. See client/src/company.js.
+import { shelfCompanyForFault } from '../../../client/src/company.js'
 import { mergeOptions } from '../../../client/src/options.js'
 import { CODEMAP_SEED } from '../codemapSeed.js'
 
@@ -75,6 +77,15 @@ export const hasRtoAction = (snapshot) =>
 // before this existed, and reached only when no model-specific row answers.
 // That is the majority of the store, and it is why nothing needed backfilling.
 //
+// A fault also draws from ITS OWN COMPANY's shelf. MOT, X1 and X2 stock the
+// same parts in the same branch under the same Model Code, and pooling them
+// spent one company's stock on another company's job — the counts still added
+// up, against the wrong balance. The fault already records who is paying; the
+// item's company comes from its SKU prefix (client/src/company.js), and the
+// Companies list joins the two. An item with a blank company is shared stock,
+// reached only when the paying company has no row of its own — the same
+// "blank means unnarrowed" rule the pair code uses one line above.
+//
 // The skip is per FAULT, not per report: an RTO line returns the device
 // untouched and must never draw stock, but a reference-only report that also
 // records real part usage still deducts for those parts normally.
@@ -97,6 +108,34 @@ const push = (map, key, value) => {
   else map.set(key, [value])
 }
 
+const itemCompany = (it) =>
+  String(it?.company ?? '')
+    .trim()
+    .toUpperCase()
+
+/**
+ * Narrow candidate rows to the shelf the paying company draws from.
+ *
+ * `want` is that company's code, or '' when the Companies list does not give
+ * one. Those are different situations and are answered differently:
+ *
+ *   want set  — the company's own rows, and ONLY those. Nothing of its own?
+ *               fall back to the shared rows (company ''), which is what stock
+ *               nobody has claimed is for. Another company's row is never
+ *               reachable; that is the whole point.
+ *   want ''   — unnarrowed. Every row stays a candidate, exactly as before this
+ *               existed. On an install where no company has been given a code
+ *               that is still one row and still resolves; where it is several,
+ *               the ambiguity check below refuses rather than picks, and says
+ *               that the Companies list is what settles it.
+ */
+function forCompany(rows, want) {
+  if (!want) return rows
+  const own = rows.filter((r) => itemCompany(r) === want)
+  if (own.length) return own
+  return rows.filter((r) => !itemCompany(r))
+}
+
 /**
  * Which items a snapshot draws on, and how many of each.
  *
@@ -112,6 +151,7 @@ const push = (map, key, value) => {
 export function resolveInventoryUsage(snapshot, items, vocab = {}) {
   const byPair = new Map() // pair code -> rows carrying it
   const byName = new Map() // item code -> shared rows carrying it
+  const companies = vocab.companies ?? []
   for (const it of items ?? []) {
     const pair = normalizePairCode(it.pairCode)
     // A coded row is model-specific and is NEVER reachable by name: letting it
@@ -136,14 +176,23 @@ export function resolveInventoryUsage(snapshot, items, vocab = {}) {
       const issue = String(f.issue ?? '').trim()
       if (!issue) continue
 
+      // Who is paying, as a shelf code. '' when the Companies list gives this
+      // company no code — see forCompany() for why that is not an error.
+      const company = shelfCompanyForFault(f.company, companies)
+
       const pairCode = pairCodeForFault({ model: e.model, issue }, vocab)
-      let hits = pairCode ? (byPair.get(pairCode) ?? []) : []
+      // Narrowed by company at EACH step rather than once at the end: a company
+      // that stocks this part under its own Model Code must draw from that row,
+      // and testing the pair code against the whole branch first would find
+      // another company's row, then fall through to the shared shelf as if
+      // nobody stocked it. Both questions are "does THIS company have one".
+      let hits = pairCode ? forCompany(byPair.get(pairCode) ?? [], company) : []
       let matchedBy = pairCode
       if (hits.length === 0) {
         // No model-specific row — fall back to the shared shelf, matched on the
         // name exactly as it always was (punctuation included: "SPEAKER (45A)"
         // and "SPEAKER 45A" are two listings, not one).
-        hits = byName.get(upTrim(issue)) ?? []
+        hits = forCompany(byName.get(upTrim(issue)) ?? [], company)
         matchedBy = ''
       }
       if (hits.length === 0) continue // nothing stocks it — ignored, as before
@@ -152,9 +201,24 @@ export function resolveInventoryUsage(snapshot, items, vocab = {}) {
       hits = [...new Map(hits.map((h) => [h.id, h])).values()]
       if (hits.length > 1) {
         const where = matchedBy ? `pair code ${matchedBy}` : `item code "${upTrim(issue)}"`
+        // Two rows that differ only by company are a different problem with a
+        // different fix, so they get a different sentence. Telling someone to
+        // "give them different Model Codes" when MOT and X1 are each correctly
+        // holding their own T99C would have them break the thing that works;
+        // what is actually missing is the code that says which shelf the
+        // fault's company means.
+        const owners = [...new Set(hits.map(itemCompany))].filter(Boolean)
+        if (!company && owners.length > 1) {
+          throw ambiguous(
+            `"${issue}" on ${e.model || 'an untyped model'} is stocked by ${owners.length} companies ` +
+              `(${owners.join(', ')}) and the fault's company ${f.company ? `"${f.company}"` : '(blank)'} ` +
+              `does not say which. Give ${f.company ? `"${f.company}"` : 'it'} a company code under ` +
+              `Manage inputs → Companies — nothing was saved.`,
+          )
+        }
         throw ambiguous(
           `"${issue}" on ${e.model || 'an untyped model'} matches ${hits.length} inventory items ` +
-            `under ${where} (${hits.map((h) => h.sku).join(', ')}). ` +
+            `under ${where}${company ? ` on ${company}'s shelf` : ''} (${hits.map((h) => h.sku).join(', ')}). ` +
             `Give them different Model Codes before saving — nothing was saved.`,
         )
       }
@@ -186,7 +250,8 @@ async function loadPairVocabulary(tx) {
   ])
   const options = mergeOptions(optionsRow?.data ?? {})
   const equipmentCodes = mapRow?.data?.equipmentCodes ?? CODEMAP_SEED.equipmentCodes
-  return { equipmentCodes, issueTypes: options.issueTypes }
+  // companies carries the name -> shelf-code join a fault is routed by.
+  return { equipmentCodes, issueTypes: options.issueTypes, companies: options.companies }
 }
 
 // Deduct the resolved usage and write the ledger. Runs inside the save
@@ -195,7 +260,16 @@ async function applyInventoryUsage(tx, snapshot, reference, branch) {
   // Only the saving branch's own stock (each branch has separate inventory).
   const items = await tx.inventoryItem.findMany({
     where: { branch: branch ?? '' },
-    select: { id: true, sku: true, itemCode: true, alias: true, pairCode: true, begin: true, out: true },
+    select: {
+      id: true,
+      sku: true,
+      company: true,
+      itemCode: true,
+      alias: true,
+      pairCode: true,
+      begin: true,
+      out: true,
+    },
   })
   if (items.length === 0) return
 
@@ -212,6 +286,7 @@ async function applyInventoryUsage(tx, snapshot, reference, branch) {
         availAfter: item.begin - newOut,
         reference: reference ?? '',
         branch: branch ?? '',
+        company: item.company ?? '',
         material: item.itemCode,
         pairCode,
       },

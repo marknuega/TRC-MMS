@@ -78,6 +78,10 @@ export function parseDelimited(text) {
 // sheet put the columns in any order it likes.
 const COLUMN_KEYS = {
   SKU: 'sku',
+  // Derived from the SKU prefix, never imported — but it MUST be listed, or the
+  // header an export writes stops being fully recognised and the whole sheet
+  // falls back to POSITIONAL, shifting every column. Same reason AVAIL is here.
+  COMPANY: null,
   STORE: 'store',
   SHELF: 'shelf',
   'ITEM CODE': 'itemCode',
@@ -159,6 +163,7 @@ export function parsePaste(text) {
 // the original workbook, whose columns have not moved.
 export const CSV_COLUMNS = [
   ['SKU', (i) => i.sku],
+  ['Company', (i) => i.company],
   ['Store', (i) => i.store],
   ['Room ID', (i) => i.roomId],
   ['Shelf', (i) => i.shelf],

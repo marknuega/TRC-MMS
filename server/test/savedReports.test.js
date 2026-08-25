@@ -292,12 +292,15 @@ describe('resolveInventoryUsage', () => {
   // document number that is already printed.
   test('two rows answering one fault fail the save and name both', () => {
     const items = [item(1, 'TH1N-SPK-A', 'SPEAKER LOW', 'H45A'), item(2, 'TH1N-SPK-B', 'SPEAKER LOW', 'H45A')]
-    assert.throws(() => resolveInventoryUsage([entry('TH1N', 'SPEAKER LOW')], items, VOCAB), (err) => {
-      assert.equal(err.status, 409)
-      assert.match(err.message, /H45A/)
-      assert.match(err.message, /TH1N-SPK-A, TH1N-SPK-B/)
-      return true
-    })
+    assert.throws(
+      () => resolveInventoryUsage([entry('TH1N', 'SPEAKER LOW')], items, VOCAB),
+      (err) => {
+        assert.equal(err.status, 409)
+        assert.match(err.message, /H45A/)
+        assert.match(err.message, /TH1N-SPK-A, TH1N-SPK-B/)
+        return true
+      },
+    )
   })
 
   test('two shared rows under one item code are refused the same way', () => {
@@ -342,5 +345,121 @@ describe('resolveInventoryUsage', () => {
     assert.deepEqual(resolveInventoryUsage([], [], VOCAB), [])
     assert.deepEqual(resolveInventoryUsage(undefined, undefined, VOCAB), [])
     assert.deepEqual(resolveInventoryUsage([{ model: 'TH1N' }], [item(1, 'X', 'SPEAKER LOW')], VOCAB), [])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Per-company shelves.
+//
+// MOT, X1 and X2 keep their own stock in one branch, under the same Model Code
+// and the same part name. Before this, the branch was one pool: the second
+// company to enter T99C was refused as a duplicate, and a fault paid for by one
+// company could be filled out of another's box. The fault says who is paying;
+// the SKU prefix says whose shelf a row is; the Companies list joins them.
+// ---------------------------------------------------------------------------
+describe('resolveInventoryUsage across companies', () => {
+  const VOCAB = {
+    equipmentCodes: CODEMAP_SEED.equipmentCodes,
+    issueTypes: [{ name: 'SPEAKER LOW', parts: '45', variant: 'A' }],
+    companies: [{ name: 'MOTECO', code: 'MOT' }, { name: 'PROJECT X', code: 'X1' }, 'FREE'],
+  }
+
+  const item = (id, sku, itemCode, pairCode = '') => ({
+    id,
+    sku,
+    company: sku.split('-')[0],
+    itemCode,
+    alias: '',
+    pairCode,
+    begin: 10,
+    out: 0,
+  })
+  const fault = (issue, company) => ({ issue, quantity: 1, action: 'CHANGE', company })
+  const drawn = (usage) => usage.map((u) => u.item.sku)
+
+  // Both rows carry C45A. That is legal now — it is the same part on two
+  // companies' shelves, not a duplicate — so the code alone cannot decide and
+  // the company has to.
+  const MOT = item(1, 'MOT-MAK-1114', 'SPEAKER LOW', 'C45A')
+  const X1 = item(2, 'X1-MAK-1116', 'SPEAKER LOW', 'C45A')
+
+  test('a fault draws from the shelf of the company paying for it', () => {
+    const entries = [{ model: 'SRG Carkit', faults: [fault('SPEAKER LOW', 'MOTECO')] }]
+    assert.deepEqual(drawn(resolveInventoryUsage(entries, [MOT, X1], VOCAB)), ['MOT-MAK-1114'])
+  })
+
+  test('the other company draws from its own, not the first one found', () => {
+    const entries = [{ model: 'SRG Carkit', faults: [fault('SPEAKER LOW', 'PROJECT X')] }]
+    assert.deepEqual(drawn(resolveInventoryUsage(entries, [MOT, X1], VOCAB)), ['X1-MAK-1116'])
+  })
+
+  // Two companies on one report is the ordinary case, and each line has to find
+  // its own shelf — this is the whole reason the counts were wrong before.
+  test('one report splits its draw between both companies', () => {
+    const entries = [
+      { model: 'SRG Carkit', faults: [fault('SPEAKER LOW', 'MOTECO'), fault('SPEAKER LOW', 'PROJECT X')] },
+    ]
+    const usage = resolveInventoryUsage(entries, [MOT, X1], VOCAB)
+    assert.deepEqual(drawn(usage).sort(), ['MOT-MAK-1114', 'X1-MAK-1116'])
+    assert.deepEqual(
+      usage.map((u) => u.qty),
+      [1, 1],
+    )
+  })
+
+  // Unclaimed stock is for whoever needs it — but only when the company has
+  // nothing of its own, or a company would spend the shared pool while its own
+  // box sat full.
+  test('falls back to shared stock when the company has no row of its own', () => {
+    const shared = item(3, 'LEGACY-1114', 'SPEAKER LOW', 'C45A')
+    shared.company = ''
+    const entries = [{ model: 'SRG Carkit', faults: [fault('SPEAKER LOW', 'PROJECT X')] }]
+    assert.deepEqual(drawn(resolveInventoryUsage(entries, [MOT, shared], VOCAB)), ['LEGACY-1114'])
+  })
+
+  test('prefers its own row over shared stock', () => {
+    const shared = item(3, 'LEGACY-1114', 'SPEAKER LOW', 'C45A')
+    shared.company = ''
+    const entries = [{ model: 'SRG Carkit', faults: [fault('SPEAKER LOW', 'MOTECO')] }]
+    assert.deepEqual(drawn(resolveInventoryUsage(entries, [MOT, shared], VOCAB)), ['MOT-MAK-1114'])
+  })
+
+  // The install that has not filled in any company codes yet. One row still
+  // resolves, exactly as it did before any of this existed.
+  test('an uncoded company still draws when only one company stocks the part', () => {
+    const entries = [{ model: 'SRG Carkit', faults: [fault('SPEAKER LOW', 'FREE')] }]
+    assert.deepEqual(drawn(resolveInventoryUsage(entries, [MOT], VOCAB)), ['MOT-MAK-1114'])
+  })
+
+  // Refused, never guessed — the same rule the rest of this path follows. The
+  // message has to name the fix, and the fix here is the Companies list, NOT
+  // "give them different Model Codes": both rows are correctly holding C45A.
+  test('refuses rather than guessing when an uncoded company could mean either shelf', () => {
+    const entries = [{ model: 'SRG Carkit', faults: [fault('SPEAKER LOW', 'FREE')] }]
+    assert.throws(
+      () => resolveInventoryUsage(entries, [MOT, X1], VOCAB),
+      (err) => {
+        assert.equal(err.status, 409)
+        assert.match(err.message, /stocked by 2 companies \(MOT, X1\)/)
+        assert.match(err.message, /Manage inputs → Companies/)
+        assert.doesNotMatch(err.message, /different Model Codes/)
+        return true
+      },
+    )
+  })
+
+  // Within ONE company two rows under one code is still the old ambiguity, and
+  // still gets the old answer.
+  test('still refuses two rows under one code on the same shelf', () => {
+    const twin = item(3, 'MOT-MAK-9999', 'SPEAKER LOW', 'C45A')
+    const entries = [{ model: 'SRG Carkit', faults: [fault('SPEAKER LOW', 'MOTECO')] }]
+    assert.throws(
+      () => resolveInventoryUsage(entries, [MOT, twin], VOCAB),
+      (err) => {
+        assert.match(err.message, /matches 2 inventory items/)
+        assert.match(err.message, /on MOT's shelf/)
+        return true
+      },
+    )
   })
 })

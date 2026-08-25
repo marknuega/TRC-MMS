@@ -58,11 +58,15 @@ function downloadCsv(filename, items) {
   URL.revokeObjectURL(url)
 }
 
-function exportInventoryPdf(items, branch, store) {
+function exportInventoryPdf(items, branch, store, company) {
   const title = `TRC ${branch || 'All'} - Inventory`
-  const scope = store ? ` · ${store}` : ''
+  // Both narrowings are named, because a company sheet and a store sheet look
+  // identical once printed and a total with no scope on it is a total someone
+  // will read as the whole branch.
+  const scope = [company, store].filter(Boolean)
   const head = [
     'SKU',
+    'Company',
     'Store',
     'Room ID',
     'Shelf',
@@ -78,7 +82,7 @@ function exportInventoryPdf(items, branch, store) {
   const body = items
     .map(
       (i) =>
-        `<tr><td>${esc(i.sku)}</td><td>${esc(i.store)}</td><td>${esc(i.roomId)}</td><td>${esc(i.shelf)}</td><td>${esc(i.itemCode)}</td>` +
+        `<tr><td>${esc(i.sku)}</td><td>${esc(i.company)}</td><td>${esc(i.store)}</td><td>${esc(i.roomId)}</td><td>${esc(i.shelf)}</td><td>${esc(i.itemCode)}</td>` +
         `<td>${esc(i.description)}</td><td>${esc(i.alias)}</td><td>${esc(i.pairCode)}</td>` +
         `<td class="c">${esc(i.begin)}</td><td class="c">${esc(i.out)}</td><td class="c">${esc(i.avail)}</td><td>${esc(i.remarks)}</td></tr>`,
     )
@@ -89,7 +93,9 @@ function exportInventoryPdf(items, branch, store) {
       `table{border-collapse:collapse;width:100%;font-size:10.5px}th,td{border:1px solid #999;padding:4px 6px;text-align:left}` +
       `th{background:#dfe3ee}td.c,th.c{text-align:center}tfoot{color:#777}` +
       `@media print{tr{page-break-inside:avoid}}</style></head><body>` +
-      `<h1>${esc(title)}</h1><p>${esc(scope)} · ${items.length} item${items.length === 1 ? '' : 's'} · printed ${esc(stamp(Date.now()))}</p>` +
+      `<h1>${esc(title)}</h1><p>${esc(
+        [...scope, `${items.length} item${items.length === 1 ? '' : 's'}`, `printed ${stamp(Date.now())}`].join(' · '),
+      )}</p>` +
       `<table><thead><tr>${head.map((x) => `<th>${esc(x)}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table>` +
       `<p style="margin-top:14px">${COPYRIGHT_HTML}</p>` +
       `</body></html>`,
@@ -103,6 +109,10 @@ export default function Inventory({ embedded = false, branch = '', region = '', 
   const [openState, setOpen] = useState(false)
   const open = embedded || openState
   const [loaded, setLoaded] = useState(false)
+  // Which company's shelf is on show. Separate from the store filter because
+  // one company keeps stock in several stores and one store holds several
+  // companies — narrowing by either must not silently narrow by the other.
+  const [company, setCompany] = useState('')
   const [store, setStore] = useState('')
   const [search, setSearch] = useState('')
   const [edit, setEdit] = useState(null) // null | 'new' | id
@@ -223,18 +233,34 @@ export default function Inventory({ embedded = false, branch = '', region = '', 
   }, [branch, region])
 
   const stores = useMemo(() => [...new Set(items.map((i) => i.store).filter(Boolean))].sort(), [items])
+  // Offered from the stock actually held rather than from the Companies list:
+  // this picker narrows what is on screen, so a company with nothing on the
+  // shelf is an empty listing, not a choice worth showing.
+  const companies = useMemo(() => [...new Set(items.map((i) => i.company).filter(Boolean))].sort(), [items])
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     return items.filter(
       (i) =>
+        (!company || i.company === company) &&
         (!store || i.store === store) &&
         (!q ||
-          `${i.sku} ${i.store} ${i.roomId ?? ''} ${i.shelf} ${i.itemCode} ${i.description ?? ''} ${i.alias ?? ''} ${i.pairCode} ${i.formerPairCode ?? ''} ${i.remarks}`
+          `${i.sku} ${i.company ?? ''} ${i.store} ${i.roomId ?? ''} ${i.shelf} ${i.itemCode} ${i.description ?? ''} ${i.alias ?? ''} ${i.pairCode} ${i.formerPairCode ?? ''} ${i.remarks}`
             .toLowerCase()
             .includes(q)),
     )
-  }, [items, store, search])
+  }, [items, company, store, search])
   const lowCount = useMemo(() => items.filter(isLow).length, [items])
+  // Counted over what is ON SCREEN, so a company view totals that company's
+  // stock and not the branch's. The whole point of the filter is that these
+  // numbers follow it.
+  const totals = useMemo(
+    () =>
+      filtered.reduce(
+        (t, i) => ({ begin: t.begin + i.begin, out: t.out + i.out, avail: t.avail + (i.begin - i.out) }),
+        { begin: 0, out: 0, avail: 0 },
+      ),
+    [filtered],
+  )
 
   const set = (k) => (e) =>
     setForm((f) => ({ ...f, [k]: ['begin', 'out', 'lowStock'].includes(k) ? Number(e.target.value) : e.target.value }))
@@ -357,6 +383,14 @@ export default function Inventory({ embedded = false, branch = '', region = '', 
           {notice && <p className="saved-hint">✅ {notice}</p>}
 
           <div className="inv-toolbar">
+            {companies.length > 1 && (
+              <SearchSelect
+                value={company}
+                onChange={(e) => setCompany(e.target.value)}
+                options={[{ value: '', label: 'All companies' }, ...companies]}
+                ariaLabel="Company filter"
+              />
+            )}
             <SearchSelect
               value={store}
               onChange={(e) => setStore(e.target.value)}
@@ -387,7 +421,12 @@ export default function Inventory({ embedded = false, branch = '', region = '', 
               type="button"
               className="btn-txt"
               onClick={() =>
-                downloadCsv(`inventory-${branch || 'all'}-${new Date().toISOString().slice(0, 10)}.csv`, filtered)
+                downloadCsv(
+                  `inventory-${[branch || 'all', company].filter(Boolean).join('-')}-${new Date()
+                    .toISOString()
+                    .slice(0, 10)}.csv`,
+                  filtered,
+                )
               }
               disabled={!filtered.length}
             >
@@ -396,7 +435,7 @@ export default function Inventory({ embedded = false, branch = '', region = '', 
             <button
               type="button"
               className="btn-pdf"
-              onClick={() => exportInventoryPdf(filtered, branch, store)}
+              onClick={() => exportInventoryPdf(filtered, branch, store, company)}
               disabled={!filtered.length}
             >
               ⭳ Export PDF
@@ -570,6 +609,7 @@ export default function Inventory({ embedded = false, branch = '', region = '', 
                 <thead>
                   <tr>
                     <th>SKU</th>
+                    <th>Company</th>
                     <th>Store</th>
                     <th>Room ID</th>
                     <th>Shelf</th>
@@ -588,6 +628,7 @@ export default function Inventory({ embedded = false, branch = '', region = '', 
                   {filtered.map((i) => (
                     <tr key={i.id} className={isLow(i) ? 'low' : ''}>
                       <td className="nowrap">{i.sku}</td>
+                      <td className="nowrap">{i.company || <span className="hint">shared</span>}</td>
                       <td className="nowrap">{i.store}</td>
                       <td className="nowrap">{i.roomId}</td>
                       <td>{i.shelf}</td>
@@ -608,12 +649,29 @@ export default function Inventory({ embedded = false, branch = '', region = '', 
                   ))}
                   {filtered.length === 0 && (
                     <tr>
-                      <td colSpan={13} className="empty">
+                      <td colSpan={14} className="empty">
                         No items match the filter.
                       </td>
                     </tr>
                   )}
                 </tbody>
+                {/* Totals for what is on screen. With the company filter set
+                    this is that company's stock alone — which is the number
+                    anyone asking "how much does MOT have" actually wants, and
+                    the one a pooled branch total never gave them. */}
+                {filtered.length > 0 && (
+                  <tfoot>
+                    <tr className="totals">
+                      <td colSpan={8}>
+                        {company || 'All companies'} · {filtered.length} {filtered.length === 1 ? 'item' : 'items'}
+                      </td>
+                      <td className="num">{totals.begin}</td>
+                      <td className="num">{totals.out}</td>
+                      <td className="num avail">{totals.avail}</td>
+                      <td colSpan={2} />
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </div>
           )}

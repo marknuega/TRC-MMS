@@ -25,6 +25,7 @@ describe('the export writes the page order', () => {
       CSV_COLUMNS.map(([label]) => label),
       [
         'SKU',
+        'Company',
         'Store',
         'Room ID',
         'Shelf',

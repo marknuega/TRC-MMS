@@ -167,6 +167,11 @@ export const DEFAULT_OPTIONS = {
   actions: ['CHANGE', 'REPAIR', 'NEW', 'PCB', 'PROGRAM', 'RE-PROGRAM', 'INSTALL', 'RE-INSTALL', 'DISMANTLE', 'RTO'],
 
   // The report engine knows the display codes for these (MOT (P2), MOI, ...).
+  // Each entry is a plain string, or { name, code } where `code` is the SKU
+  // prefix that company's stock is shelved under (MOT, X1, X2). The code is
+  // what routes a fault to the right company's shelf when stock is drawn —
+  // see client/src/company.js. Left off, the company simply is not narrowed,
+  // exactly as before the field existed.
   companies: ['MOTECO', 'MOI', 'PROJECT 2', 'PROJECT X', 'ONLINE', 'MOTECO LOCAL', 'FREE'],
 
   // Materials — a managed list you can add to via Manage inputs. Each item is
@@ -701,6 +706,11 @@ export const CATEGORIES = [
   { key: 'statuses', label: 'Item status' },
   { key: 'branches', label: 'Branches' },
 ]
+
+// A companies item may be a plain string (legacy) or { name, code }. Defined in
+// company.js because the server resolves stock through the same helpers, and
+// re-exported here so the option lists are all reached the one way.
+export { companyName, companyCode, companyCodeMap, normalizeCompany } from './company.js'
 
 // A materials item may be a plain string (legacy) or { name, description }.
 export const materialName = (v) => (typeof v === 'string' ? v : String(v?.name ?? ''))
