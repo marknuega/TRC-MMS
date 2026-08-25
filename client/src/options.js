@@ -968,6 +968,34 @@ export function issueFitsModel(v, model) {
   return issueModels(v).some((m) => modelKey(m) === want)
 }
 
+/**
+ * Whether a part is OFFERED in the ISSUE menu for the model in hand.
+ *
+ * Two things narrow the menu and they are not equal in authority.
+ *
+ * `issueFitsModel` is a STATEMENT: somebody listed this part's devices in
+ * Manage inputs, and a device off that list does not get it. That always wins.
+ *
+ * `elsewhere` — the caller's stockedElsewhere answer — is an INFERENCE: this
+ * part is only stocked under C, so it is probably the Carkit's. Right for the
+ * great majority of the store, which nobody has said anything about, and the
+ * only thing narrowing it at all.
+ *
+ * So the inference only speaks where nobody has. An Antenna With Cable listing
+ * SRG Carkit, Desktop, Bike and TH1N Carkit is one part serving four devices
+ * out of one box; inferring from the single shelf it sits on that it belongs
+ * to that device alone contradicts the person who listed them, and hid it from
+ * three of the four.
+ *
+ * @param v         the issue type
+ * @param model     the model on the bench
+ * @param elsewhere whether the shelf inference says this belongs to another device
+ */
+export function issueOffered(v, model, elsewhere = false) {
+  if (!issueFitsModel(v, model)) return false
+  return issueNarrowed(v) || !elsewhere
+}
+
 /** Just the names, for the dropdowns and for matchOption. */
 export const issueNames = (list) => (list ?? []).map(issueName).filter(Boolean)
 

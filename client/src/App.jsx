@@ -47,7 +47,7 @@ import {
   materialDescMap,
   issueName,
   issueCode,
-  issueFitsModel,
+  issueOffered,
   issueNameForModel,
   issueAllNames,
   technicianName,
@@ -87,6 +87,7 @@ import {
   entryQty,
   materialBlocksByType,
   deviceBlocksByType,
+  agencyComment,
   transmittalRows,
   reportNotes,
   buildMonthlyMatrix,
@@ -959,7 +960,9 @@ function App({ user, onLogout }) {
     // on every device, which is what all of them mean until somebody says
     // otherwise in Manage inputs -> Which devices use each part. With no Model
     // chosen there is nothing to narrow against, so everything is offered.
-    const fits = (it) => issueFitsModel(it, model)
+    // Whether this device gets this part at all — a listed set of devices
+    // beats the guess made from the shelf its stock sits on. See issueOffered.
+    const offered = (it, name) => issueOffered(it, model, !stockedForThis(name))
     // Offered under the name THIS device calls it. One code can be a different
     // physical part per radio — 99A is the ACP-12 on a TH1N and the Charger818
     // on an STP9000 — and offering an STP9000 the Airbus name would have the
@@ -967,11 +970,11 @@ function App({ user, onLogout }) {
     for (const it of options.issueTypes ?? []) {
       const code = issueCode(it)
       const name = issueNameForModel(it, model)
-      if (code && fits(it) && stockedForThis(name)) add(name, code)
+      if (code && offered(it, name)) add(name, code)
     }
     for (const it of options.issueTypes ?? []) {
       const name = issueNameForModel(it, model)
-      if (!issueCode(it) && fits(it) && stockedForThis(name)) add(name)
+      if (!issueCode(it) && offered(it, name)) add(name)
     }
     for (const a of options.actions ?? []) {
       if (!['CHANGE', 'REPAIR', 'NEW'].includes(String(a).toUpperCase())) add(a, '', 'action')
@@ -4257,6 +4260,8 @@ function ReportPrint({ report }) {
       <h4 className="print-split-title">Split Format (Airbus / Sepura / Hytera) — Device Summary</h4>
       <SplitColumns byType={devices} />
 
+      <AgencySummaryPrint entries={report.entries} />
+
       <p className="print-footer">
         <Copyright />
       </p>
@@ -4304,6 +4309,38 @@ function WireIssiOffer({ wire, onAgree, onDismiss }) {
         Not now
       </button>
     </p>
+  )
+}
+
+// The agency roll-up on the printed sheet, so the PDF carries what the copied
+// text has always carried — who did the day's work, not just what it was.
+//
+// Read back off agencyComment rather than recomputed from the entries: there is
+// one rule for how MAIN is folded and which agencies make a line (see
+// foldMaintenance), and a second implementation of it here is a second thing to
+// keep in step. Its own title and dividers are dropped — the sheet has headings
+// and borders of its own — so only the cells cross over.
+//
+// Nothing at all on a day with no agency work, rather than an empty box.
+function AgencySummaryPrint({ entries }) {
+  const text = agencyComment(entries)
+  if (!text) return null
+  const lines = text
+    .split('\n')
+    .slice(1) // the 'Agency Summary' heading; this sheet prints its own
+    .filter((l) => l.trim() && !/^-+$/.test(l))
+  if (!lines.length) return null
+  return (
+    <>
+      <h4 className="print-split-title">Agency Summary</h4>
+      <div className="print-agency">
+        {lines.map((line, i) => (
+          <div className="split-line" key={i}>
+            {line}
+          </div>
+        ))}
+      </div>
+    </>
   )
 }
 
