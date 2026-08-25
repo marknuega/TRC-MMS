@@ -1381,8 +1381,20 @@ export default function ManageInputs({
                           and that stays true. A part on no shelf shows none,
                           which is most of them until the Model Codes are set.
                           Capped, because a part stocked for every radio would
-                          otherwise bury the name under ten badges. */}
+                          otherwise bury the name under ten badges.
+
+                          Only while the part is UNNARROWED. Once somebody has
+                          said which devices use it, that answer is the one the
+                          card owes them, and these would sit above it
+                          contradicting it — showing R for a THR9 that was
+                          deliberately left unticked, because a shelf somewhere
+                          still holds one. That is a real thing to know and the
+                          wrong place to learn it: this row is where the
+                          narrowing is decided, not where stock is audited. The
+                          per-device rows below replace them, and say more —
+                          each device's code AND what the part is called there. */}
                       {isIssues &&
+                        perDeviceRows(value).length === 0 &&
                         (pairCodesByPart?.get(nameOf(value).trim().toUpperCase()) ?? [])
                           .slice(0, MAX_PAIR_BADGES)
                           .map((code) => (
@@ -1391,6 +1403,7 @@ export default function ManageInputs({
                             </span>
                           ))}
                       {isIssues &&
+                        perDeviceRows(value).length === 0 &&
                         (pairCodesByPart?.get(nameOf(value).trim().toUpperCase()) ?? []).length > MAX_PAIR_BADGES && (
                           <span
                             className="issue-pair-code"
