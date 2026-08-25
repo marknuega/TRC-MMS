@@ -2349,7 +2349,7 @@ button.sync-pill {
 .issue-opt-badges {
   flex: 0 0 auto;
   display: grid;
-  grid-template-columns: 2.7rem 1.3rem 2.6rem;
+  grid-template-columns: 2.7rem 2.6rem;
   align-items: center;
   justify-items: center;
   gap: 0.25rem;

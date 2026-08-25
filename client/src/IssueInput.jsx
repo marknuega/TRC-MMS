@@ -374,17 +374,31 @@ export default function IssueInput({
                       on the inside where the name already is. */}
                   <span className="issue-opt-badges">
                     <span className="issue-opt-slot">
-                      {/* A real code (C99A) is shown whole; a provisional one
-                          is shown as its device letter alone, because the rest
-                          of it is the item's own name and that is already the
-                          text on the left of this row. */}
-                      {s.pairCode && (
+                      {/* One code, not two. T99A already CONTAINS 99A — the
+                          device letter in front of the parts code is the whole
+                          construction — so showing both said the same thing
+                          twice and made the row longer for it.
+
+                          The parts code is not deleted, it is the fallback.
+                          With no Model chosen on the entry an unstocked part
+                          has no pair code to show, and 99A is then the only
+                          code that row can offer; dropping it outright would
+                          leave those rows blank. Shown whole for a real code;
+                          a provisional one shows its device letter alone,
+                          because the rest of it is the item's own name and
+                          that is already the text on the left of this row. */}
+                      {s.pairCode ? (
                         <span className="issue-pair-code" title={`Model Code ${s.pairCode}`}>
                           {parsePairCode(s.pairCode)?.provisional ? parsePairCode(s.pairCode).letter : s.pairCode}
                         </span>
+                      ) : (
+                        s.code && (
+                          <span className="issue-code" title={`Parts code ${s.code}`}>
+                            {s.code}
+                          </span>
+                        )
                       )}
                     </span>
-                    <span className="issue-opt-slot">{s.code && <span className="issue-code">{s.code}</span>}</span>
                     <span className="issue-opt-slot">
                       {/* Whose shelf the stock is on. MOT, X1 and X2 hold the
                           same parts in one branch and a fault draws from the
