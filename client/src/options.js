@@ -1001,14 +1001,18 @@ const REQUIRED_ACTIONS = ['RTO']
 // Matched by name, uppercased, the same way REQUIRED_ACTIONS is. The RE- pair
 // are the same job done a second time, so they are the same kind of thing.
 //
-// RTO is deliberately NOT here. It consumes no part either, but it already
-// means something specific — the device went back untouched, which marks the
-// whole report reference-only at save time (see savedReports.js) — and it was
-// not among the actions asked for. Add it here if that turns out to be wanted.
+// RTO is here, and it is the clearest case of the lot: the device went back to
+// its owner untouched, so not only was no part fitted, nothing was done at all.
+// It was held out at first only because it had not been asked for — it already
+// carries its own separate meaning, marking the whole report reference-only at
+// save time (see savedReports.js), and that is unaffected: isRtoAction is what
+// drives it, and this list is read in exactly one place, the Company
+// auto-select. Nothing else changes by RTO being named here.
 // INSTALLATION/RE-INSTALLATION included alongside INSTALL/RE-INSTALL: Manage
 // inputs lets an admin rename the Actions list, and "Installation" is a
 // renaming of the same action, not a different one.
 export const SERVICE_ACTIONS = [
+  'RTO',
   'REPAIR',
   'PROGRAM',
   'RE-PROGRAM',
