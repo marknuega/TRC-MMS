@@ -679,8 +679,17 @@ export default function ManageInputs({
     //
     // Looked up by the name inventory HOLDS, which is the name this row had
     // when it was opened: renaming an issue does not rename the stock.
+    //
+    // And by the name it holds ON THE DEVICE BEING SHELVED. One code can be a
+    // different physical part per radio — 99A is the ACP-12 on a TH1N and the
+    // Charger818 on an STP9000 — so shelving 99A onto the STP9000 has to find
+    // the Charger818's rows. Reading the row's own name here instead would
+    // stamp T99A onto the ACP-12's box: the Airbus part relabelled as the
+    // STP9000's shelf, and every STP9000 charger fault drawing from it.
     if (editLetter && editLetter !== editLetterWas) {
-      const error = await onAssignPairCode?.(nameOf(list[editIndex]), editLetter)
+      const shelfModel = deviceModels.find((m) => letterOf(m) === editLetter)
+      const shelfName = shelfModel ? issueNameForModel(list[editIndex], shelfModel) : nameOf(list[editIndex])
+      const error = await onAssignPairCode?.(shelfName, editLetter)
       if (error) return flash(error, 'name')
     }
     onChange(
