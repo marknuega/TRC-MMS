@@ -2864,6 +2864,19 @@ button.sync-pill {
   gap: 0.15rem;
   min-width: 0;
 }
+/* A variant with per-device rows reads across, not down: the variant code on
+   the left, its devices stacked beside it. Down the card the codes then line
+   up in a column of their own — 99A, 99B, 99C — which is what makes a group of
+   variants scannable rather than a wall of names.
+
+   Flagged from the render rather than matched with :has(), so what the layout
+   depends on is stated where it is decided instead of inferred from a
+   descendant. */
+.manage-item-label.with-devices {
+  flex-direction: row;
+  align-items: baseline;
+  gap: 0.5rem;
+}
 .manage-list li span.manage-item-desc {
   font-size: 0.82rem;
   font-weight: 500;
@@ -2992,6 +3005,16 @@ button.sync-pill {
   flex-wrap: wrap;
   gap: 0.2rem 0.4rem;
   margin-top: 0.15rem;
+}
+/* One device per line, so a part on four radios reads as four rows rather than
+   a wrapped paragraph you have to pick apart. */
+.issue-devices-stacked {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  gap: 0.1rem;
+  margin-top: 0;
+  min-width: 0;
 }
 .issue-device {
   display: inline-flex;
