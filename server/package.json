@@ -12,6 +12,7 @@
     "migrate:deploy": "prisma migrate deploy",
     "studio": "prisma studio",
     "fix-codemap": "node --env-file=.env scripts/fix-stale-codemap-entries.js",
+    "letter-skus": "node --env-file=.env scripts/letter-sku-suffixes.js",
     "seed-regions": "node --env-file=.env scripts/seed-regions.js",
     "reset-password": "node --env-file=.env scripts/reset-password.js"
   },
