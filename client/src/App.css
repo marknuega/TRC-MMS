@@ -2421,6 +2421,14 @@ button.sync-pill {
   transform: translateY(-50%);
   pointer-events: none;
 }
+/* The company badge pinned inside the field, beside the Model Code. */
+.issue-company-inline {
+  position: absolute;
+  top: 50%;
+  right: 0.6rem;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
 /* One control per row, and deliberately quiet: it opens an editor, it does not
    change anything by itself. Faint until the row is hovered or arrowed onto, so
    a list being read does not look like a list being edited. */
@@ -2501,16 +2509,6 @@ button.sync-pill {
 }
 /* Destructive, so it is coloured as such — but it lives inside the editor, one
    step in from the row, which is the distance that keeps it off a mis-click. */
-.issue-code-del {
-  border: 1px solid var(--danger);
-  background: none;
-  color: var(--danger);
-  font-weight: 600;
-}
-.issue-code-del:hover {
-  background: var(--danger);
-  color: #fff;
-}
 
 .ref-badge {
   display: inline-block;
@@ -2810,7 +2808,11 @@ button.sync-pill {
 /* Which devices use a part — ticked in the edit row, beside the code that
    names it, so the two halves of a Model Code are answered in one place. The
    grid lower down ticks the same field; this is the close-up of one row. */
+/* Its own line inside the code row rather than a fourth box beside Parts Code
+   and Variant: it is a list of devices, not a short field, and sharing the line
+   left both cramped. */
 .field-models {
+  flex-basis: 100%;
   border: 1px solid var(--border);
   border-radius: 0.4rem;
   padding: 0.3rem 0.5rem 0.45rem;
@@ -2856,8 +2858,13 @@ button.sync-pill {
 }
 /* Each device reads as its letter first — the letter is what lands in the
    code, so it is the part worth seeing at a glance. */
+/* `.edit-code-row label` is a class AND a type, so it outweighs a lone class
+   and was stacking the checkbox, the letter and the name into a column. Matched
+   on weight rather than fought with !important. */
+.edit-code-row .model-tick,
 .model-tick {
   display: inline-flex;
+  flex-direction: row;
   align-items: center;
   gap: 0.3rem;
   min-width: 0;

@@ -72,7 +72,7 @@ import ReferenceCard from './ReferenceCard'
 import Toast from './Toast'
 import CodeEntry from './CodeEntry'
 import SearchSelect from './SearchSelect'
-import { companyNameForCode } from './company.js'
+import { companyNameForCode, shelfCompanyFor } from './company.js'
 import IssueInput from './IssueInput'
 import { Credit, Copyright, COPYRIGHT_HTML } from './copyright'
 import { BrandMark } from './brand'
@@ -850,6 +850,23 @@ function App({ user, onLogout }) {
    * Shared stock (blank company) names no company and adds nothing, which is
    * right: it is the stock that belongs to whoever needs it.
    */
+  // The company codes this branch's stock is actually filed under. A fault
+  // company may name a shelf directly (MOT, X1) without a code being typed,
+  // but only one of these — see shelfCompanyFor.
+  const knownCompanies = useMemo(
+    () =>
+      new Set(
+        (inventory ?? [])
+          .map((i) =>
+            String(i.company ?? '')
+              .trim()
+              .toUpperCase(),
+          )
+          .filter(Boolean),
+      ),
+    [inventory],
+  )
+
   const companiesByPart = useMemo(() => {
     const index = new Map()
     for (const it of inventory ?? []) {
@@ -895,10 +912,10 @@ function App({ user, onLogout }) {
       )
     const out = []
     const seen = new Set()
-    // `source` is which admin-managed list the row came from, and it is what
-    // decides whether the row can be removed and from where. An inventory name
-    // has no such list — it is offered because stock matches on it — so it is
-    // not removable here; deleting it belongs to the Inventory page.
+    // `source` is which admin-managed list the row came from. Nothing is
+    // removed from here any more — that lives in Manage inputs, where the
+    // consequences of editing a shared list are visible — but the source still
+    // says what a row IS, which is worth keeping on it.
     const add = (name, code = '', source = 'issue') => {
       const key = String(name ?? '')
         .trim()
@@ -909,7 +926,6 @@ function App({ user, onLogout }) {
         name: String(name).trim(),
         code,
         source,
-        removable: source !== 'inventory',
       })
     }
     // Only the parts this device actually has. A part that names no models is
@@ -988,27 +1004,6 @@ function App({ user, onLogout }) {
       return companies.map((c) => ({ ...row, companies: [c], company: c }))
     })
   }, [issueSuggestions, saved, entries, form.model, modelByPart, companiesByPart, pairVocab])
-
-  /**
-   * Drop a suggestion from the admin-managed list it belongs to.
-   *
-   * Confirmed, and the confirmation names the LIST rather than just the row:
-   * removing an action takes it out of the Action dropdown as well, which is a
-   * consequence somewhere the person cannot see from here. Existing entries and
-   * saved reports keep the text they already hold either way — this edits the
-   * vocabulary offered from now on, not the records written with it.
-   */
-  function removeIssueSuggestion(s) {
-    const key = s.source === 'action' ? 'actions' : 'issueTypes'
-    const where = s.source === 'action' ? 'Actions — it will also leave the Action dropdown' : 'Issue types'
-    if (!window.confirm(`Remove "${s.name}" from ${where}?`)) return
-    const list = options[key] ?? []
-    const nameOf = key === 'actions' ? (v) => String(v ?? '') : issueName
-    setCategory(
-      key,
-      list.filter((v) => !sameName(nameOf(v), s.name)),
-    )
-  }
 
   /**
    * Give an issue a CDS code from inside the entry form, and keep it.
@@ -3028,11 +3023,11 @@ function App({ user, onLogout }) {
                                     value={fault.issue}
                                     onChange={setFault(i, 'issue')}
                                     onPickCompany={pickFaultCompany(i, setFault)}
+                                    companyCode={shelfCompanyFor(fault.company, options.companies, knownCompanies)}
                                     suggestions={rankedIssueSuggestions}
                                     onAssignCode={assignIssueCode}
                                     onAssignPairCode={assignPartModel}
                                     deviceLetters={deviceLetters}
-                                    onRemove={removeIssueSuggestion}
                                     placeholder="e.g. A COVER"
                                   />
                                 )}
@@ -3377,11 +3372,11 @@ function App({ user, onLogout }) {
                                   value={fault.issue}
                                   onChange={eSetFault(i, 'issue')}
                                   onPickCompany={pickFaultCompany(i, eSetFault)}
+                                  companyCode={shelfCompanyFor(fault.company, options.companies, knownCompanies)}
                                   suggestions={rankedIssueSuggestions}
                                   onAssignCode={assignIssueCode}
                                   onAssignPairCode={assignPartModel}
                                   deviceLetters={deviceLetters}
-                                  onRemove={removeIssueSuggestion}
                                   placeholder="e.g. A COVER"
                                 />
                               )}
