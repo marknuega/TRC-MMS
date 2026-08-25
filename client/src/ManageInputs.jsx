@@ -498,6 +498,436 @@ export default function ManageInputs({
    * an unnarrowed part called the same thing on every device. A part that is
    * narrowed, or that goes by a different name somewhere, has rows.
    */
+  /**
+   * One row of the list: the editor when this is the open row, the card
+   * otherwise.
+   *
+   * Lifted out of the list so it can be rendered inside a GROUP as easily as
+   * on its own. Every variant of a parts code now shares one card, and the
+   * card is a real element rather than a run of siblings — .manage-list is a
+   * multi-column grid, so siblings flow across columns and a card drawn by
+   * joining their borders would come apart at every column break.
+   *
+   * `i` stays the row's index into `list`: edit, save and delete are keyed on
+   * it, and grouping must not disturb that.
+   */
+  const rowBody = (value, i) => (
+    <>
+      {editIndex === i ? (
+        <>
+          {/* Enter walks this row's fields and saves from the last. */}
+          <div className="edit-fields" onKeyDown={(e) => advanceOnEnter(e, saveEdit)}>
+            {isIssues && (
+              <div className="edit-code-row">
+                {/* Which devices use this part, beside the code that
+                                names it — the two halves of a Model Code in the
+                                one place, so the codes it makes (T99C, C99C) can
+                                be read off rather than assembled in somebody's
+                                head. Writes the SAME field the grid below ticks;
+                                they are two views of one answer, not two answers.
+
+                                Everything starts ticked, which is what a part
+                                nobody has narrowed means. */}
+                {deviceModels.length > 0 && (
+                  <fieldset className="field-models">
+                    <legend>Models that use this part</legend>
+                    <div className="model-rows">
+                      {deviceModels.map((m) => {
+                        const on = (editModels ?? deviceModels).includes(m)
+                        return (
+                          <div key={m} className={on ? 'model-row on' : 'model-row'}>
+                            <label className="model-tick" title={m}>
+                              <input
+                                type="checkbox"
+                                checked={on}
+                                onChange={() => toggleEditModel(m)}
+                                onKeyDown={cancelOnEscape}
+                              />
+                              <span className="model-tick-letter">{letterOf(m)}</span>
+                              <span className="model-tick-name">{m}</span>
+                            </label>
+                            {/* The code this device gives the part. */}
+                            <span className="model-row-code">{on ? codeFor(m, editParts, editVariant) : ''}</span>
+                            {/* What the part is CALLED here. Blank is
+                                            "same as the row's own name", which is
+                                            most devices — so the placeholder
+                                            shows that name rather than leaving
+                                            the box looking unanswered. */}
+                            {on && (
+                              <input
+                                className="edit-input model-row-name"
+                                value={editNames[m] ?? ''}
+                                onChange={(e) =>
+                                  setEditNames((prev) => {
+                                    const next = { ...prev }
+                                    if (e.target.value.trim()) next[m] = e.target.value
+                                    else delete next[m]
+                                    return next
+                                  })
+                                }
+                                onKeyDown={cancelOnEscape}
+                                placeholder={editValue || 'same as above'}
+                                aria-label={`What this part is called on ${m}`}
+                              />
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </fieldset>
+                )}
+                <label className="field-code">
+                  Parts Code
+                  <input
+                    className="edit-input"
+                    value={editParts}
+                    onChange={(e) => setEditParts(e.target.value.replace(/\D/g, '').slice(0, 2))}
+                    onKeyDown={cancelOnEscape}
+                    placeholder="19"
+                    inputMode="numeric"
+                  />
+                </label>
+                <label className="field-code">
+                  Variant
+                  <input
+                    className="edit-input"
+                    value={editVariant}
+                    onChange={(e) =>
+                      setEditVariant(
+                        e.target.value
+                          .replace(/[^A-Za-z]/g, '')
+                          .slice(0, 1)
+                          .toUpperCase(),
+                      )
+                    }
+                    onKeyDown={cancelOnEscape}
+                    placeholder="B"
+                  />
+                </label>
+                {/* Where the STOCK sits, which is a different
+                                question from which models use the part: a code
+                                can be right on four devices while the box lives
+                                on one shelf. Single on purpose — an item carries
+                                one Model Code, so pointing it at two shelves is
+                                not a thing that can be stored. */}
+                {deviceLetters.length > 0 && (
+                  <label className="field-code">
+                    Stock shelf
+                    <select
+                      className="edit-input"
+                      value={editLetter}
+                      onChange={(e) => setEditLetter(e.target.value)}
+                      onKeyDown={cancelOnEscape}
+                      title="Move this part's stock onto one model's shelf. Leave as is to touch no inventory."
+                    >
+                      <option value="">— leave as is —</option>
+                      {deviceLetters.map((d) => (
+                        <option key={d.letter} value={d.letter}>
+                          {d.letter} — {d.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+              </div>
+            )}
+            {hasPrefixes && (
+              <div className="edit-code-row">
+                {hasTelPrefixes && (
+                  <label className="field-code field-prefix">
+                    Tel prefixes
+                    <input
+                      className="edit-input"
+                      value={editPrefixes}
+                      onChange={(e) => setEditPrefixes(e.target.value.replace(/[^\d,\s]/g, ''))}
+                      onKeyDown={cancelOnEscape}
+                      placeholder="355, 06"
+                      inputMode="numeric"
+                    />
+                  </label>
+                )}
+                {hasStandIn && (
+                  <>
+                    <label className="field-code field-prefix">
+                      Stand-in prefixes
+                      <input
+                        className="edit-input"
+                        value={editStandIn}
+                        onChange={(e) => setEditStandIn(e.target.value.replace(/[^\d,\s]/g, ''))}
+                        onKeyDown={cancelOnEscape}
+                        placeholder="103, 03"
+                        inputMode="numeric"
+                      />
+                    </label>
+                    <label className="field-code">
+                      Stored as
+                      <input
+                        className="edit-input"
+                        value={editStandInReal}
+                        onChange={(e) => setEditStandInReal(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        onKeyDown={cancelOnEscape}
+                        placeholder="109"
+                        inputMode="numeric"
+                      />
+                    </label>
+                  </>
+                )}
+                {hasIssiPrefixes && (
+                  <label className="field-code field-prefix">
+                    ISSI prefixes
+                    <input
+                      className="edit-input"
+                      value={editIssiPrefixes}
+                      onChange={(e) => setEditIssiPrefixes(e.target.value.replace(/[^\d,\s]/g, ''))}
+                      onKeyDown={cancelOnEscape}
+                      placeholder="180, 214"
+                      inputMode="numeric"
+                    />
+                  </label>
+                )}
+              </div>
+            )}
+            {isTechnicians && (
+              <div className="edit-code-row">
+                <label className="field-code">
+                  Tech ID
+                  <input
+                    className="edit-input"
+                    value={editId}
+                    onChange={(e) => setEditId(e.target.value.replace(/\D/g, ''))}
+                    onKeyDown={cancelOnEscape}
+                    placeholder="1"
+                    inputMode="numeric"
+                  />
+                </label>
+                <label className="field-code">
+                  2-Letter Initial
+                  <input
+                    className="edit-input"
+                    value={editInitials2}
+                    onChange={(e) =>
+                      setEditInitials2(
+                        e.target.value
+                          .replace(/[^A-Za-z]/g, '')
+                          .slice(0, 2)
+                          .toUpperCase(),
+                      )
+                    }
+                    onKeyDown={cancelOnEscape}
+                    placeholder="MA"
+                  />
+                </label>
+                <label className="field-code">
+                  3-Letter Initial
+                  <input
+                    className="edit-input"
+                    value={editInitials3}
+                    onChange={(e) =>
+                      setEditInitials3(
+                        e.target.value
+                          .replace(/[^A-Za-z]/g, '')
+                          .slice(0, 3)
+                          .toUpperCase(),
+                      )
+                    }
+                    onKeyDown={cancelOnEscape}
+                    placeholder="MRA"
+                  />
+                </label>
+              </div>
+            )}
+            <input
+              className="edit-input"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onKeyDown={cancelOnEscape}
+              placeholder={
+                isMaterials ? 'Material name' : isIssues ? 'Description' : isTechnicians ? 'Technician name' : undefined
+              }
+              autoFocus
+            />
+            {isMaterials && (
+              <input
+                className="edit-input"
+                value={editDesc}
+                onChange={(e) => setEditDesc(e.target.value)}
+                onKeyDown={cancelOnEscape}
+                placeholder="Description (optional)"
+              />
+            )}
+            {isAgencies && (
+              <input
+                className="edit-input"
+                value={editFullForm}
+                onChange={(e) => setEditFullForm(e.target.value)}
+                onKeyDown={cancelOnEscape}
+                placeholder="Full form (optional)"
+                aria-label="Full form"
+              />
+            )}
+            {isCompanies && (
+              <input
+                className="edit-input"
+                value={editCode}
+                onChange={(e) => setEditCode(e.target.value)}
+                onKeyDown={cancelOnEscape}
+                placeholder="Stock code (MOT)"
+                aria-label="Stock code"
+              />
+            )}
+          </div>
+          <div className="manage-item-actions">
+            <button type="button" onClick={saveEdit}>
+              Save
+            </button>
+            <button type="button" className="ghost" onClick={() => setEditIndex(-1)}>
+              Cancel
+            </button>
+            {/* Delete lives inside Edit so it can't be hit by accident. */}
+            <button type="button" className="danger" onClick={() => remove(i)}>
+              Delete
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <span className="manage-item-label">
+            {isIssues && issueCode(value) && <span className="manage-item-code">{issueCode(value)}</span>}
+            {/* The Model Codes this part is STOCKED under — the
+                            parts code beside it says what the part is, these say
+                            whose shelves it sits on. Read from inventory, not
+                            from this list: a code here is claimed without a
+                            device on purpose (see the note above the Add row),
+                            and that stays true. A part on no shelf shows none,
+                            which is most of them until the Model Codes are set.
+                            Capped, because a part stocked for every radio would
+                            otherwise bury the name under ten badges.
+
+                            Only while the part is UNNARROWED. Once somebody has
+                            said which devices use it, that answer is the one the
+                            card owes them, and these would sit above it
+                            contradicting it — showing R for a THR9 that was
+                            deliberately left unticked, because a shelf somewhere
+                            still holds one. That is a real thing to know and the
+                            wrong place to learn it: this row is where the
+                            narrowing is decided, not where stock is audited. The
+                            per-device rows below replace them, and say more —
+                            each device's code AND what the part is called there. */}
+            {isIssues &&
+              perDeviceRows(value).length === 0 &&
+              (pairCodesByPart?.get(nameOf(value).trim().toUpperCase()) ?? []).slice(0, MAX_PAIR_BADGES).map((code) => (
+                <span key={code} className="issue-pair-code" title={`Model Code ${code}`}>
+                  {parsePairCode(code)?.provisional ? parsePairCode(code).letter : code}
+                </span>
+              ))}
+            {isIssues &&
+              perDeviceRows(value).length === 0 &&
+              (pairCodesByPart?.get(nameOf(value).trim().toUpperCase()) ?? []).length > MAX_PAIR_BADGES && (
+                <span
+                  className="issue-pair-code"
+                  title={(pairCodesByPart?.get(nameOf(value).trim().toUpperCase()) ?? []).join(', ')}
+                >
+                  +{(pairCodesByPart?.get(nameOf(value).trim().toUpperCase()) ?? []).length - MAX_PAIR_BADGES}
+                </span>
+              )}
+            {hasTelPrefixes && optionPrefixes(value).length > 0 && (
+              <span className="manage-item-code" title="Tel prefixes">
+                {optionPrefixes(value).join(' / ')}
+              </span>
+            )}
+            {/* An arrow rather than a bare pair: the row has to say
+                            which of the two digits is typed and which is stored,
+                            and 107 → 109 says it without a legend. */}
+            {hasStandIn && optionStandIns(value).length > 0 && optionStandInReal(value) && (
+              <span className="manage-item-code" title="Stand-in prefixes, and what they are stored as">
+                {optionStandIns(value).join(' / ')} → {optionStandInReal(value)}
+              </span>
+            )}
+            {/* Labelled, so the digits say which number they answer
+                            to rather than leaving it to be inferred from which
+                            list is open. An agency's stale Tel prefixes are not
+                            shown at all — they select nothing now. */}
+            {hasIssiPrefixes && optionIssiPrefixes(value).length > 0 && (
+              <span className="manage-item-code" title="ISSI prefixes">
+                ISSI {optionIssiPrefixes(value).join(' / ')}
+              </span>
+            )}
+            {isTechnicians &&
+              [technicianId(value), technicianInitials2(value), technicianInitials3(value)].filter(Boolean).length >
+                0 && (
+                <span className="manage-item-code">
+                  {[technicianId(value), technicianInitials2(value), technicianInitials3(value)]
+                    .filter(Boolean)
+                    .join(' / ')}
+                </span>
+              )}
+            {nameOf(value)}
+            {isMaterials && descOf(value) && <span className="manage-item-desc">{descOf(value)}</span>}
+            {isCompanies && companyCode(value) && <span className="manage-item-desc">stock {companyCode(value)}</span>}
+            {fullFormOf(value) && <span className="manage-item-desc">{fullFormOf(value)}</span>}
+            {/* The devices this part is on, each with the code it
+                            carries there and the name it goes by — the whole
+                            answer readable off the card, without opening it.
+
+                            Shown only once there is something a single code chip
+                            cannot say: a part on every device under one name is
+                            already fully described by "99A ACP-12" above, and
+                            repeating it ten times would bury the rows that do
+                            differ. */}
+            {isIssues && issueCode(value) && perDeviceRows(value).length > 0 && (
+              <span className="issue-devices">
+                {perDeviceRows(value).map((r) => (
+                  <span key={r.model} className="issue-device" title={r.model}>
+                    <span className="manage-item-code">{r.code}</span>
+                    <span className="issue-device-name">{r.name}</span>
+                  </span>
+                ))}
+              </span>
+            )}
+          </span>
+          <div className="manage-item-actions">
+            {/* One edit at a time: a second open row would quietly
+                            discard the first one's unsaved changes. */}
+            <button
+              type="button"
+              className="icon-edit"
+              onClick={() => startEdit(i)}
+              disabled={editIndex !== -1}
+              aria-label={`Edit ${nameOf(value)}`}
+              title={editIndex === -1 ? `Edit ${nameOf(value)}` : 'Finish the open edit first'}
+            >
+              ✎
+            </button>
+          </div>
+        </>
+      )}
+    </>
+  )
+
+  /**
+   * The list as cards: every variant of one parts base code in a single group.
+   *
+   * displayList already orders coded issue rows by parts then variant, so a
+   * group is a contiguous run and this is one pass. Each item keeps its own
+   * index into `list` — edit, save and delete are keyed on it, and grouping
+   * must not disturb that.
+   *
+   * An UNCODED row is a group of one with no base code, so it renders exactly
+   * as it always did: it is not a variant of anything, and a head reading ''
+   * would invent a group. Every non-issue category is the same — one group per
+   * row, no heads — so this one shape serves the whole list.
+   */
+  const issueGroups = (() => {
+    const out = []
+    for (const entry of displayList) {
+      const parts = isIssues ? issueParts(entry.value) : ''
+      const last = out[out.length - 1]
+      if (parts && last && last.parts === parts) last.items.push(entry)
+      else out.push({ key: `${parts || 'x'}-${entry.i}`, parts, items: [entry] })
+    }
+    return out
+  })()
+
   const perDeviceRows = (value) => {
     if (!isIssues) return []
     const overrides = issueNameOverrides(value)
@@ -1083,408 +1513,38 @@ export default function ManageInputs({
             {list.length === 0 && <li className="manage-empty">No values yet — add one above.</li>}
             {/* An item being edited takes the whole grid row: the description is
                 the longest field and the one that must stay readable. */}
-            {displayList.map(({ value, i }) => (
-              <li key={`${nameOf(value)}-${i}`} className={editIndex === i ? 'editing' : undefined}>
-                {editIndex === i ? (
-                  <>
-                    {/* Enter walks this row's fields and saves from the last. */}
-                    <div className="edit-fields" onKeyDown={(e) => advanceOnEnter(e, saveEdit)}>
-                      {isIssues && (
-                        <div className="edit-code-row">
-                          {/* Which devices use this part, beside the code that
-                              names it — the two halves of a Model Code in the
-                              one place, so the codes it makes (T99C, C99C) can
-                              be read off rather than assembled in somebody's
-                              head. Writes the SAME field the grid below ticks;
-                              they are two views of one answer, not two answers.
+            {issueGroups.map((g) => (
+              <li
+                key={g.key}
+                className={
+                  [g.parts ? 'manage-group' : '', g.items.some((x) => x.i === editIndex) ? 'editing' : '']
+                    .filter(Boolean)
+                    .join(' ') || undefined
+                }
+              >
+                {/* One card per PARTS BASE CODE. 99A, 99B and 99C are the same
+                    component in different builds — the charger that ships with
+                    the radio, the spare desk charger, the 12W — and they were
+                    separate cards that had to be hunted down a list to be
+                    compared. Under one head they read as what they are: the
+                    variants of 99.
 
-                              Everything starts ticked, which is what a part
-                              nobody has narrowed means. */}
-                          {deviceModels.length > 0 && (
-                            <fieldset className="field-models">
-                              <legend>Models that use this part</legend>
-                              <div className="model-rows">
-                                {deviceModels.map((m) => {
-                                  const on = (editModels ?? deviceModels).includes(m)
-                                  return (
-                                    <div key={m} className={on ? 'model-row on' : 'model-row'}>
-                                      <label className="model-tick" title={m}>
-                                        <input
-                                          type="checkbox"
-                                          checked={on}
-                                          onChange={() => toggleEditModel(m)}
-                                          onKeyDown={cancelOnEscape}
-                                        />
-                                        <span className="model-tick-letter">{letterOf(m)}</span>
-                                        <span className="model-tick-name">{m}</span>
-                                      </label>
-                                      {/* The code this device gives the part. */}
-                                      <span className="model-row-code">
-                                        {on ? codeFor(m, editParts, editVariant) : ''}
-                                      </span>
-                                      {/* What the part is CALLED here. Blank is
-                                          "same as the row's own name", which is
-                                          most devices — so the placeholder
-                                          shows that name rather than leaving
-                                          the box looking unanswered. */}
-                                      {on && (
-                                        <input
-                                          className="edit-input model-row-name"
-                                          value={editNames[m] ?? ''}
-                                          onChange={(e) =>
-                                            setEditNames((prev) => {
-                                              const next = { ...prev }
-                                              if (e.target.value.trim()) next[m] = e.target.value
-                                              else delete next[m]
-                                              return next
-                                            })
-                                          }
-                                          onKeyDown={cancelOnEscape}
-                                          placeholder={editValue || 'same as above'}
-                                          aria-label={`What this part is called on ${m}`}
-                                        />
-                                      )}
-                                    </div>
-                                  )
-                                })}
-                              </div>
-                            </fieldset>
-                          )}
-                          <label className="field-code">
-                            Parts Code
-                            <input
-                              className="edit-input"
-                              value={editParts}
-                              onChange={(e) => setEditParts(e.target.value.replace(/\D/g, '').slice(0, 2))}
-                              onKeyDown={cancelOnEscape}
-                              placeholder="19"
-                              inputMode="numeric"
-                            />
-                          </label>
-                          <label className="field-code">
-                            Variant
-                            <input
-                              className="edit-input"
-                              value={editVariant}
-                              onChange={(e) =>
-                                setEditVariant(
-                                  e.target.value
-                                    .replace(/[^A-Za-z]/g, '')
-                                    .slice(0, 1)
-                                    .toUpperCase(),
-                                )
-                              }
-                              onKeyDown={cancelOnEscape}
-                              placeholder="B"
-                            />
-                          </label>
-                          {/* Where the STOCK sits, which is a different
-                              question from which models use the part: a code
-                              can be right on four devices while the box lives
-                              on one shelf. Single on purpose — an item carries
-                              one Model Code, so pointing it at two shelves is
-                              not a thing that can be stored. */}
-                          {deviceLetters.length > 0 && (
-                            <label className="field-code">
-                              Stock shelf
-                              <select
-                                className="edit-input"
-                                value={editLetter}
-                                onChange={(e) => setEditLetter(e.target.value)}
-                                onKeyDown={cancelOnEscape}
-                                title="Move this part's stock onto one model's shelf. Leave as is to touch no inventory."
-                              >
-                                <option value="">— leave as is —</option>
-                                {deviceLetters.map((d) => (
-                                  <option key={d.letter} value={d.letter}>
-                                    {d.letter} — {d.label}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                          )}
-                        </div>
-                      )}
-                      {hasPrefixes && (
-                        <div className="edit-code-row">
-                          {hasTelPrefixes && (
-                            <label className="field-code field-prefix">
-                              Tel prefixes
-                              <input
-                                className="edit-input"
-                                value={editPrefixes}
-                                onChange={(e) => setEditPrefixes(e.target.value.replace(/[^\d,\s]/g, ''))}
-                                onKeyDown={cancelOnEscape}
-                                placeholder="355, 06"
-                                inputMode="numeric"
-                              />
-                            </label>
-                          )}
-                          {hasStandIn && (
-                            <>
-                              <label className="field-code field-prefix">
-                                Stand-in prefixes
-                                <input
-                                  className="edit-input"
-                                  value={editStandIn}
-                                  onChange={(e) => setEditStandIn(e.target.value.replace(/[^\d,\s]/g, ''))}
-                                  onKeyDown={cancelOnEscape}
-                                  placeholder="103, 03"
-                                  inputMode="numeric"
-                                />
-                              </label>
-                              <label className="field-code">
-                                Stored as
-                                <input
-                                  className="edit-input"
-                                  value={editStandInReal}
-                                  onChange={(e) => setEditStandInReal(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                                  onKeyDown={cancelOnEscape}
-                                  placeholder="109"
-                                  inputMode="numeric"
-                                />
-                              </label>
-                            </>
-                          )}
-                          {hasIssiPrefixes && (
-                            <label className="field-code field-prefix">
-                              ISSI prefixes
-                              <input
-                                className="edit-input"
-                                value={editIssiPrefixes}
-                                onChange={(e) => setEditIssiPrefixes(e.target.value.replace(/[^\d,\s]/g, ''))}
-                                onKeyDown={cancelOnEscape}
-                                placeholder="180, 214"
-                                inputMode="numeric"
-                              />
-                            </label>
-                          )}
-                        </div>
-                      )}
-                      {isTechnicians && (
-                        <div className="edit-code-row">
-                          <label className="field-code">
-                            Tech ID
-                            <input
-                              className="edit-input"
-                              value={editId}
-                              onChange={(e) => setEditId(e.target.value.replace(/\D/g, ''))}
-                              onKeyDown={cancelOnEscape}
-                              placeholder="1"
-                              inputMode="numeric"
-                            />
-                          </label>
-                          <label className="field-code">
-                            2-Letter Initial
-                            <input
-                              className="edit-input"
-                              value={editInitials2}
-                              onChange={(e) =>
-                                setEditInitials2(
-                                  e.target.value
-                                    .replace(/[^A-Za-z]/g, '')
-                                    .slice(0, 2)
-                                    .toUpperCase(),
-                                )
-                              }
-                              onKeyDown={cancelOnEscape}
-                              placeholder="MA"
-                            />
-                          </label>
-                          <label className="field-code">
-                            3-Letter Initial
-                            <input
-                              className="edit-input"
-                              value={editInitials3}
-                              onChange={(e) =>
-                                setEditInitials3(
-                                  e.target.value
-                                    .replace(/[^A-Za-z]/g, '')
-                                    .slice(0, 3)
-                                    .toUpperCase(),
-                                )
-                              }
-                              onKeyDown={cancelOnEscape}
-                              placeholder="MRA"
-                            />
-                          </label>
-                        </div>
-                      )}
-                      <input
-                        className="edit-input"
-                        value={editValue}
-                        onChange={(e) => setEditValue(e.target.value)}
-                        onKeyDown={cancelOnEscape}
-                        placeholder={
-                          isMaterials
-                            ? 'Material name'
-                            : isIssues
-                              ? 'Description'
-                              : isTechnicians
-                                ? 'Technician name'
-                                : undefined
-                        }
-                        autoFocus
-                      />
-                      {isMaterials && (
-                        <input
-                          className="edit-input"
-                          value={editDesc}
-                          onChange={(e) => setEditDesc(e.target.value)}
-                          onKeyDown={cancelOnEscape}
-                          placeholder="Description (optional)"
-                        />
-                      )}
-                      {isAgencies && (
-                        <input
-                          className="edit-input"
-                          value={editFullForm}
-                          onChange={(e) => setEditFullForm(e.target.value)}
-                          onKeyDown={cancelOnEscape}
-                          placeholder="Full form (optional)"
-                          aria-label="Full form"
-                        />
-                      )}
-                      {isCompanies && (
-                        <input
-                          className="edit-input"
-                          value={editCode}
-                          onChange={(e) => setEditCode(e.target.value)}
-                          onKeyDown={cancelOnEscape}
-                          placeholder="Stock code (MOT)"
-                          aria-label="Stock code"
-                        />
-                      )}
-                    </div>
-                    <div className="manage-item-actions">
-                      <button type="button" onClick={saveEdit}>
-                        Save
-                      </button>
-                      <button type="button" className="ghost" onClick={() => setEditIndex(-1)}>
-                        Cancel
-                      </button>
-                      {/* Delete lives inside Edit so it can't be hit by accident. */}
-                      <button type="button" className="danger" onClick={() => remove(i)}>
-                        Delete
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <span className="manage-item-label">
-                      {isIssues && issueCode(value) && <span className="manage-item-code">{issueCode(value)}</span>}
-                      {/* The Model Codes this part is STOCKED under — the
-                          parts code beside it says what the part is, these say
-                          whose shelves it sits on. Read from inventory, not
-                          from this list: a code here is claimed without a
-                          device on purpose (see the note above the Add row),
-                          and that stays true. A part on no shelf shows none,
-                          which is most of them until the Model Codes are set.
-                          Capped, because a part stocked for every radio would
-                          otherwise bury the name under ten badges.
-
-                          Only while the part is UNNARROWED. Once somebody has
-                          said which devices use it, that answer is the one the
-                          card owes them, and these would sit above it
-                          contradicting it — showing R for a THR9 that was
-                          deliberately left unticked, because a shelf somewhere
-                          still holds one. That is a real thing to know and the
-                          wrong place to learn it: this row is where the
-                          narrowing is decided, not where stock is audited. The
-                          per-device rows below replace them, and say more —
-                          each device's code AND what the part is called there. */}
-                      {isIssues &&
-                        perDeviceRows(value).length === 0 &&
-                        (pairCodesByPart?.get(nameOf(value).trim().toUpperCase()) ?? [])
-                          .slice(0, MAX_PAIR_BADGES)
-                          .map((code) => (
-                            <span key={code} className="issue-pair-code" title={`Model Code ${code}`}>
-                              {parsePairCode(code)?.provisional ? parsePairCode(code).letter : code}
-                            </span>
-                          ))}
-                      {isIssues &&
-                        perDeviceRows(value).length === 0 &&
-                        (pairCodesByPart?.get(nameOf(value).trim().toUpperCase()) ?? []).length > MAX_PAIR_BADGES && (
-                          <span
-                            className="issue-pair-code"
-                            title={(pairCodesByPart?.get(nameOf(value).trim().toUpperCase()) ?? []).join(', ')}
-                          >
-                            +{(pairCodesByPart?.get(nameOf(value).trim().toUpperCase()) ?? []).length - MAX_PAIR_BADGES}
-                          </span>
-                        )}
-                      {hasTelPrefixes && optionPrefixes(value).length > 0 && (
-                        <span className="manage-item-code" title="Tel prefixes">
-                          {optionPrefixes(value).join(' / ')}
-                        </span>
-                      )}
-                      {/* An arrow rather than a bare pair: the row has to say
-                          which of the two digits is typed and which is stored,
-                          and 107 → 109 says it without a legend. */}
-                      {hasStandIn && optionStandIns(value).length > 0 && optionStandInReal(value) && (
-                        <span className="manage-item-code" title="Stand-in prefixes, and what they are stored as">
-                          {optionStandIns(value).join(' / ')} → {optionStandInReal(value)}
-                        </span>
-                      )}
-                      {/* Labelled, so the digits say which number they answer
-                          to rather than leaving it to be inferred from which
-                          list is open. An agency's stale Tel prefixes are not
-                          shown at all — they select nothing now. */}
-                      {hasIssiPrefixes && optionIssiPrefixes(value).length > 0 && (
-                        <span className="manage-item-code" title="ISSI prefixes">
-                          ISSI {optionIssiPrefixes(value).join(' / ')}
-                        </span>
-                      )}
-                      {isTechnicians &&
-                        [technicianId(value), technicianInitials2(value), technicianInitials3(value)].filter(Boolean)
-                          .length > 0 && (
-                          <span className="manage-item-code">
-                            {[technicianId(value), technicianInitials2(value), technicianInitials3(value)]
-                              .filter(Boolean)
-                              .join(' / ')}
-                          </span>
-                        )}
-                      {nameOf(value)}
-                      {isMaterials && descOf(value) && <span className="manage-item-desc">{descOf(value)}</span>}
-                      {isCompanies && companyCode(value) && (
-                        <span className="manage-item-desc">stock {companyCode(value)}</span>
-                      )}
-                      {fullFormOf(value) && <span className="manage-item-desc">{fullFormOf(value)}</span>}
-                      {/* The devices this part is on, each with the code it
-                          carries there and the name it goes by — the whole
-                          answer readable off the card, without opening it.
-
-                          Shown only once there is something a single code chip
-                          cannot say: a part on every device under one name is
-                          already fully described by "99A ACP-12" above, and
-                          repeating it ten times would bury the rows that do
-                          differ. */}
-                      {isIssues && issueCode(value) && perDeviceRows(value).length > 0 && (
-                        <span className="issue-devices">
-                          {perDeviceRows(value).map((r) => (
-                            <span key={r.model} className="issue-device" title={r.model}>
-                              <span className="manage-item-code">{r.code}</span>
-                              <span className="issue-device-name">{r.name}</span>
-                            </span>
-                          ))}
-                        </span>
-                      )}
+                    A row with no code is its own group of one and gets no
+                    head. It is not a variant of anything, and a head reading
+                    '' would invent a group. */}
+                {g.parts && (
+                  <div className="manage-group-head">
+                    <span className="manage-group-code">{g.parts}</span>
+                    <span className="manage-group-count">
+                      {g.items.length} {g.items.length === 1 ? 'variant' : 'variants'}
                     </span>
-                    <div className="manage-item-actions">
-                      {/* One edit at a time: a second open row would quietly
-                          discard the first one's unsaved changes. */}
-                      <button
-                        type="button"
-                        className="icon-edit"
-                        onClick={() => startEdit(i)}
-                        disabled={editIndex !== -1}
-                        aria-label={`Edit ${nameOf(value)}`}
-                        title={editIndex === -1 ? `Edit ${nameOf(value)}` : 'Finish the open edit first'}
-                      >
-                        ✎
-                      </button>
-                    </div>
-                  </>
+                  </div>
                 )}
+                {g.items.map(({ value, i }) => (
+                  <div key={`${nameOf(value)}-${i}`} className={`manage-row${editIndex === i ? ' editing' : ''}`}>
+                    {rowBody(value, i)}
+                  </div>
+                ))}
               </li>
             ))}
           </ul>

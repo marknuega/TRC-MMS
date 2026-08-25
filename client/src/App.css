@@ -2770,6 +2770,63 @@ button.sync-pill {
   padding: 0.4rem 0.5rem 0.4rem 0.85rem;
   min-height: 2.9rem;
 }
+/* A group of variants is ONE grid item, so the card cannot be split across a
+   column break: .manage-list is a multi-column auto-fill grid, and a card drawn
+   by joining sibling borders would come apart at every break. The <li> becomes
+   the card and stacks its rows; the row carries what the <li> used to. */
+.manage-list li.manage-group {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+.manage-group-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.35rem 0.85rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.manage-group-code {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.92rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--text-h);
+}
+.manage-group-count {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+/* Outside a group the wrapper must not exist as far as layout is concerned:
+   the <li> is still the row, and the label and the actions are still its
+   children. display:contents takes the wrapper out of the box tree entirely,
+   so an ungrouped row renders exactly as it did before it had one — and every
+   rule already written against `.manage-list li > ...` keeps matching. */
+.manage-row {
+  display: contents;
+}
+/* Inside a group each variant IS a row and needs its own box. */
+.manage-group .manage-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.4rem 0.5rem 0.4rem 0.85rem;
+  min-height: 2.9rem;
+}
+.manage-group .manage-row + .manage-row {
+  border-top: 1px solid var(--border);
+}
+/* The open editor is laid out by `.manage-list li.editing`, which is on the
+   card — so the wrapper steps out of the way again and lets those rules reach
+   the editor's own children, exactly as when the row was the <li>. */
+.manage-group .manage-row.editing {
+  display: contents;
+}
 .manage-list li span {
   font-size: 0.98rem;
   color: var(--text-h);
