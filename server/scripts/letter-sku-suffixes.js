@@ -95,37 +95,37 @@ async function main() {
     return
   }
 
-  // One transaction: a half-renamed store is worse than an un-renamed one,
-  // and the ledger rows must not outlive a rollback of the item they name.
+  // TWO statements, not two per item. A rename walks the whole store, and a
+  // round trip per row across a remote link is what timed the first two
+  // production runs out — 258 items could not finish inside five minutes, and
+  // both died at P2028 with everything correctly rolled back. One
+  // UPDATE ... FROM (VALUES ...) sends the whole mapping at once and lets
+  // Postgres do the join, which is the work it is for.
+  //
+  // Safe as one statement because no target can collide with a name already
+  // in the table: every new SKU ends in a letter, and the collision check
+  // above proved no two rows want the same one. So there is no moment
+  // mid-statement where two rows share a SKU for the unique index to refuse.
+  const params = (rows) => rows.flatMap((p) => [p.id, p.to])
+  const values = (rows) => rows.map((_, i) => `($${i * 2 + 1}::int, $${i * 2 + 2}::text)`).join(', ')
+
   const txns = await prisma.$transaction(
     async (tx) => {
-      // Which items carry ledger rows at all. Asked ONCE, and inside the
-      // transaction so it sees the same rows the updates will.
-      //
-      // Most of the store has never moved — 258 items against 17 movements,
-      // the first time this ran — and an updateMany per item is a round trip
-      // per item whether or not it has anything to update. Over a remote
-      // connection that doubled the wall time for nothing, which is half of
-      // what ran the clock out.
-      const withTxns = new Set(
-        (await tx.inventoryTxn.findMany({ select: { itemId: true }, distinct: ['itemId'] })).map((t) => t.itemId),
+      await tx.$executeRawUnsafe(
+        `UPDATE inventory_items AS i SET sku = v.sku
+           FROM (VALUES ${values(planned)}) AS v(id, sku)
+          WHERE i.id = v.id`,
+        ...params(planned),
       )
-      let moved = 0
-      for (const p of planned) {
-        await tx.inventoryItem.update({ where: { id: p.id }, data: { sku: p.to } })
-        // By item, not by the old string: an item carrying a SKU from some
-        // earlier rename should come forward with the rest of its history.
-        if (!withTxns.has(p.id)) continue
-        const { count } = await tx.inventoryTxn.updateMany({ where: { itemId: p.id }, data: { sku: p.to } })
-        moved += count
-      }
-      return moved
+      // The ledger carries a literal copy of the SKU per movement, keyed by
+      // item — so it is joined on item_id, not on the old string.
+      return await tx.$executeRawUnsafe(
+        `UPDATE inventory_txns AS t SET sku = v.sku
+           FROM (VALUES ${values(planned)}) AS v(item_id, sku)
+          WHERE t.item_id = v.item_id`,
+        ...params(planned),
+      )
     },
-    // Prisma's 5s default is sized for a request handler, not a migration
-    // that crosses the whole store one row at a time over a remote link. The
-    // first production run died on it at P2028 — cleanly, the whole rename
-    // rolled back, but it could never have finished. Five minutes, with room
-    // to wait for a connection out of the pool.
     { timeout: 5 * 60 * 1000, maxWait: 30 * 1000 },
   )
 
