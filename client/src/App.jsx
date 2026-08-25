@@ -831,6 +831,40 @@ function App({ user, onLogout }) {
     return index
   }, [inventory, options.models, equipmentCodes])
 
+  /**
+   * Item name (UPPER) -> the companies whose shelves stock it.
+   *
+   * MOT, X1 and X2 keep separate stock of the same part in one branch, and
+   * which of them a fault draws from is decided by who is paying (see
+   * client/src/company.js). Showing it on the row is what makes that visible
+   * before the save rather than after it.
+   *
+   * A part on two companies' shelves lists BOTH, unlike modelByPart above,
+   * which goes blank when a second model stocks something. The reason they
+   * differ: a Model Code is the item's one identity, so two of them means the
+   * row can no longer name it — while two companies is not a conflict at all,
+   * it is the ordinary case this whole dimension exists for, and the honest
+   * answer is to say both.
+   *
+   * Shared stock (blank company) names no company and adds nothing, which is
+   * right: it is the stock that belongs to whoever needs it.
+   */
+  const companiesByPart = useMemo(() => {
+    const index = new Map()
+    for (const it of inventory ?? []) {
+      const company = String(it.company ?? '')
+        .trim()
+        .toUpperCase()
+      if (!company) continue
+      for (const name of namesOfItem(it)) {
+        const at = index.get(name)
+        if (at) at.add(company)
+        else index.set(name, new Set([company]))
+      }
+    }
+    return new Map([...index].map(([name, set]) => [name, [...set].sort()]))
+  }, [inventory])
+
   // ---- ISSUE suggestions ---------------------------------------------------
   // Coded issues first — they are the ones a code can be typed for later, and
   // the ones the WhatsApp decoder can read back — then everything else that is
@@ -933,14 +967,16 @@ function App({ user, onLogout }) {
     // glitch; it is the part telling you it lives on the TH1n's shelf and the
     // radio in front of you is not a TH1n.
     return ordered.map((s) => {
-      const stocked = modelByPart.get(s.name.trim().toUpperCase())?.pairCode
+      const key = s.name.trim().toUpperCase()
+      const stocked = modelByPart.get(key)?.pairCode
       return {
         ...s,
         pairCode: stocked || (form.model ? pairCodeForFault({ model: form.model, issue: s.name }, pairVocab) : ''),
         stocked: Boolean(stocked),
+        companies: companiesByPart.get(key) ?? [],
       }
     })
-  }, [issueSuggestions, saved, entries, form.model, modelByPart, pairVocab])
+  }, [issueSuggestions, saved, entries, form.model, modelByPart, companiesByPart, pairVocab])
 
   /**
    * Drop a suggestion from the admin-managed list it belongs to.

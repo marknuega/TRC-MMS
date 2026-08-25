@@ -2387,6 +2387,29 @@ button.sync-pill {
   line-height: 1;
   color: var(--warn-ink);
 }
+/* Which company's shelf the part is on — the third badge on the row, after
+   the Model Code and the parts code. Green rather than a third shade of the
+   other two: it answers a different question (whose stock, not what part), and
+   a colour of its own is what stops the row reading as one long code. */
+.issue-company {
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.2rem;
+  height: 1.2rem;
+  padding: 0 0.3rem;
+  border: 1px solid color-mix(in srgb, var(--success) 40%, var(--border));
+  border-radius: 999px;
+  background: var(--success-soft);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.56rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.03em;
+  color: var(--success-ink);
+}
 /* The same badge, sitting inside the ISSUE field for the value already chosen.
    The wrapper is already positioned (see .issue-input above, which the menu
    hangs off). Click-through, so the badge is not a hole in the middle of the
