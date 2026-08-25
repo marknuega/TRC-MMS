@@ -602,6 +602,14 @@ h2 {
   font-size: 0.85em;
 }
 
+/* What a Model Code's device letter means, beside the code — quieter than the
+   code itself, because the code is the identity and this is the gloss on it. */
+.pair-device {
+  color: var(--muted);
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+
 /* ---- Form ---- */
 .entry-form fieldset {
   border: 1px solid var(--border);
