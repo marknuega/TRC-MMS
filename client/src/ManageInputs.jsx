@@ -11,6 +11,9 @@ import {
   issueCode,
   issueModels,
   issueNarrowed,
+  issueNameForModel,
+  issueNameOverrides,
+  withIssueName,
   issueName,
   issueParts,
   issueVariant,
@@ -100,6 +103,11 @@ export default function ManageInputs({
   // "not narrowed", an array is the devices it is on — see withModels.
   const [newModels, setNewModels] = useState(null)
   const [editModels, setEditModels] = useState(null)
+  // Per-device name overrides for the open row: { <model>: <part name> }. One
+  // code can be a different physical part per radio, and this is where that is
+  // said. Only the exceptions live here — a device left blank is called what
+  // the row itself is called.
+  const [editNames, setEditNames] = useState({})
   const [editLetter, setEditLetter] = useState('')
   const [editLetterWas, setEditLetterWas] = useState('')
   const [editPrefixes, setEditPrefixes] = useState('')
@@ -223,7 +231,14 @@ export default function ManageInputs({
       // narrowed and the key stays off; an array is stored as it is, EMPTY
       // included, or a part cleared to no devices would come back from a
       // rename offered on every one of them.
-      return withModels({ name, parts: f.parts.trim(), variant: f.variant.trim().toUpperCase() }, f.models ?? null)
+      // Overrides applied through withIssueName so the "same as the row's own
+      // name" case is dropped rather than stored — the row already says it,
+      // and a stored copy is a second thing to drift.
+      let item = withModels({ name, parts: f.parts.trim(), variant: f.variant.trim().toUpperCase() }, f.models ?? null)
+      for (const [model, partName] of Object.entries(f.names ?? {})) {
+        item = withIssueName(item, model, partName)
+      }
+      return item
     }
     if (isMaterials) return { name, description: f.desc.trim() }
     // Stays a plain string when no code is given, exactly as every companies
@@ -427,6 +442,7 @@ export default function ManageInputs({
     desc: newDesc,
     parts: newParts,
     models: newModels,
+    names: {},
     variant: newVariant,
     prefixes: newPrefixes,
     issiPrefixes: newIssiPrefixes,
@@ -442,6 +458,7 @@ export default function ManageInputs({
     desc: editDesc,
     parts: editParts,
     models: editModels,
+    names: editNames,
     variant: editVariant,
     prefixes: editPrefixes,
     issiPrefixes: editIssiPrefixes,
@@ -464,6 +481,59 @@ export default function ManageInputs({
   // The devices a row is currently ticked for. An untouched part is ticked
   // everywhere, because that is what it means.
   const modelsTickedOn = (value) => (issueNarrowed(value) ? issueModels(value) : deviceModels)
+
+  // The device letter a model is written by, for showing the code a part gets
+  // on it. Same lookup deviceModels filtered on, so every model listed there
+  // has one.
+  const letterOf = (model) => deviceLetterFor(model, map?.equipmentCodes ?? FALLBACK.equipmentCodes) || ''
+
+  // The code one device gives this part+variant — H + 99 + A = H99A. Shown on
+  // the device's own row, because a code read off the row beats one assembled
+  // from three separate fields in somebody's head. '' while either half is
+  // still half-typed: a partial code is not a code.
+  /**
+   * The per-device breakdown a card shows: [{ model, code, name }].
+   *
+   * Empty when there is nothing the single code chip does not already say —
+   * an unnarrowed part called the same thing on every device. A part that is
+   * narrowed, or that goes by a different name somewhere, has rows.
+   */
+  const perDeviceRows = (value) => {
+    if (!isIssues) return []
+    const overrides = issueNameOverrides(value)
+    if (!issueNarrowed(value) && Object.keys(overrides).length === 0) return []
+    return modelsTickedOn(value)
+      .map((m) => ({
+        model: m,
+        code: codeFor(m, issueParts(value), issueVariant(value)),
+        name: issueNameForModel(value, m),
+      }))
+      .filter((r) => r.code)
+  }
+
+  const codeFor = (model, parts, variant) => {
+    const p = String(parts ?? '').trim()
+    const v = String(variant ?? '')
+      .trim()
+      .toUpperCase()
+    if (!PARTS_RE.test(p) || !VARIANT_RE.test(v)) return ''
+    const letter = letterOf(model)
+    return letter ? `${letter}${p}${v}` : ''
+  }
+
+  // Ticking inside the open edit row. Untouched means every device, so that is
+  // the set the first untick works from — the same rule toggleIssueModel
+  // follows in the grid, because they are the one field.
+  const toggleEditModel = (model) => {
+    const set = new Set(editModels ?? deviceModels)
+    if (set.has(model)) set.delete(model)
+    else set.add(model)
+    // Back to every device is stored as "never narrowed", not as a list that
+    // happens to be complete — so a device added to the code map later is
+    // offered for this part too, instead of being silently excluded by a list
+    // written before it existed.
+    setEditModels(set.size === deviceModels.length ? null : deviceModels.filter((m) => set.has(m)))
+  }
 
   function setIssueModels(index, models) {
     onChange(
@@ -580,6 +650,7 @@ export default function ManageInputs({
     // answer to show, and a picker opening on one of them would look like an
     // offer to move the other.
     setEditModels(isIssues && issueNarrowed(list[i]) ? issueModels(list[i]) : null)
+    setEditNames(isIssues ? issueNameOverrides(list[i]) : {})
     const stocked = isIssues ? (pairCodesByPart?.get(nameOf(list[i]).trim().toUpperCase()) ?? []) : []
     const letter = stocked.length === 1 ? (parsePairCode(stocked[0])?.letter ?? '') : ''
     setEditLetter(letter)
@@ -622,6 +693,7 @@ export default function ManageInputs({
     setEditParts('')
     setEditVariant('')
     setEditModels(null)
+    setEditNames({})
     setEditLetter('')
     setEditLetterWas('')
     setEditPrefixes('')
@@ -1010,29 +1082,64 @@ export default function ManageInputs({
                     <div className="edit-fields" onKeyDown={(e) => advanceOnEnter(e, saveEdit)}>
                       {isIssues && (
                         <div className="edit-code-row">
-                          {/* The device that owns the stock, beside the code
-                              that names the part — the two halves of the Model
-                              Code, editable in the place the card shows them.
-                              Blank leaves the shelves exactly as they are; it
-                              is not an instruction to un-stock anything. */}
-                          {deviceLetters.length > 0 && (
-                            <label className="field-code">
-                              Model Code
-                              <select
-                                className="edit-input"
-                                value={editLetter}
-                                onChange={(e) => setEditLetter(e.target.value)}
-                                onKeyDown={cancelOnEscape}
-                                title="Which model's shelf this part comes off"
-                              >
-                                <option value="">— leave as is —</option>
-                                {deviceLetters.map((d) => (
-                                  <option key={d.letter} value={d.letter}>
-                                    {d.letter} — {d.label}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
+                          {/* Which devices use this part, beside the code that
+                              names it — the two halves of a Model Code in the
+                              one place, so the codes it makes (T99C, C99C) can
+                              be read off rather than assembled in somebody's
+                              head. Writes the SAME field the grid below ticks;
+                              they are two views of one answer, not two answers.
+
+                              Everything starts ticked, which is what a part
+                              nobody has narrowed means. */}
+                          {deviceModels.length > 0 && (
+                            <fieldset className="field-models">
+                              <legend>Models that use this part</legend>
+                              <div className="model-rows">
+                                {deviceModels.map((m) => {
+                                  const on = (editModels ?? deviceModels).includes(m)
+                                  return (
+                                    <div key={m} className={on ? 'model-row on' : 'model-row'}>
+                                      <label className="model-tick" title={m}>
+                                        <input
+                                          type="checkbox"
+                                          checked={on}
+                                          onChange={() => toggleEditModel(m)}
+                                          onKeyDown={cancelOnEscape}
+                                        />
+                                        <span className="model-tick-letter">{letterOf(m)}</span>
+                                        <span className="model-tick-name">{m}</span>
+                                      </label>
+                                      {/* The code this device gives the part. */}
+                                      <span className="model-row-code">
+                                        {on ? codeFor(m, editParts, editVariant) : ''}
+                                      </span>
+                                      {/* What the part is CALLED here. Blank is
+                                          "same as the row's own name", which is
+                                          most devices — so the placeholder
+                                          shows that name rather than leaving
+                                          the box looking unanswered. */}
+                                      {on && (
+                                        <input
+                                          className="edit-input model-row-name"
+                                          value={editNames[m] ?? ''}
+                                          onChange={(e) =>
+                                            setEditNames((prev) => {
+                                              const next = { ...prev }
+                                              if (e.target.value.trim()) next[m] = e.target.value
+                                              else delete next[m]
+                                              return next
+                                            })
+                                          }
+                                          onKeyDown={cancelOnEscape}
+                                          placeholder={editValue || 'same as above'}
+                                          aria-label={`What this part is called on ${m}`}
+                                        />
+                                      )}
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </fieldset>
                           )}
                           <label className="field-code">
                             Parts Code
@@ -1062,6 +1169,31 @@ export default function ManageInputs({
                               placeholder="B"
                             />
                           </label>
+                          {/* Where the STOCK sits, which is a different
+                              question from which models use the part: a code
+                              can be right on four devices while the box lives
+                              on one shelf. Single on purpose — an item carries
+                              one Model Code, so pointing it at two shelves is
+                              not a thing that can be stored. */}
+                          {deviceLetters.length > 0 && (
+                            <label className="field-code">
+                              Stock shelf
+                              <select
+                                className="edit-input"
+                                value={editLetter}
+                                onChange={(e) => setEditLetter(e.target.value)}
+                                onKeyDown={cancelOnEscape}
+                                title="Move this part's stock onto one model's shelf. Leave as is to touch no inventory."
+                              >
+                                <option value="">— leave as is —</option>
+                                {deviceLetters.map((d) => (
+                                  <option key={d.letter} value={d.letter}>
+                                    {d.letter} — {d.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          )}
                         </div>
                       )}
                       {hasPrefixes && (
@@ -1295,6 +1427,25 @@ export default function ManageInputs({
                         <span className="manage-item-desc">stock {companyCode(value)}</span>
                       )}
                       {fullFormOf(value) && <span className="manage-item-desc">{fullFormOf(value)}</span>}
+                      {/* The devices this part is on, each with the code it
+                          carries there and the name it goes by — the whole
+                          answer readable off the card, without opening it.
+
+                          Shown only once there is something a single code chip
+                          cannot say: a part on every device under one name is
+                          already fully described by "99A ACP-12" above, and
+                          repeating it ten times would bury the rows that do
+                          differ. */}
+                      {isIssues && issueCode(value) && perDeviceRows(value).length > 0 && (
+                        <span className="issue-devices">
+                          {perDeviceRows(value).map((r) => (
+                            <span key={r.model} className="issue-device" title={r.model}>
+                              <span className="manage-item-code">{r.code}</span>
+                              <span className="issue-device-name">{r.name}</span>
+                            </span>
+                          ))}
+                        </span>
+                      )}
                     </span>
                     <div className="manage-item-actions">
                       {/* One edit at a time: a second open row would quietly

@@ -803,8 +803,22 @@ export function technicianIdMap(technicians) {
 // entry — so a second field could only ever disagree with the first.
 //
 // The variant letter is part of the part's identity here, not a build
-// selector: 99A is the Charger-818 and 99B the Charger-DEY — two different
-// chargers, not two builds of one.
+// selector: 99A is the charger that ships with the radio and 99B the spare
+// desk charger — two different chargers, not two builds of one.
+//
+// But WHICH charger that is depends on the radio. 99A is the ACP-12 on a TH1N
+// and a THR9, and the Charger818 on an STP9000: one slot in the vocabulary,
+// three devices, two physical parts. So a coded row may carry `names`, a
+// per-device override:
+//
+//   { name: 'ACP-12', parts: '99', variant: 'A',
+//     models: ['TH1N', 'THR9', 'STP9000'],
+//     names:  { STP9000: 'Charger818' } }
+//
+// `name` stays the row's own name and the answer for every device without an
+// override, so a row that has never needed one is byte-for-byte what it always
+// was. Only the exceptions are stored, which is also what keeps the list
+// readable: a part called the same thing everywhere says so by staying silent.
 // ---------------------------------------------------------------------------
 
 export const PARTS_RE = /^\d{2}$/
@@ -861,6 +875,86 @@ export const issueNarrowed = (v) => Array.isArray(asObj(v)?.models)
 // Case and punctuation carry no meaning when comparing two model names —
 // "TMR 880i" and "TMR880I" are the one device.
 const modelKey = (v) => upTrim(v).replace(/[^A-Z0-9]/g, '')
+
+/**
+ * The per-device name overrides, as stored: { <model name>: <part name> }.
+ *
+ * Keyed by the model's own name rather than a normalised key so the stored
+ * JSON stays readable by a person — matching is done through modelKey below,
+ * which is what makes "TMR 880i" and "TMR880I" the one device anyway.
+ */
+export const issueNameOverrides = (v) => {
+  const raw = asObj(v)?.names
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+  const out = {}
+  for (const [model, name] of Object.entries(raw)) {
+    const m = String(model ?? '').trim()
+    const n = String(name ?? '').trim()
+    if (m && n) out[m] = n
+  }
+  return out
+}
+
+/**
+ * What this part is CALLED on a given device.
+ *
+ * Falls back to the row's own name, which is the answer for every device
+ * nobody has overridden — and for every row saved before overrides existed.
+ * With no device asked about there is nothing to override against, so the
+ * row's own name is again the answer.
+ */
+export function issueNameForModel(v, model) {
+  const want = modelKey(model)
+  if (want) {
+    for (const [m, name] of Object.entries(issueNameOverrides(v))) {
+      if (modelKey(m) === want) return name
+    }
+  }
+  return issueName(v)
+}
+
+/**
+ * Every name this one row answers to — its own, plus each override.
+ *
+ * Used where a name has to be resolved back to its code without knowing which
+ * device it came off: a fault stores the NAME it was written by, and
+ * "Charger818" has to find 99A the same way "ACP-12" does. Deduped past case
+ * and punctuation, so a row whose override merely re-spells its own name does
+ * not answer twice.
+ */
+export function issueAllNames(v) {
+  const out = []
+  const seen = new Set()
+  for (const n of [issueName(v), ...Object.values(issueNameOverrides(v))]) {
+    const name = String(n ?? '').trim()
+    const key = upTrim(name).replace(/[^A-Z0-9]/g, '')
+    if (name && !seen.has(key)) {
+      seen.add(key)
+      out.push(name)
+    }
+  }
+  return out
+}
+
+/**
+ * A row with one device's name changed. An override equal to the row's own
+ * name, or blank, is REMOVED rather than stored: the row already says that,
+ * and a stored duplicate is a second copy to drift out of step with the first.
+ */
+export function withIssueName(v, model, name) {
+  const base = asObj(v) ? { ...v } : { name: String(v ?? '') }
+  const want = modelKey(model)
+  if (!want) return base
+  const next = {}
+  for (const [m, n] of Object.entries(issueNameOverrides(v))) {
+    if (modelKey(m) !== want) next[m] = n
+  }
+  const clean = String(name ?? '').trim()
+  if (clean && modelKey(clean) !== modelKey(issueName(v))) next[String(model).trim()] = clean
+  if (Object.keys(next).length) base.names = next
+  else delete base.names
+  return base
+}
 
 /**
  * Whether a part may be offered for a model. A part that names no models is

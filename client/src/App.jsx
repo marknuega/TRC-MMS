@@ -48,6 +48,8 @@ import {
   issueName,
   issueCode,
   issueFitsModel,
+  issueNameForModel,
+  issueAllNames,
   technicianName,
   optionNames,
   telPick,
@@ -880,12 +882,18 @@ function App({ user, onLogout }) {
     // otherwise in Manage inputs -> Which devices use each part. With no Model
     // chosen there is nothing to narrow against, so everything is offered.
     const fits = (it) => issueFitsModel(it, model)
+    // Offered under the name THIS device calls it. One code can be a different
+    // physical part per radio — 99A is the ACP-12 on a TH1N and the Charger818
+    // on an STP9000 — and offering an STP9000 the Airbus name would have the
+    // technician write a part that is not in the box in front of them.
     for (const it of options.issueTypes ?? []) {
       const code = issueCode(it)
-      if (code && fits(it) && stockedForThis(issueName(it))) add(issueName(it), code)
+      const name = issueNameForModel(it, model)
+      if (code && fits(it) && stockedForThis(name)) add(name, code)
     }
     for (const it of options.issueTypes ?? []) {
-      if (!issueCode(it) && fits(it) && stockedForThis(issueName(it))) add(issueName(it))
+      const name = issueNameForModel(it, model)
+      if (!issueCode(it) && fits(it) && stockedForThis(name)) add(name)
     }
     for (const a of options.actions ?? []) {
       if (!['CHANGE', 'REPAIR', 'NEW'].includes(String(a).toUpperCase())) add(a, '', 'action')
@@ -978,15 +986,22 @@ function App({ user, onLogout }) {
   function assignIssueCode(name, parts, variant) {
     const code = `${parts}${variant}`
     const list = options.issueTypes ?? []
-    const clash = list.find((it) => issueCode(it) === code && sameName(issueName(it), name) === false)
+    // Matched against EVERY name a row answers to, its per-device overrides
+    // included. "Charger818" is 99A's name on an STP9000, so claiming 99A for
+    // it is that row confirming what it already says — not a second row trying
+    // to take the code, which is what refusing it would imply.
+    const answers = (it) => issueAllNames(it).some((n) => sameName(n, name))
+    const clash = list.find((it) => issueCode(it) === code && !answers(it))
     if (clash) return `${code} is already ${issueName(clash)}`
 
-    const at = list.findIndex((it) => sameName(issueName(it), name))
-    const coded = {
-      name: at >= 0 ? issueName(list[at]) : name,
-      parts,
-      variant,
-    }
+    const at = list.findIndex(answers)
+    // Spread the row rather than rebuilding it: a part narrowed to three
+    // devices, or carrying a name of its own on one of them, keeps both when
+    // its code is claimed from the entry form. Rebuilt from three fields, it
+    // silently lost them — the narrowing simply stopped applying and the part
+    // went back to being offered everywhere.
+    const existing = at >= 0 ? (typeof list[at] === 'string' ? { name: list[at] } : list[at]) : null
+    const coded = existing ? { ...existing, name: issueName(list[at]), parts, variant } : { name, parts, variant }
     // An issue already on the list is updated in place, keeping its position;
     // an action or inventory name that has never been an issue is appended.
     const next = at >= 0 ? list.map((it, i) => (i === at ? coded : it)) : [...list, coded]

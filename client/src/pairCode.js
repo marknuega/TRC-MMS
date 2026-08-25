@@ -47,7 +47,7 @@
  * No React in this file: the server imports it too.
  */
 
-import { issueCode, issueName } from './options.js'
+import { issueCode, issueAllNames } from './options.js'
 
 /** The four-character form: letter, two digits, variant letter. */
 export const REAL_PAIR_RE = /^[A-Z]\d{2}[A-Z]$/
@@ -185,12 +185,19 @@ export function normalizePairCode(code) {
  * "SPEAKER LOUD"'s code and draw the wrong item off the shelf for good. An
  * unclaimed name simply gets a provisional code instead, which is correct and
  * reversible.
+ *
+ * EVERY name the row answers to is checked, not just its own. One code can be
+ * a different physical part per device — 99A is the ACP-12 on a TH1N and the
+ * Charger818 on an STP9000 — and a fault stores the name it was written by, so
+ * "Charger818" has to reach 99A exactly as "ACP-12" does. Without this the
+ * override name claims nothing, and every fault written by it silently falls
+ * through to a provisional code and its own separate shelf.
  */
 export function claimedPartsCode(issue, issueTypes) {
   const want = norm(issue)
   if (!want) return ''
   for (const it of issueTypes ?? []) {
-    if (norm(issueName(it)) === want) {
+    if (issueAllNames(it).some((n) => norm(n) === want)) {
       const code = issueCode(it)
       if (code) return code
     }

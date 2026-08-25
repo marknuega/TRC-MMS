@@ -172,3 +172,45 @@ describe('stockedElsewhere', () => {
     assert.equal(stockedElsewhere(['nonsense', 'C45A'], 'H'), true)
   })
 })
+
+// ---------------------------------------------------------------------------
+// A fault written by a per-device name must reach that device's shelf.
+//
+// One code can be a different physical part per radio: 99A is the ACP-12 on a
+// TH1N and the Charger818 on an STP9000. A fault stores the NAME it was
+// written by, so if "Charger818" claimed nothing, every STP9000 charger fault
+// would fall through to a provisional code and its own separate shelf — stock
+// drawn off the wrong box, silently, inside the save transaction.
+// ---------------------------------------------------------------------------
+describe('per-device names resolve to the shared code', () => {
+  const ISSUE_TYPES = [
+    {
+      name: 'ACP-12',
+      parts: '99',
+      variant: 'A',
+      models: ['TH1N', 'THR9', 'STP9000'],
+      names: { STP9000: 'Charger818' },
+    },
+  ]
+  const VOCAB = { equipmentCodes: CODEMAP_SEED.equipmentCodes, issueTypes: ISSUE_TYPES }
+
+  test('the row own name claims the code', () => {
+    assert.equal(claimedPartsCode('ACP-12', ISSUE_TYPES), '99A')
+  })
+
+  test('an override name claims the same code', () => {
+    assert.equal(claimedPartsCode('Charger818', ISSUE_TYPES), '99A')
+  })
+
+  test('each device draws its own pair code from its own name', () => {
+    assert.equal(pairCodeForFault({ model: 'TH1N', issue: 'ACP-12' }, VOCAB), 'H99A')
+    assert.equal(pairCodeForFault({ model: 'THR9', issue: 'ACP-12' }, VOCAB), 'R99A')
+    assert.equal(pairCodeForFault({ model: 'STP9000', issue: 'Charger818' }, VOCAB), 'T99A')
+  })
+
+  // Nothing loosens: an unrelated name still claims nothing and still gets a
+  // provisional code, which is the reversible answer.
+  test('a name nothing claims is still unclaimed', () => {
+    assert.equal(claimedPartsCode('SOME OTHER PART', ISSUE_TYPES), '')
+  })
+})

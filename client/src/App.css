@@ -2784,6 +2784,101 @@ button.sync-pill {
   width: 8rem;
   text-align: left;
 }
+/* Which devices use a part — ticked in the edit row, beside the code that
+   names it, so the two halves of a Model Code are answered in one place. The
+   grid lower down ticks the same field; this is the close-up of one row. */
+.field-models {
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  padding: 0.3rem 0.5rem 0.45rem;
+  margin: 0;
+  min-width: 0;
+}
+.field-models legend {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--muted);
+  padding: 0 0.25rem;
+}
+.model-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+/* One device per line: tick, its code, and what the part is called there.
+   A column each, so the codes line up down the card and a name that differs
+   from the row above is visible without reading. */
+.model-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 3.4rem minmax(0, 1.4fr);
+  align-items: center;
+  gap: 0.35rem;
+}
+/* An unticked device stays legible but recedes — it is an option, not an
+   answer, and greying it out is what says so. */
+.model-row:not(.on) {
+  opacity: 0.55;
+}
+.model-row-code {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--primary);
+  text-align: center;
+}
+.model-row-name {
+  min-width: 0;
+  font-size: 0.78rem;
+}
+/* Each device reads as its letter first — the letter is what lands in the
+   code, so it is the part worth seeing at a glance. */
+.model-tick {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--muted);
+  cursor: pointer;
+}
+.model-row.on .model-tick {
+  color: var(--text-h);
+  font-weight: 600;
+}
+.model-tick-letter {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-weight: 700;
+  color: var(--primary);
+}
+/* A long device name must never push the row wider than the card. */
+.model-tick-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The per-device breakdown on a closed card: each device's code and the name
+   the part goes by there. Wraps, because a part can be on ten devices. */
+.issue-devices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 0.4rem;
+  margin-top: 0.15rem;
+}
+.issue-device {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.25rem;
+  max-width: 100%;
+}
+.issue-device-name {
+  font-size: 0.75rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 /* In the edit row the two code fields share a line above the description. */
 .edit-code-row {
   display: flex;
