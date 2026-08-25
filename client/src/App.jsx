@@ -883,6 +883,33 @@ function App({ user, onLogout }) {
     return new Map([...index].map(([name, set]) => [name, [...set].sort()]))
   }, [inventory])
 
+  /**
+   * Model Code -> the companies whose shelves stock it.
+   *
+   * The same question companiesByPart answers, asked the other way round,
+   * because a name is not how a fault finds its box. A save matches on the
+   * Model Code FIRST and only falls back to the name (see collectUsage in
+   * server/src/routes/savedReports.js), so an issue can draw stock off a row
+   * whose name it never shares: "Speaker82" claims parts code 45B, a TH1n
+   * makes that H45B, and the row holding H45B is listed as "Speaker". Indexed
+   * by name alone the menu had nothing to say about that row and showed no
+   * company badge at all — while the save went on quietly deducting from it.
+   */
+  const companiesByPairCode = useMemo(() => {
+    const index = new Map()
+    for (const it of inventory ?? []) {
+      const code = normalizePairCode(it.pairCode)
+      const company = String(it.company ?? '')
+        .trim()
+        .toUpperCase()
+      if (!code || !company) continue
+      const at = index.get(code)
+      if (at) at.add(company)
+      else index.set(code, new Set([company]))
+    }
+    return new Map([...index].map(([code, set]) => [code, [...set].sort()]))
+  }, [inventory])
+
   // ---- ISSUE suggestions ---------------------------------------------------
   // Coded issues first — they are the ones a code can be typed for later, and
   // the ones the WhatsApp decoder can read back — then everything else that is
@@ -997,13 +1024,19 @@ function App({ user, onLogout }) {
         pairCode: stocked || (form.model ? pairCodeForFault({ model: form.model, issue: s.name }, pairVocab) : ''),
         stocked: Boolean(stocked),
       }
-      const companies = companiesByPart.get(key) ?? []
+      // Model Code first, name second — the order a save resolves in, so the
+      // badge names the shelf the stock will actually come off rather than a
+      // same-named row the save would never reach.
+      const companies =
+        (row.pairCode ? companiesByPairCode.get(normalizePairCode(row.pairCode)) : null) ??
+        companiesByPart.get(key) ??
+        []
       // Shared stock names no company and stays one row — there is nothing to
       // choose between, and splitting it would offer the same box twice.
       if (companies.length === 0) return [{ ...row, companies: [], company: '' }]
       return companies.map((c) => ({ ...row, companies: [c], company: c }))
     })
-  }, [issueSuggestions, saved, entries, form.model, modelByPart, companiesByPart, pairVocab])
+  }, [issueSuggestions, saved, entries, form.model, modelByPart, companiesByPart, companiesByPairCode, pairVocab])
 
   /**
    * Give an issue a CDS code from inside the entry form, and keep it.
