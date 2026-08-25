@@ -104,6 +104,26 @@ export function companyCodeMap(companies) {
  * this existed. See resolveInventoryUsage in routes/savedReports.js for what
  * that fallback refuses to guess at.
  */
+/**
+ * The company NAME a shelf code belongs to — 'MOT' -> 'MOTECO'.
+ *
+ * The other direction of companyCodeMap, for the places that hold a code and
+ * need the word: a fault records the company in the words the report prints,
+ * so picking a part off MOT's shelf has to set 'MOTECO', not 'MOT'.
+ *
+ * '' when no entry claims the code, which is the same "unnarrowed" answer
+ * everything else here gives: the caller selects nothing rather than writing a
+ * company the dropdown does not offer.
+ */
+export function companyNameForCode(code, companies) {
+  const want = normalizeCompany(code)
+  if (!want) return ''
+  for (const it of companies ?? []) {
+    if (companyCode(it) === want) return companyName(it).trim()
+  }
+  return ''
+}
+
 export function shelfCompanyForFault(faultCompany, companies) {
   const name = String(faultCompany ?? '')
     .trim()

@@ -35,6 +35,10 @@ const VARIANT_RE = /^[A-Z]$/
 export default function IssueInput({
   value,
   onChange,
+  // (companyCode) => void — the row picked names a company's shelf, so the
+  // Company field follows it. An auto-select, not a lock: the caller may set
+  // it and the person may change it afterwards.
+  onPickCompany,
   suggestions = [], // [{ name, code, pairCode, companies, source, removable }] — either code '' when it has none
   onAssignCode, // (name, parts, variant) => string|void — a string is an error
   onAssignPairCode, // async (name, letter) => string|'' — puts the item on that model's shelf
@@ -111,8 +115,10 @@ export default function IssueInput({
     return suggestions.find((s) => s.name.trim().toUpperCase() === want)?.pairCode ?? ''
   }, [value, suggestions])
 
-  const commit = (name) => {
+  const commit = (name, company = '') => {
     onChange({ target: { value: name } })
+    // After the name, so a handler reading both sees the issue already set.
+    if (company) onPickCompany?.(company)
     setOpen(false)
     setCoding(null)
   }
@@ -131,7 +137,7 @@ export default function IssueInput({
     // Otherwise it belongs to the form, which is what submits the entry.
     if (e.key === 'Enter' && open && activeIndex >= 0 && filtered[activeIndex]) {
       e.preventDefault()
-      commit(filtered[activeIndex].name)
+      commit(filtered[activeIndex].name, filtered[activeIndex].company)
     }
   }
 
@@ -199,7 +205,9 @@ export default function IssueInput({
       const error = await onAssignPairCode?.(coding.name, letter)
       if (error) return setCoding((c) => ({ ...c, error }))
     }
-    commit(coding.name) // coded and chosen in one move — "update the code to proceed"
+    // Coded and chosen in one move — "update the code to proceed" — so it
+    // carries the row's company exactly as picking the row would have.
+    commit(coding.name, coding.row?.company)
   }
 
   return (
@@ -250,7 +258,7 @@ export default function IssueInput({
               onMouseDown={(e) => {
                 if (!e.target.closest?.('.issue-code-form')) e.preventDefault()
               }}
-              onClick={() => commit(s.name)}
+              onClick={() => commit(s.name, s.company)}
             >
               <span className="issue-opt-name" title={s.name}>
                 {s.name}
