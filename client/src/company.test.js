@@ -8,7 +8,7 @@
  */
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
-import { companyFromSku, companyCodeMap, shelfCompanyForFault } from './company.js'
+import { companyFromSku, companyCodeMap, shelfCompanyForFault, companyNameForCode } from './company.js'
 
 describe('the company in a SKU', () => {
   test('is the segment before the first hyphen', () => {
@@ -55,5 +55,30 @@ describe('a fault company to a shelf', () => {
 
   test('skips uncoded entries rather than mapping them to blank', () => {
     assert.deepEqual(companyCodeMap(companies), { MOTECO: 'MOT', 'PROJECT X': 'X1' })
+  })
+})
+
+// Picking a part off MOT's shelf has to set the company the REPORT prints,
+// which is the word, not the code.
+describe('a shelf code to a company name', () => {
+  const companies = [{ name: 'MOTECO', code: 'MOT' }, { name: 'PROJECT X', code: 'X1' }, 'FREE']
+
+  test('resolves the code back to the name', () => {
+    assert.equal(companyNameForCode('MOT', companies), 'MOTECO')
+    assert.equal(companyNameForCode('X1', companies), 'PROJECT X')
+  })
+
+  test('is case and punctuation insensitive on the code', () => {
+    assert.equal(companyNameForCode('mot', companies), 'MOTECO')
+  })
+
+  // Selecting nothing beats writing a company the dropdown does not offer.
+  test('is blank for a code nothing claims', () => {
+    assert.equal(companyNameForCode('ZZ', companies), '')
+    assert.equal(companyNameForCode('', companies), '')
+  })
+
+  test('round-trips with shelfCompanyForFault', () => {
+    assert.equal(shelfCompanyForFault(companyNameForCode('X1', companies), companies), 'X1')
   })
 })

@@ -72,6 +72,7 @@ import ReferenceCard from './ReferenceCard'
 import Toast from './Toast'
 import CodeEntry from './CodeEntry'
 import SearchSelect from './SearchSelect'
+import { companyNameForCode } from './company.js'
 import IssueInput from './IssueInput'
 import { Credit, Copyright, COPYRIGHT_HTML } from './copyright'
 import { BrandMark } from './brand'
@@ -831,6 +832,40 @@ function App({ user, onLogout }) {
     return index
   }, [inventory, options.models, equipmentCodes])
 
+  /**
+   * Item name (UPPER) -> the companies whose shelves stock it.
+   *
+   * MOT, X1 and X2 keep separate stock of the same part in one branch, and
+   * which of them a fault draws from is decided by who is paying (see
+   * client/src/company.js). Showing it on the row is what makes that visible
+   * before the save rather than after it.
+   *
+   * A part on two companies' shelves lists BOTH, unlike modelByPart above,
+   * which goes blank when a second model stocks something. The reason they
+   * differ: a Model Code is the item's one identity, so two of them means the
+   * row can no longer name it — while two companies is not a conflict at all,
+   * it is the ordinary case this whole dimension exists for, and the honest
+   * answer is to say both.
+   *
+   * Shared stock (blank company) names no company and adds nothing, which is
+   * right: it is the stock that belongs to whoever needs it.
+   */
+  const companiesByPart = useMemo(() => {
+    const index = new Map()
+    for (const it of inventory ?? []) {
+      const company = String(it.company ?? '')
+        .trim()
+        .toUpperCase()
+      if (!company) continue
+      for (const name of namesOfItem(it)) {
+        const at = index.get(name)
+        if (at) at.add(company)
+        else index.set(name, new Set([company]))
+      }
+    }
+    return new Map([...index].map(([name, set]) => [name, [...set].sort()]))
+  }, [inventory])
+
   // ---- ISSUE suggestions ---------------------------------------------------
   // Coded issues first — they are the ones a code can be typed for later, and
   // the ones the WhatsApp decoder can read back — then everything else that is
@@ -932,15 +967,27 @@ function App({ user, onLogout }) {
     // So a row can show H99T while the Model says Carkit. That is not a
     // glitch; it is the part telling you it lives on the TH1n's shelf and the
     // radio in front of you is not a TH1n.
-    return ordered.map((s) => {
-      const stocked = modelByPart.get(s.name.trim().toUpperCase())?.pairCode
-      return {
+    // A part stocked by more than one company becomes one ROW per company,
+    // not one row naming several. The two boxes are different stock with
+    // different counts, and the choice between them is the choice of who pays
+    // — so it is made here, by picking a row, rather than left to be made
+    // implicitly by the Company field afterwards. Picking one selects that
+    // company (see setFault), the same courtesy a part already does for Model.
+    return ordered.flatMap((s) => {
+      const key = s.name.trim().toUpperCase()
+      const stocked = modelByPart.get(key)?.pairCode
+      const row = {
         ...s,
         pairCode: stocked || (form.model ? pairCodeForFault({ model: form.model, issue: s.name }, pairVocab) : ''),
         stocked: Boolean(stocked),
       }
+      const companies = companiesByPart.get(key) ?? []
+      // Shared stock names no company and stays one row — there is nothing to
+      // choose between, and splitting it would offer the same box twice.
+      if (companies.length === 0) return [{ ...row, companies: [], company: '' }]
+      return companies.map((c) => ({ ...row, companies: [c], company: c }))
     })
-  }, [issueSuggestions, saved, entries, form.model, modelByPart, pairVocab])
+  }, [issueSuggestions, saved, entries, form.model, modelByPart, companiesByPart, pairVocab])
 
   /**
    * Drop a suggestion from the admin-managed list it belongs to.
@@ -1636,6 +1683,25 @@ function App({ user, onLogout }) {
       next.quantity = 0
     }
     return next
+  }
+
+  /**
+   * Picking a part off one company's shelf selects that company.
+   *
+   * The row names a shelf CODE ('MOT'); the fault records the company in the
+   * words the report prints ('MOTECO'), so the Companies list is what joins
+   * them. A code nothing claims selects nothing rather than writing a value
+   * the dropdown does not offer — the same refusal to invent a company that
+   * the save path makes.
+   *
+   * Routed through the row's own setter so it goes through setFault's rules
+   * rather than around them: a service action still clears the company
+   * afterwards, and the field stays overridable. An auto-select, not a lock —
+   * the same contract the Model auto-select below already has.
+   */
+  const pickFaultCompany = (i, setter) => (code) => {
+    const name = companyNameForCode(code, options.companies)
+    if (name) setter(i, 'company')({ target: { value: name } })
   }
 
   const setFault = (i, field) => (e) => {
@@ -2961,6 +3027,7 @@ function App({ user, onLogout }) {
                                   <IssueInput
                                     value={fault.issue}
                                     onChange={setFault(i, 'issue')}
+                                    onPickCompany={pickFaultCompany(i, setFault)}
                                     suggestions={rankedIssueSuggestions}
                                     onAssignCode={assignIssueCode}
                                     onAssignPairCode={assignPartModel}
@@ -3309,6 +3376,7 @@ function App({ user, onLogout }) {
                                 <IssueInput
                                   value={fault.issue}
                                   onChange={eSetFault(i, 'issue')}
+                                  onPickCompany={pickFaultCompany(i, eSetFault)}
                                   suggestions={rankedIssueSuggestions}
                                   onAssignCode={assignIssueCode}
                                   onAssignPairCode={assignPartModel}
