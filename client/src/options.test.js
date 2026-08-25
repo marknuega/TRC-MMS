@@ -5,6 +5,10 @@ import {
   DEFAULT_OPTIONS,
   issueCodeIndex,
   issueFitsModel,
+  issueNameForModel,
+  issueNameOverrides,
+  issueAllNames,
+  withIssueName,
   issueModels,
   issueNarrowed,
   optionNames,
@@ -880,5 +884,81 @@ describe('issueFitsModel', () => {
   test('reads the list back, ignoring blanks', () => {
     assert.deepEqual(issueModels({ name: 'X', models: ['TH1N', '', '  THR9  '] }), ['TH1N', 'THR9'])
     assert.deepEqual(issueModels({ name: 'X', models: 'TH1N' }), [])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// One code, a different physical part per device.
+//
+// 99A is the ACP-12 on a TH1N and a THR9, and the Charger818 on an STP9000:
+// one slot in the vocabulary, three devices, two parts. Only the exceptions
+// are stored, so a part called the same thing everywhere stays exactly what it
+// always was.
+// ---------------------------------------------------------------------------
+describe('per-device issue names', () => {
+  const charger = {
+    name: 'ACP-12',
+    parts: '99',
+    variant: 'A',
+    models: ['TH1N', 'THR9', 'STP9000'],
+    names: { STP9000: 'Charger818' },
+  }
+
+  test('a device with an override is called by it', () => {
+    assert.equal(issueNameForModel(charger, 'STP9000'), 'Charger818')
+  })
+
+  test('every other device falls back to the row own name', () => {
+    assert.equal(issueNameForModel(charger, 'TH1N'), 'ACP-12')
+    assert.equal(issueNameForModel(charger, 'THR9'), 'ACP-12')
+  })
+
+  // Asking about no device at all cannot be an override, so it is the row.
+  test('with no device named, the row own name answers', () => {
+    assert.equal(issueNameForModel(charger, ''), 'ACP-12')
+    assert.equal(issueNameForModel(charger, null), 'ACP-12')
+  })
+
+  test('matches a device past case and punctuation', () => {
+    const v = { name: 'LCD', parts: '26', variant: 'A', names: { 'TMR 880i': 'CUR3 DISPLAY' } }
+    assert.equal(issueNameForModel(v, 'TMR880I'), 'CUR3 DISPLAY')
+    assert.equal(issueNameForModel(v, 'tmr 880i'), 'CUR3 DISPLAY')
+  })
+
+  // The whole point of leaving rows without overrides untouched.
+  test('a row saved before overrides existed is unaffected', () => {
+    assert.equal(issueNameForModel({ name: 'FISTMIC', parts: '19', variant: 'B' }, 'TH1N'), 'FISTMIC')
+    assert.equal(issueNameForModel('LCD', 'TH1N'), 'LCD')
+  })
+
+  test('every name a row answers to, deduped', () => {
+    assert.deepEqual(issueAllNames(charger), ['ACP-12', 'Charger818'])
+    assert.deepEqual(issueAllNames('LCD'), ['LCD'])
+  })
+
+  describe('withIssueName', () => {
+    test('sets one device name without touching the others', () => {
+      const next = withIssueName(charger, 'TH1N', 'ACP-12 LONG')
+      assert.equal(issueNameForModel(next, 'TH1N'), 'ACP-12 LONG')
+      assert.equal(issueNameForModel(next, 'STP9000'), 'Charger818')
+    })
+
+    // Storing "the same as the row" is a second copy to drift out of step with
+    // the first, so it is dropped rather than written.
+    test('an override equal to the row own name is not stored', () => {
+      const next = withIssueName(charger, 'THR9', 'ACP-12')
+      assert.deepEqual(issueNameOverrides(next), { STP9000: 'Charger818' })
+    })
+
+    test('blank clears an override', () => {
+      const next = withIssueName(charger, 'STP9000', '')
+      assert.deepEqual(issueNameOverrides(next), {})
+      assert.equal(issueNameForModel(next, 'STP9000'), 'ACP-12')
+    })
+
+    test('the last override cleared drops the key entirely', () => {
+      const next = withIssueName(charger, 'STP9000', '')
+      assert.equal(Object.prototype.hasOwnProperty.call(next, 'names'), false)
+    })
   })
 })
