@@ -63,6 +63,15 @@ export default function IssueInput({
   list, // fallback datalist id, for modes that keep the native list
   ...rest
 }) {
+  // What the device letter in a Model Code stands for, in the code map's own
+  // words — so a badge reading H11A can say "Airbus TH1n" rather than leaving
+  // the reader to know the letters by heart. Read off deviceLetters, which is
+  // the same list the row's device picker offers.
+  const deviceNameOf = (code) => {
+    const letter = parsePairCode(code)?.letter
+    return (letter && deviceLetters.find((d) => d.letter === letter)?.label) || ''
+  }
+
   const [open, setOpen] = useState(false)
   const [activeIndex, setActiveIndex] = useState(-1)
   const [coding, setCoding] = useState(null) // { name, parts, variant, error } while a code is being typed
@@ -259,7 +268,11 @@ export default function IssueInput({
         <span
           className="issue-pair-code issue-pair-code-inline"
           style={companyCode ? { right: `${FIELD_EDGE + BADGE_W + BADGE_GAP}rem` } : undefined}
-          title={`Model Code ${selectedPairCode}`}
+          title={
+            deviceNameOf(selectedPairCode)
+              ? `Model Code ${selectedPairCode} — ${deviceNameOf(selectedPairCode)}`
+              : `Model Code ${selectedPairCode}`
+          }
         >
           {parsePairCode(selectedPairCode)?.provisional ? parsePairCode(selectedPairCode).letter : selectedPairCode}
         </span>
@@ -400,7 +413,14 @@ export default function IssueInput({
                           because the rest of it is the item's own name and
                           that is already the text on the left of this row. */}
                       {s.pairCode ? (
-                        <span className="issue-pair-code" title={`Model Code ${s.pairCode}`}>
+                        <span
+                          className="issue-pair-code"
+                          title={
+                            deviceNameOf(s.pairCode)
+                              ? `Model Code ${s.pairCode} — ${deviceNameOf(s.pairCode)}`
+                              : `Model Code ${s.pairCode}`
+                          }
+                        >
                           {parsePairCode(s.pairCode)?.provisional ? parsePairCode(s.pairCode).letter : s.pairCode}
                         </span>
                       ) : (

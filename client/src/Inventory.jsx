@@ -147,6 +147,20 @@ export default function Inventory({ embedded = false, branch = '', region = '', 
     return codedModels.find((m) => deviceLetterFor(m, equipmentCodes) === letter) ?? ''
   }
 
+  // What the device letter in a stored code MEANS, beside the code itself —
+  // "H11A · Airbus TH1n" — because a four-character code is only readable by
+  // someone who has the letters by heart, and nobody should have to.
+  //
+  // The LETTER's name, deliberately, not a model's. H is Airbus TH1n for the
+  // handheld and for the carkit alike, and a stored code carries nothing that
+  // tells those two apart — modelOfCode above answers with whichever the list
+  // happens to name first, which is a fine default for an edit form and would
+  // be a quiet lie printed against a row. This says only what is known.
+  const deviceNameOf = (pairCode) => {
+    const letter = parsePairCode(pairCode)?.letter
+    return (letter && equipmentCodes?.[letter]) || ''
+  }
+
   async function openHistory(item) {
     setHist({ item, txns: null })
     try {
@@ -635,7 +649,18 @@ export default function Inventory({ embedded = false, branch = '', region = '', 
                       <td className="item">{i.itemCode}</td>
                       <td className="rem">{i.description}</td>
                       <td className="item">{i.alias}</td>
-                      <td className="item">{i.pairCode || <span className="hint">shared</span>}</td>
+                      <td className="item">
+                        {i.pairCode ? (
+                          <>
+                            {i.pairCode}
+                            {deviceNameOf(i.pairCode) && (
+                              <span className="pair-device"> · {deviceNameOf(i.pairCode)}</span>
+                            )}
+                          </>
+                        ) : (
+                          <span className="hint">shared</span>
+                        )}
+                      </td>
                       <td className="num">{i.begin}</td>
                       <td className="num">{i.out}</td>
                       <td className="num avail">{i.avail}</td>
