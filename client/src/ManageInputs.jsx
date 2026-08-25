@@ -16,6 +16,9 @@ import {
   issueVariant,
   materialName,
   materialDesc,
+  companyName,
+  companyCode,
+  normalizeCompany,
   optionName,
   optionNames,
   prefixIndex,
@@ -79,6 +82,7 @@ export default function ManageInputs({
   const [newStandIn, setNewStandIn] = useState('')
   const [newStandInReal, setNewStandInReal] = useState('')
   const [newFullForm, setNewFullForm] = useState('')
+  const [newCode, setNewCode] = useState('')
   const [newId, setNewId] = useState('')
   const [newInitials2, setNewInitials2] = useState('')
   const [newInitials3, setNewInitials3] = useState('')
@@ -103,6 +107,7 @@ export default function ManageInputs({
   const [editStandIn, setEditStandIn] = useState('')
   const [editStandInReal, setEditStandInReal] = useState('')
   const [editFullForm, setEditFullForm] = useState('')
+  const [editCode, setEditCode] = useState('')
   const [editId, setEditId] = useState('')
   const [editInitials2, setEditInitials2] = useState('')
   const [editInitials3, setEditInitials3] = useState('')
@@ -119,6 +124,11 @@ export default function ManageInputs({
   // variant, and their description IS their name; Models and Agencies carry the
   // Tel number prefixes that select them; every other list is a string.
   const isMaterials = cat === 'materials'
+  // A company carries the SKU prefix its stock is shelved under (MOT, X1). It
+  // is what routes a fault to the right company's shelf when a report is saved
+  // — without it the companies are still listed, still printed and still
+  // totalled apart, but stock comes off whichever shelf answers first.
+  const isCompanies = cat === 'companies'
   const isIssues = cat === 'issueTypes'
   const isTechnicians = cat === 'technicians'
   const isModels = cat === 'models'
@@ -161,15 +171,17 @@ export default function ManageInputs({
         })
     : list.map((value, i) => ({ value, i }))
   const nameOf = (v) =>
-    isMaterials
-      ? materialName(v)
-      : isIssues
-        ? issueName(v)
-        : isTechnicians
-          ? technicianName(v)
-          : hasPrefixes
-            ? optionName(v)
-            : String(v)
+    isCompanies
+      ? companyName(v)
+      : isMaterials
+        ? materialName(v)
+        : isIssues
+          ? issueName(v)
+          : isTechnicians
+            ? technicianName(v)
+            : hasPrefixes
+              ? optionName(v)
+              : String(v)
   const descOf = (v) => (isMaterials ? materialDesc(v) : '')
 
   // What an agency's acronym stands for. Two sources, in this order:
@@ -214,6 +226,12 @@ export default function ManageInputs({
       return withModels({ name, parts: f.parts.trim(), variant: f.variant.trim().toUpperCase() }, f.models ?? null)
     }
     if (isMaterials) return { name, description: f.desc.trim() }
+    // Stays a plain string when no code is given, exactly as every companies
+    // list was before this field existed — nothing to store, so nothing stored.
+    if (isCompanies) {
+      const code = normalizeCompany(f.code)
+      return code ? { name, code } : name
+    }
     if (hasPrefixes) {
       // Built fresh from the fields on show, so an agency saved here also
       // sheds the inert `prefixes` a Tel number no longer reads.
@@ -415,6 +433,7 @@ export default function ManageInputs({
     standIn: newStandIn,
     standInReal: newStandInReal,
     fullForm: newFullForm,
+    code: newCode,
     id: newId,
     initials2: newInitials2,
     initials3: newInitials3,
@@ -429,6 +448,7 @@ export default function ManageInputs({
     standIn: editStandIn,
     standInReal: editStandInReal,
     fullForm: editFullForm,
+    code: editCode,
     id: editId,
     initials2: editInitials2,
     initials3: editInitials3,
@@ -484,6 +504,7 @@ export default function ManageInputs({
     setNewStandIn('')
     setNewStandInReal('')
     setNewFullForm('')
+    setNewCode('')
     setNewId('')
     setNewInitials2('')
     setNewInitials3('')
@@ -554,6 +575,7 @@ export default function ManageInputs({
     // opening an agency to edit it offers the full form rather than a blank box
     // that would silently drop what the card was showing a moment ago.
     setEditFullForm(isAgencies ? optionFullForm(list[i]) || mappedFullForm(list[i]) : '')
+    setEditCode(isCompanies ? companyCode(list[i]) : '')
     // Only when the part sits on exactly one shelf. On two there is no single
     // answer to show, and a picker opening on one of them would look like an
     // offer to move the other.
@@ -607,6 +629,7 @@ export default function ManageInputs({
     setEditStandIn('')
     setEditStandInReal('')
     setEditFullForm('')
+    setEditCode('')
     setEditId('')
     setEditInitials2('')
     setEditInitials3('')
@@ -867,6 +890,17 @@ export default function ManageInputs({
                   value={newDesc}
                   onChange={(e) => setNewDesc(e.target.value)}
                   placeholder="Description (optional)"
+                />
+              </label>
+            )}
+            {isCompanies && (
+              <label className="field-desc">
+                Stock code (optional)
+                <input
+                  value={newCode}
+                  onChange={(e) => setNewCode(e.target.value)}
+                  placeholder="MOT"
+                  title="The SKU prefix this company's stock is shelved under — MOT for MOT-MAK-1114-2. It is what draws a part off this company's shelf instead of another's when a report is saved. Leave blank and the company is simply not narrowed."
                 />
               </label>
             )}
@@ -1170,6 +1204,16 @@ export default function ManageInputs({
                           aria-label="Full form"
                         />
                       )}
+                      {isCompanies && (
+                        <input
+                          className="edit-input"
+                          value={editCode}
+                          onChange={(e) => setEditCode(e.target.value)}
+                          onKeyDown={cancelOnEscape}
+                          placeholder="Stock code (MOT)"
+                          aria-label="Stock code"
+                        />
+                      )}
                     </div>
                     <div className="manage-item-actions">
                       <button type="button" onClick={saveEdit}>
@@ -1247,6 +1291,9 @@ export default function ManageInputs({
                         )}
                       {nameOf(value)}
                       {isMaterials && descOf(value) && <span className="manage-item-desc">{descOf(value)}</span>}
+                      {isCompanies && companyCode(value) && (
+                        <span className="manage-item-desc">stock {companyCode(value)}</span>
+                      )}
                       {fullFormOf(value) && <span className="manage-item-desc">{fullFormOf(value)}</span>}
                     </span>
                     <div className="manage-item-actions">

@@ -1,0 +1,59 @@
+/*
+ * Software Developed by Muhammad Amir  MT# MT1063
+ * © 2026 Muhammad Amir. All rights reserved.
+ *
+ * Which company owns a shelf. The prefix in a SKU used to be decoration; it is
+ * now the thing that keeps MOT's stock out of X1's counts, so what it does and
+ * does NOT read as is pinned here.
+ */
+import { test, describe } from 'node:test'
+import assert from 'node:assert/strict'
+import { companyFromSku, companyCodeMap, shelfCompanyForFault } from './company.js'
+
+describe('the company in a SKU', () => {
+  test('is the segment before the first hyphen', () => {
+    assert.equal(companyFromSku('MOT-MAK-1114-2'), 'MOT')
+    assert.equal(companyFromSku('X1-MAK-1116'), 'X1')
+    assert.equal(companyFromSku('X2-MAK-1125'), 'X2')
+  })
+
+  test('is upper-cased, so a lower-case paste files with its own company', () => {
+    assert.equal(companyFromSku('mot-mak-1114-2'), 'MOT')
+  })
+
+  // The whole point of the narrow rule in companyFromSku. A legacy SKU that was
+  // never prefixed is SHARED stock; reading "1114" as a company of its own would
+  // put those rows on a shelf no fault can ever reach.
+  test('is blank for a SKU that carries no company', () => {
+    assert.equal(companyFromSku('1114-2'), '')
+    assert.equal(companyFromSku('NOPREFIX'), '')
+    assert.equal(companyFromSku(''), '')
+    assert.equal(companyFromSku(null), '')
+  })
+
+  test('is blank when the first segment is too long to be a tag', () => {
+    assert.equal(companyFromSku('MOTECOLOCAL-MAK-1'), '')
+  })
+})
+
+describe('a fault company to a shelf', () => {
+  const companies = [{ name: 'MOTECO', code: 'MOT' }, { name: 'PROJECT X', code: 'X1' }, 'FREE']
+
+  test('resolves through the Companies list, past case', () => {
+    assert.equal(shelfCompanyForFault('MOTECO', companies), 'MOT')
+    assert.equal(shelfCompanyForFault('moteco', companies), 'MOT')
+    assert.equal(shelfCompanyForFault('PROJECT X', companies), 'X1')
+  })
+
+  // Not an error: it is the state every install starts in, and the caller
+  // falls back to matching across companies rather than refusing.
+  test('is blank for a company the list gives no code', () => {
+    assert.equal(shelfCompanyForFault('FREE', companies), '')
+    assert.equal(shelfCompanyForFault('NEVER HEARD OF IT', companies), '')
+    assert.equal(shelfCompanyForFault('', companies), '')
+  })
+
+  test('skips uncoded entries rather than mapping them to blank', () => {
+    assert.deepEqual(companyCodeMap(companies), { MOTECO: 'MOT', 'PROJECT X': 'X1' })
+  })
+})

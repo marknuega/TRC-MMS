@@ -39,6 +39,12 @@ model InventoryItem {
   id             Int            @id @default(autoincrement())
   sku            String         @unique
   branch         String         @default("") // owning branch; non-admins are scoped to their own
+  // Which company's shelf this is, derived from the SKU prefix rather than
+  // typed (MOT-MAK-1114-2 -> MOT). MOT, X1 and X2 keep separate stock in one
+  // branch, so a Model Code is unique per branch AND company, and every count,
+  // ledger and usage total is per company. '' is SHARED stock, drawn on by any
+  // company — see client/src/company.js.
+  company        String         @default("")
   store          String         @default("")
   // Which room in that store the stock sits in — the step between the store
   // and the shelf, for a branch whose stock is spread across more than one.
@@ -62,8 +68,8 @@ model InventoryItem {
   //
   // Blank means SHARED: matched by itemCode alone, the way every item was
   // before this column existed, and used only when no model-specific row
-  // answers. Unique per branch, enforced in routes/inventory.js — '' is not
-  // NULL and a database constraint would collide on every shared row.
+  // answers. Unique per branch AND company, enforced in routes/inventory.js —
+  // '' is not NULL and a database constraint would collide on every shared row.
   pairCode       String         @default("") @map("pair_code")
   // The provisional code this item was held by before its name was given a
   // parts code. Never cleared: documents already printed carry the old form.
@@ -78,6 +84,8 @@ model InventoryItem {
 
   @@index([store])
   @@index([branch])
+  @@index([company])
+  @@index([branch, company])
   @@index([pairCode])
   @@map("inventory_items")
 }
@@ -93,6 +101,9 @@ model InventoryTxn {
   availAfter Int           @default(0) @map("avail_after")
   reference  String        @default("") // REP-#### / TRANS-#### / note
   branch     String        @default("")
+  // The company shelf the movement came off, recorded literally so a past
+  // movement still reads right if the item is ever re-prefixed.
+  company    String        @default("")
   material   String        @default("")
   // The pair code the fault resolved through, or '' when the item was matched
   // as a shared one by name. Recorded literally so the ledger still reads

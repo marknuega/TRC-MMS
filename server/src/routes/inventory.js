@@ -5,6 +5,8 @@ import { branchWhere, writeBranch, canAccessBranch } from '../scope.js'
 // path resolves faults through, so a code that lists here is a code that
 // looks up there. See client/src/pairCode.js.
 import { normalizePairCode, parsePairCode } from '../../../client/src/pairCode.js'
+// Which company's shelf a row is, read out of its SKU prefix.
+import { companyFromSku } from '../../../client/src/company.js'
 import { issueCodeIndex, mergeOptions } from '../../../client/src/options.js'
 
 const router = Router()
@@ -49,6 +51,11 @@ function parseItem(body) {
   return {
     data: {
       sku,
+      // Derived, never taken from the body. The prefix in the SKU is the one
+      // statement of ownership; accepting a second one from the client makes it
+      // possible for a row to say MOT in its SKU and X1 in its company, which
+      // is a row no count can be trusted from.
+      company: companyFromSku(sku),
       store: clean(body?.store),
       roomId: clean(body?.roomId),
       shelf: clean(body?.shelf),
@@ -100,24 +107,37 @@ const unclaimedError = ({ letter, part }) =>
   `that holds the item by its own name until the name is given a code.`
 
 /**
- * Refuse a Model Code already held by another item in the same branch.
+ * Refuse a Model Code already held by another item on the SAME company's shelf.
+ *
+ * Scoped by company as well as branch, because MOT, X1 and X2 keep separate
+ * stock in one branch and each of them genuinely holds its own T99C. Checking
+ * per branch alone was telling the second company its code "is already
+ * X1-MAK-1114-2" and refusing a row that was never a duplicate — one company's
+ * shelf blocking another's.
+ *
+ * Within one company it is still refused, for the reason it always was: two
+ * items under one code is exactly the ambiguity the save path cannot resolve.
  *
  * Checked here rather than by a unique index: a shared item's code is '', not
- * NULL, so an index would collide on every one of them. Two items under one
- * code is exactly the ambiguity the save path refuses — better to catch it
- * while someone is looking at the form than at the moment stock moves.
+ * NULL, so an index would collide on every one of them.
  */
-async function pairCodeTaken(db, pairCode, branch, exceptId) {
+async function pairCodeTaken(db, pairCode, branch, company, exceptId) {
   if (!pairCode) return null
   const clash = await db.inventoryItem.findFirst({
     where: {
       pairCode,
       branch: branch ?? '',
+      company: company ?? '',
       ...(exceptId ? { NOT: { id: exceptId } } : {}),
     },
   })
   return clash
 }
+
+// Names the company when there is one, so "already MOT-MAK-1114-2" reads as a
+// clash on MOT's own shelf rather than a mystery about someone else's.
+const takenError = (pairCode, company, clash) =>
+  `Model Code ${pairCode} is already ${clash.sku}${company ? ` on ${company}'s shelf` : ''}`
 
 // GET /api/inventory - items for the user's branch (non-admin) or all/one (admin).
 router.get('/', async (req, res, next) => {
@@ -141,9 +161,9 @@ router.post('/', async (req, res, next) => {
     if (data.branch === null) return res.status(400).json({ error: 'That branch is outside your region' })
     const unclaimed = unclaimedPartsCode(data.pairCode, await claimedCodes())
     if (unclaimed) return res.status(400).json({ error: unclaimedError(unclaimed) })
-    const clash = await pairCodeTaken(prisma, data.pairCode, data.branch)
+    const clash = await pairCodeTaken(prisma, data.pairCode, data.branch, data.company)
     if (clash) {
-      return res.status(409).json({ error: `Model Code ${data.pairCode} is already ${clash.sku}` })
+      return res.status(409).json({ error: takenError(data.pairCode, data.company, clash) })
     }
     const item = await prisma.inventoryItem.create({ data })
     res.status(201).json(shape(item))
@@ -185,9 +205,9 @@ router.put('/:id', async (req, res, next) => {
         e.code = 'P2025'
         throw e
       }
-      const clash = await pairCodeTaken(tx, data.pairCode, before.branch, id)
+      const clash = await pairCodeTaken(tx, data.pairCode, before.branch, data.company, id)
       if (clash) {
-        const e = new Error(`Model Code ${data.pairCode} is already ${clash.sku}`)
+        const e = new Error(takenError(data.pairCode, data.company, clash))
         e.status = 409
         throw e
       }
@@ -203,6 +223,8 @@ router.put('/:id', async (req, res, next) => {
             change: newAvail - oldAvail,
             availAfter: newAvail,
             reference: 'Manual edit',
+            branch: updated.branch,
+            company: updated.company,
             material: updated.itemCode,
             pairCode: updated.pairCode,
           },
@@ -265,14 +287,14 @@ router.post('/import', async (req, res, next) => {
         // A Model Code already held by a different item is skipped rather than
         // duplicated: a bulk paste must not be able to create the ambiguity
         // that stops every later save.
-        if (await pairCodeTaken(prisma, data.pairCode, existing.branch, existing.id)) {
+        if (await pairCodeTaken(prisma, data.pairCode, existing.branch, data.company, existing.id)) {
           skipped += 1
           continue
         }
         await prisma.inventoryItem.update({ where: { sku: data.sku }, data })
         updated += 1
       } else {
-        if (await pairCodeTaken(prisma, data.pairCode, branch)) {
+        if (await pairCodeTaken(prisma, data.pairCode, branch, data.company)) {
           skipped += 1
           continue
         }
