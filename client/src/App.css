@@ -2349,7 +2349,7 @@ button.sync-pill {
 .issue-opt-badges {
   flex: 0 0 auto;
   display: grid;
-  grid-template-columns: 2.7rem 2.6rem;
+  grid-template-columns: 2.6rem 2.6rem;
   align-items: center;
   justify-items: center;
   gap: 0.25rem;
@@ -2366,14 +2366,18 @@ button.sync-pill {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.2rem;
-  height: 1.2rem;
+  /* Same width, height and radius as every other badge — see the note on
+     .issue-pair-code. It keeps the ring instead of a fill, which is what still
+     marks it as the parts code rather than a shelf. */
+  width: 2.6rem;
+  min-width: 2.6rem;
+  height: 1.45rem;
   padding: 0;
-  border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--border));
-  border-radius: 50%;
-  background: none; /* the ring alone — it marks the code, it does not fill it */
+  border: 1.5px solid color-mix(in srgb, var(--primary) 45%, var(--border));
+  border-radius: 999px;
+  background: none;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.56rem;
+  font-size: 0.62rem;
   font-weight: 700;
   line-height: 1;
   color: var(--primary);
@@ -2394,14 +2398,21 @@ button.sync-pill {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 1.2rem;
-  height: 1.2rem;
-  padding: 0 0.3rem;
-  border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--border));
+  /* Every badge is the same object: same width, same height, same radius,
+     whatever it holds. X1 and T99A are two values of one thing — which shelf,
+     which company — and letting the short one shrink made them read as two
+     different kinds of mark and left the column they sit in ragged. Only
+     colour distinguishes them now, which is the one difference that means
+     something. */
+  width: 2.6rem;
+  min-width: 2.6rem;
+  height: 1.45rem;
+  padding: 0;
+  border: 1.5px solid color-mix(in srgb, var(--warn) 55%, var(--border));
   border-radius: 999px;
   background: var(--warn-soft);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.56rem;
+  font-size: 0.62rem;
   font-weight: 700;
   line-height: 1;
   color: var(--warn-ink);
@@ -2416,14 +2427,16 @@ button.sync-pill {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 1.2rem;
-  height: 1.2rem;
-  padding: 0 0.3rem;
-  border: 1px solid color-mix(in srgb, var(--success) 40%, var(--border));
+  /* Sized with the others — see the note on .issue-pair-code. */
+  width: 2.6rem;
+  min-width: 2.6rem;
+  height: 1.45rem;
+  padding: 0;
+  border: 1.5px solid color-mix(in srgb, var(--success) 50%, var(--border));
   border-radius: 999px;
   background: var(--success-soft);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.56rem;
+  font-size: 0.62rem;
   font-weight: 700;
   line-height: 1;
   letter-spacing: 0.03em;
