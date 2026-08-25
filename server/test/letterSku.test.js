@@ -24,10 +24,12 @@ describe('letterFor', () => {
 })
 
 describe('letterSku', () => {
-  test('a numbered suffix becomes its letter', () => {
-    assert.equal(letterSku('MOT-MAK-1117-1').to, 'MOT-MAK-1117A')
-    assert.equal(letterSku('MOT-MAK-1117-2').to, 'MOT-MAK-1117B')
-    assert.equal(letterSku('MOT-MAK-1117-26').to, 'MOT-MAK-1117Z')
+  // -1 is B, not A. The unsuffixed row is the first of its stem and holds A,
+  // so the suffix counts what was added after it.
+  test('a numbered suffix counts on from the base', () => {
+    assert.equal(letterSku('MOT-MAK-1117-1').to, 'MOT-MAK-1117B')
+    assert.equal(letterSku('MOT-MAK-1117-2').to, 'MOT-MAK-1117C')
+    assert.equal(letterSku('MOT-MAK-1117-25').to, 'MOT-MAK-1117Z')
   })
 
   // The base series. An unsuffixed SKU is the first of its stem, and A is what
@@ -51,8 +53,8 @@ describe('letterSku', () => {
 
   // Reported rather than approximated: a SKU is what every ledger row and
   // every count is keyed by, so a rename nobody can justify is not made.
-  test('a suffix past -26 is refused, not wrapped', () => {
-    assert.match(letterSku('MOT-MAK-1117-27').skip, /past -26/)
+  test('a suffix past -25 is refused, not wrapped', () => {
+    assert.match(letterSku('MOT-MAK-1117-26').skip, /past -25/)
   })
 
   // A suffix only reads as a suffix behind a number. Behind a word there is
@@ -73,16 +75,26 @@ describe('letterSku', () => {
   // The four-digit tail is the item number, not a 1116-long series.
   test('a long tail is a part number, not a suffix', () => {
     assert.equal(letterSku('MOT-MAK-1116').to, 'MOT-MAK-1116A')
-    assert.match(letterSku('MOT-MAK-1117-27').skip, /past -26/)
+    assert.match(letterSku('MOT-MAK-1117-26').skip, /past -25/)
   })
 
   // The pair the whole stem-ends-in-a-digit rule exists to tell apart. Same
   // four digits, one with a suffix and one without, and the -1 is the half
   // that reads as a series.
-  test('-1116 is the item number and -1116-1 is its first series', () => {
+  test('-1116 is the item number and -1116-1 is the one after it', () => {
     assert.equal(letterSku('MOT-MAK-1116').to, 'MOT-MAK-1116A')
-    assert.equal(letterSku('MOT-MAK-1116-1').to, 'MOT-MAK-1116A')
-    assert.equal(letterSku('MOT-MAK-1116-2').to, 'MOT-MAK-1116B')
+    assert.equal(letterSku('MOT-MAK-1116-1').to, 'MOT-MAK-1116B')
+    assert.equal(letterSku('MOT-MAK-1116-2').to, 'MOT-MAK-1116C')
+  })
+
+  // The store holds all three of these side by side. Every one has to land on
+  // a SKU of its own or the migration refuses the whole run — this is the
+  // case that sent the rule back for a second look.
+  test('a stem with a bare row AND numbered rows keeps them all distinct', () => {
+    const real = ['MOT-MAK-1114', 'MOT-MAK-1114-1', 'MOT-MAK-1114-2', 'MOT-MAK-1117', 'MOT-MAK-1117-1']
+    const to = real.map((s) => letterSku(s).to)
+    assert.deepEqual(to, ['MOT-MAK-1114A', 'MOT-MAK-1114B', 'MOT-MAK-1114C', 'MOT-MAK-1117A', 'MOT-MAK-1117B'])
+    assert.equal(new Set(to).size, to.length, 'every row must keep a SKU of its own')
   })
 
   // The whole point of only ever touching the tail: the company is read off

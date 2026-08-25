@@ -2,10 +2,10 @@
  * Software Developed by Muhammad Amir  MT# MT1063
  * © 2026 Muhammad Amir. All rights reserved.
  *
- * Move every inventory SKU onto the letter series — MOT-MAK-1117-1 becomes
- * MOT-MAK-1117A, and an unsuffixed MOT-MAK-1116 becomes MOT-MAK-1116A. The
- * rule itself, and why A is the base series, lives in src/letterSku.js; this
- * file is what applies it to a database.
+ * Move every inventory SKU onto the letter series — an unsuffixed
+ * MOT-MAK-1117 becomes MOT-MAK-1117A and MOT-MAK-1117-1 becomes
+ * MOT-MAK-1117B. The rule itself, and why the bare row is the one that holds
+ * A, lives in src/letterSku.js; this file is what applies it to a database.
  *
  * The ledger follows the item. InventoryTxn.sku is a literal copy taken at the
  * time of each movement, so left alone an item's History would split across
