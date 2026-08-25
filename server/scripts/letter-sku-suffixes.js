@@ -97,17 +97,37 @@ async function main() {
 
   // One transaction: a half-renamed store is worse than an un-renamed one,
   // and the ledger rows must not outlive a rollback of the item they name.
-  const txns = await prisma.$transaction(async (tx) => {
-    let moved = 0
-    for (const p of planned) {
-      await tx.inventoryItem.update({ where: { id: p.id }, data: { sku: p.to } })
-      // By item, not by the old string: an item carrying a SKU from some
-      // earlier rename should come forward with the rest of its history.
-      const { count } = await tx.inventoryTxn.updateMany({ where: { itemId: p.id }, data: { sku: p.to } })
-      moved += count
-    }
-    return moved
-  })
+  const txns = await prisma.$transaction(
+    async (tx) => {
+      // Which items carry ledger rows at all. Asked ONCE, and inside the
+      // transaction so it sees the same rows the updates will.
+      //
+      // Most of the store has never moved — 258 items against 17 movements,
+      // the first time this ran — and an updateMany per item is a round trip
+      // per item whether or not it has anything to update. Over a remote
+      // connection that doubled the wall time for nothing, which is half of
+      // what ran the clock out.
+      const withTxns = new Set(
+        (await tx.inventoryTxn.findMany({ select: { itemId: true }, distinct: ['itemId'] })).map((t) => t.itemId),
+      )
+      let moved = 0
+      for (const p of planned) {
+        await tx.inventoryItem.update({ where: { id: p.id }, data: { sku: p.to } })
+        // By item, not by the old string: an item carrying a SKU from some
+        // earlier rename should come forward with the rest of its history.
+        if (!withTxns.has(p.id)) continue
+        const { count } = await tx.inventoryTxn.updateMany({ where: { itemId: p.id }, data: { sku: p.to } })
+        moved += count
+      }
+      return moved
+    },
+    // Prisma's 5s default is sized for a request handler, not a migration
+    // that crosses the whole store one row at a time over a remote link. The
+    // first production run died on it at P2028 — cleanly, the whole rename
+    // rolled back, but it could never have finished. Five minutes, with room
+    // to wait for a connection out of the pool.
+    { timeout: 5 * 60 * 1000, maxWait: 30 * 1000 },
+  )
 
   console.log(`\n✓ Renamed ${planned.length} item(s) and ${txns} ledger row(s).`)
 }
