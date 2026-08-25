@@ -4,14 +4,18 @@
  *
  * The letter series an inventory SKU is filed under.
  *
- *     MOT-MAK-1117-1   ->  MOT-MAK-1117A
- *     MOT-MAK-1117-2   ->  MOT-MAK-1117B
- *     MOT-MAK-1116     ->  MOT-MAK-1116A
+ *     MOT-MAK-1117     ->  MOT-MAK-1117A
+ *     MOT-MAK-1117-1   ->  MOT-MAK-1117B
+ *     MOT-MAK-1117-2   ->  MOT-MAK-1117C
  *
- * A is the base series, so a SKU that never carried a suffix gains one rather
- * than staying the odd shape out — after this every SKU ends in a letter, and
- * "the 1117s" is a thing you can read down a column instead of a thing you
- * have to know.
+ * A is the base series and the UNSUFFIXED row is what holds it — after this
+ * every SKU ends in a letter, and "the 1117s" is a thing you can read down a
+ * column instead of a thing you have to know.
+ *
+ * So -1 is B, not A. The store holds MOT-MAK-1117 and MOT-MAK-1117-1 side by
+ * side as two separate items with two separate counts, and reading -1 as A
+ * would land both on MOT-MAK-1117A. The suffix does not number the series, it
+ * numbers what was added AFTER the first one.
  *
  * The COMPANY prefix is untouched and unaffected: it is read from the segment
  * before the FIRST hyphen (client/src/company.js), and this only ever rewrites
@@ -32,9 +36,10 @@ export const letterFor = (n) => (Number.isInteger(n) && n >= 1 && n <= 26 ? Stri
  *   { skip }   — cannot be done, and why, in words meant for the console
  *
  * A reason rather than an approximation for the cases that cannot be done: a
- * suffix past -26 has no letter, and a SKU whose stem does not end in a digit
- * has nothing to hang one off. Both are reported rather than guessed at, since
- * a SKU is the thing every ledger row and every count is keyed by.
+ * suffix past -25 runs out of alphabet once A is spent on the base, and a SKU
+ * whose stem does not end in a digit has nothing to hang a letter off. Both
+ * are reported rather than guessed at, since a SKU is the thing every ledger
+ * row and every count is keyed by.
  */
 export function letterSku(sku) {
   const raw = String(sku ?? '').trim()
@@ -56,13 +61,15 @@ export function letterSku(sku) {
   const numbered = raw.match(/^(.*\d)-(\d{1,2})$/)
   if (numbered) {
     const [, stem, digits] = numbered
-    const letter = letterFor(Number(digits))
-    if (!letter) return { skip: `suffix -${digits} is past -26, which has no letter` }
+    // +1 because A is already spoken for: the unsuffixed row is the first of
+    // its stem, so -1 is the second and lands on B.
+    const letter = letterFor(Number(digits) + 1)
+    if (!letter) return { skip: `suffix -${digits} is past -25, which runs out of alphabet` }
     return { to: `${stem}${letter}` }
   }
 
   // No suffix to convert: this is the first of its stem, and A is what "first"
-  // is called from here on.
+  // is called from here on. The numbered rows above counted from it.
   if (/\d$/.test(raw)) return { to: `${raw}A` }
 
   return { skip: 'ends in neither a number suffix nor a digit' }
