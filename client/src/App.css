@@ -2872,6 +2872,13 @@ button.sync-pill {
    Flagged from the render rather than matched with :has(), so what the layout
    depends on is stated where it is decided instead of inferred from a
    descendant. */
+/* One character wide but a fixed box, so A, B, C and D line up down the card
+   instead of each badge shrinking to its own letter. */
+.manage-list li span.manage-item-code.variant-code {
+  min-width: 1.6rem;
+  text-align: center;
+  font-size: 0.85rem;
+}
 .manage-item-label.with-devices {
   flex-direction: row;
   align-items: baseline;

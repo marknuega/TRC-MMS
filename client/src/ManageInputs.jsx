@@ -792,7 +792,17 @@ export default function ManageInputs({
       ) : (
         <>
           <span className={`manage-item-label${isIssues && perDeviceRows(value).length > 0 ? ' with-devices' : ''}`}>
-            {isIssues && issueCode(value) && <span className="manage-item-code">{issueCode(value)}</span>}
+            {/* The VARIANT alone, because the card head above already says
+                which parts code these are variants of. Repeating it on every
+                row — 99A, 99B, 99C under a head reading 99 — spent the width
+                that makes the letters line up, and buried the one character
+                that actually differs between the rows. The full code stays in
+                the title, and on every badge that leaves this card. */}
+            {isIssues && issueCode(value) && (
+              <span className="manage-item-code variant-code" title={issueCode(value)}>
+                {issueVariant(value)}
+              </span>
+            )}
             {/* The Model Codes this part is STOCKED under — the
                             parts code beside it says what the part is, these say
                             whose shelves it sits on. Read from inventory, not
