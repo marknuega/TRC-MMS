@@ -2341,6 +2341,25 @@ button.sync-pill {
    three characters, so its diameter is driven by their width, and the font
    inside is already as small as stays legible. box-sizing keeps the border
    inside the square. */
+/* The three badges as a fixed grid rather than a flex run, so the Model Code,
+   the parts code and the company each keep their own column down the whole
+   menu. A row missing one used to pull the badges after it leftwards, and the
+   list stopped being scannable: you had to read each row across to work out
+   which kind of badge you were looking at. Empty slots hold their width. */
+.issue-opt-badges {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: 2.7rem 1.3rem 2.6rem;
+  align-items: center;
+  justify-items: center;
+  gap: 0.25rem;
+}
+.issue-opt-slot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+}
 .issue-code {
   flex: 0 0 auto;
   box-sizing: border-box;
@@ -2409,6 +2428,14 @@ button.sync-pill {
   line-height: 1;
   letter-spacing: 0.03em;
   color: var(--success-ink);
+  /* A code may be up to six characters (see companyFromSku). Ellipsised rather
+     than allowed to widen, because widening one row's badge would push that
+     row's column out of line with every other row's — which is the whole thing
+     the fixed grid exists to prevent. The full value is in the title. */
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 /* The same badge, sitting inside the ISSUE field for the value already chosen.
    The wrapper is already positioned (see .issue-input above, which the menu
