@@ -465,6 +465,45 @@ export default function ManageInputs({
   // everywhere, because that is what it means.
   const modelsTickedOn = (value) => (issueNarrowed(value) ? issueModels(value) : deviceModels)
 
+  // The device letter a model is written by, for showing the code a part gets
+  // on it. Same lookup deviceModels filtered on, so every model listed there
+  // has one.
+  const letterOf = (model) => deviceLetterFor(model, map?.equipmentCodes ?? FALLBACK.equipmentCodes) || ''
+
+  // The full Model Codes a part+variant would carry across the devices ticked
+  // for it — T99C, C99C, and so on. Shown while editing, because the code is
+  // the thing a technician actually reads and it is otherwise assembled in
+  // somebody's head from three separate fields.
+  const codesFor = (models, parts, variant) => {
+    const code = `${String(parts ?? '').trim()}${String(variant ?? '')
+      .trim()
+      .toUpperCase()}`
+    if (
+      !PARTS_RE.test(String(parts ?? '').trim()) ||
+      !VARIANT_RE.test(
+        String(variant ?? '')
+          .trim()
+          .toUpperCase(),
+      )
+    )
+      return []
+    return (models ?? []).map((m) => `${letterOf(m)}${code}`).filter((c) => c.length === 4)
+  }
+
+  // Ticking inside the open edit row. Untouched means every device, so that is
+  // the set the first untick works from — the same rule toggleIssueModel
+  // follows in the grid, because they are the one field.
+  const toggleEditModel = (model) => {
+    const set = new Set(editModels ?? deviceModels)
+    if (set.has(model)) set.delete(model)
+    else set.add(model)
+    // Back to every device is stored as "never narrowed", not as a list that
+    // happens to be complete — so a device added to the code map later is
+    // offered for this part too, instead of being silently excluded by a list
+    // written before it existed.
+    setEditModels(set.size === deviceModels.length ? null : deviceModels.filter((m) => set.has(m)))
+  }
+
   function setIssueModels(index, models) {
     onChange(
       cat,
@@ -1010,29 +1049,36 @@ export default function ManageInputs({
                     <div className="edit-fields" onKeyDown={(e) => advanceOnEnter(e, saveEdit)}>
                       {isIssues && (
                         <div className="edit-code-row">
-                          {/* The device that owns the stock, beside the code
-                              that names the part — the two halves of the Model
-                              Code, editable in the place the card shows them.
-                              Blank leaves the shelves exactly as they are; it
-                              is not an instruction to un-stock anything. */}
-                          {deviceLetters.length > 0 && (
-                            <label className="field-code">
-                              Model Code
-                              <select
-                                className="edit-input"
-                                value={editLetter}
-                                onChange={(e) => setEditLetter(e.target.value)}
-                                onKeyDown={cancelOnEscape}
-                                title="Which model's shelf this part comes off"
-                              >
-                                <option value="">— leave as is —</option>
-                                {deviceLetters.map((d) => (
-                                  <option key={d.letter} value={d.letter}>
-                                    {d.letter} — {d.label}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
+                          {/* Which devices use this part, beside the code that
+                              names it — the two halves of a Model Code in the
+                              one place, so the codes it makes (T99C, C99C) can
+                              be read off rather than assembled in somebody's
+                              head. Writes the SAME field the grid below ticks;
+                              they are two views of one answer, not two answers.
+
+                              Everything starts ticked, which is what a part
+                              nobody has narrowed means. */}
+                          {deviceModels.length > 0 && (
+                            <fieldset className="field-models">
+                              <legend>Models that use this part</legend>
+                              <div className="model-ticks">
+                                {deviceModels.map((m) => {
+                                  const on = (editModels ?? deviceModels).includes(m)
+                                  return (
+                                    <label key={m} className={on ? 'model-tick on' : 'model-tick'} title={m}>
+                                      <input
+                                        type="checkbox"
+                                        checked={on}
+                                        onChange={() => toggleEditModel(m)}
+                                        onKeyDown={cancelOnEscape}
+                                      />
+                                      <span className="model-tick-letter">{letterOf(m)}</span>
+                                      <span className="model-tick-name">{m}</span>
+                                    </label>
+                                  )
+                                })}
+                              </div>
+                            </fieldset>
                           )}
                           <label className="field-code">
                             Parts Code
@@ -1062,8 +1108,51 @@ export default function ManageInputs({
                               placeholder="B"
                             />
                           </label>
+                          {/* Where the STOCK sits, which is a different
+                              question from which models use the part: a code
+                              can be right on four devices while the box lives
+                              on one shelf. Single on purpose — an item carries
+                              one Model Code, so pointing it at two shelves is
+                              not a thing that can be stored. */}
+                          {deviceLetters.length > 0 && (
+                            <label className="field-code">
+                              Stock shelf
+                              <select
+                                className="edit-input"
+                                value={editLetter}
+                                onChange={(e) => setEditLetter(e.target.value)}
+                                onKeyDown={cancelOnEscape}
+                                title="Move this part's stock onto one model's shelf. Leave as is to touch no inventory."
+                              >
+                                <option value="">— leave as is —</option>
+                                {deviceLetters.map((d) => (
+                                  <option key={d.letter} value={d.letter}>
+                                    {d.letter} — {d.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                          )}
                         </div>
                       )}
+                      {/* The codes this part actually carries, read off rather
+                          than assembled from three fields by hand. Silent until
+                          the parts code and variant are both real, because a
+                          half-typed code preview is a code that does not exist. */}
+                      {isIssues &&
+                        (() => {
+                          const codes = codesFor(editModels ?? deviceModels, editParts, editVariant)
+                          if (codes.length === 0) return null
+                          return (
+                            <p className="edit-code-preview">
+                              {codes.map((c) => (
+                                <span key={c} className="manage-item-code">
+                                  {c}
+                                </span>
+                              ))}
+                            </p>
+                          )
+                        })()}
                       {hasPrefixes && (
                         <div className="edit-code-row">
                           {hasTelPrefixes && (

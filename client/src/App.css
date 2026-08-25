@@ -2784,6 +2784,76 @@ button.sync-pill {
   width: 8rem;
   text-align: left;
 }
+/* Which devices use a part — ticked in the edit row, beside the code that
+   names it, so the two halves of a Model Code are answered in one place. The
+   grid lower down ticks the same field; this is the close-up of one row. */
+.field-models {
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  padding: 0.3rem 0.5rem 0.45rem;
+  margin: 0;
+  min-width: 0;
+}
+.field-models legend {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--muted);
+  padding: 0 0.25rem;
+}
+.model-ticks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.4rem;
+}
+/* Each device reads as its letter first — the letter is what lands in the
+   code, so it is the part worth seeing at a glance. */
+.model-tick {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 0.3rem;
+  padding: 0.1rem 0.4rem 0.1rem 0.25rem;
+  cursor: pointer;
+  background: var(--surface-2);
+}
+.model-tick.on {
+  color: var(--text-h);
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+.model-tick-letter {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-weight: 700;
+  color: var(--primary);
+}
+/* A long device name must never push the row wider than the card. */
+.model-tick-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 9rem;
+}
+/* The codes the ticked devices actually produce. */
+.edit-code-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin: 0;
+}
+.edit-code-preview span.manage-item-code {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--primary);
+  background: var(--primary-soft);
+  border-radius: 0.3rem;
+  padding: 0.05rem 0.35rem;
+}
 /* In the edit row the two code fields share a line above the description. */
 .edit-code-row {
   display: flex;
