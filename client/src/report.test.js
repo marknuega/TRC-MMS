@@ -4,6 +4,7 @@ import {
   classify,
   entryCounts,
   entryQty,
+  foldMaintenance,
   technicianTotals,
   agencyBlocks,
   activityTotals,
@@ -13,7 +14,6 @@ import {
   buildTxt,
   deviceBlocksByType,
   entriesByModel,
-  foldMaintenance,
   materialBlocksByType,
   setIssueClaims,
   isCountable,
@@ -246,9 +246,9 @@ describe('chargers and power supplies count on top of the entry max', () => {
         'Entry & Materials Summary',
         DIVIDER,
         'AIRBUS (TH1N)',
-        'ANTENNA (MOT) = 1',
-        'BCOVER (MOT) = 1',
-        'CHARGER12 (MOT) = 3',
+        '1. ANTENNA (MOT) = 1',
+        '2. BCOVER (MOT) = 1',
+        '3. CHARGER12 (MOT) = 3',
         DIVIDER,
         'Device Summary',
         DIVIDER,
@@ -342,7 +342,11 @@ describe('the Materials Summary adds up one line per part', () => {
     action: 'CHANGE',
     company,
   })
-  const lines = (entries) => materialBlocksByType(entries).AIRBUS.flatMap((b) => b.lines)
+  // Without the "1. " a Materials line carries: these rules are about which
+  // parts land on which line and what each one says, not where it sits in the
+  // block. The numbering has a test of its own below.
+  const unnumbered = (l) => l.replace(/^\d+\. /, '')
+  const lines = (entries) => materialBlocksByType(entries).AIRBUS.flatMap((b) => b.lines.map(unnumbered))
 
   const CLAIMS = [
     { name: 'Speaker Mid', parts: '45', variant: 'B' },
@@ -956,7 +960,8 @@ describe('a PCB, a programming and an installation on one day', () => {
       branch: 'Makkah',
       shortId: 'MAK-REP-A011',
     })
-  const materialLines = (entries, type) => materialBlocksByType(entries)[type].flatMap((b) => b.lines)
+  const unnumbered = (l) => l.replace(/^\d+\. /, '')
+  const materialLines = (entries, type) => materialBlocksByType(entries)[type].flatMap((b) => b.lines.map(unnumbered))
   // agencyBlocks keeps Installation and Dismantle broken out for the monthly
   // sheet; the daily Agency Summary folds them into MAINTENANCE. These rules are
   // about the daily report, so they read the folded tally it actually prints.
@@ -1033,31 +1038,26 @@ describe('a PCB, a programming and an installation on one day', () => {
     })
   })
 
-  // -- Rule 2: an install absorbs the entry's ordinary maintenance faults --
+  // -- Rule 2: an install and the parts fitted with it are both counted --
   //
-  // Fitting a fuse cover or a FUSE10 while mounting a car kit is part of doing
-  // the install, not a second repair — the install count already covers the
-  // device, so those faults contribute nothing further. Programming is not
-  // treated the same way (see "programming is kept out of maintenance in just
-  // the same way" below): a PCB changed alongside a re-program is two
-  // genuinely separate jobs, not one.
-  describe("an install absorbs the entry's maintenance faults", () => {
-    test('it does not reach maintenanceCount', () => {
-      // The three parts contribute nothing — the entry also has an install
-      // fault, so they are the install, not a repair on top of it. Only the
-      // installation's own 2 is counted.
+  // Mounting a car kit and changing parts while doing it is an installation AND
+  // a repair: two things happened to that device. The entry counts once under
+  // each, the same way an entry carrying a programming and a PCB always has.
+  describe('an install and its parts each count once', () => {
+    test('the parts still reach maintenanceCount', () => {
+      // The three parts count as one repair, taking their max quantity of 2,
+      // and the installation's own 2 counts beside it rather than instead.
       assert.deepEqual(entryCounts(carkit()), {
-        maintenance: 0,
+        maintenance: 2,
         programming: 0,
         install: 2,
         dismantle: 0,
       })
     })
 
-    // ...so the block's MAINTENANCE is the install's own 2 and nothing else —
-    // the three parts are not counted a second time on top of it. INSTALLATION
-    // then keeps its line, and TOTAL sums both lines (see foldMaintenance).
-    test('the Device Summary maintenance is the install, not the parts as well', () => {
+    // Two lines describing two different jobs, and a TOTAL that is their sum —
+    // the install is no longer counted a second time inside MAINTENANCE.
+    test('the Device Summary shows the repair and the install separately', () => {
       const [block] = deviceBlocksByType(a011()).SEPURA
       assert.equal(block.header, 'SEPURA (CARKIT)')
       assert.deepEqual(block.cats, [
@@ -1067,15 +1067,15 @@ describe('a PCB, a programming and an installation on one day', () => {
       assert.equal(block.total, 4)
     })
 
-    // The roll-up drops the INSTALLATION line the device block keeps, so its
-    // maintenance is the same 2 with nothing beside it.
+    // The roll-up accounts for the same work, in one cell rather than two:
+    // the block's 2 parts and 2 install become PSD's single MAIN of 4.
     test('the Agency Summary counts the same work', () => {
-      assert.deepEqual(agencyOf(a011(), 'PSD').cats, [['MAINTENANCE', 2]])
-      assert.equal(agencyOf(a011(), 'PSD').total, 2)
+      assert.deepEqual(agencyOf(a011(), 'PSD').cats, [['MAINTENANCE', 4]])
+      assert.equal(agencyOf(a011(), 'PSD').total, 4)
     })
 
-    // The rule INSTALLATION is being held to.
-    test('programming is kept out of maintenance in just the same way', () => {
+    // Programming was always counted this way; installation now matches it.
+    test('programming is counted beside maintenance in just the same way', () => {
       assert.deepEqual(entryCounts(th1n()), {
         maintenance: 1,
         programming: 1,
@@ -1102,9 +1102,9 @@ describe('a PCB, a programming and an installation on one day', () => {
     test('the installation prints under the car kit and under no other device', () => {
       assert.ok(materialLines(a011(), 'SEPURA').includes('INSTALLATION = 2'))
       assert.ok(!materialLines(a011(), 'AIRBUS').some((l) => l.startsWith('INSTALLATION')))
-      // In the Device Summary the install counts as the car kit's MAINTENANCE
-      // (Rule 2), so what the TH1N must not pick up is that count, not a
-      // category of its own: its own maintenance is the 1 PCB it really had.
+      // The car kit's install is a line of its own on the car kit's block, so
+      // what the TH1N must not pick up is an INSTALLATION line: its own
+      // maintenance is the 1 PCB it really had.
       assert.deepEqual(deviceBlocksByType(a011()).AIRBUS[0].cats, [
         ['MAINTENANCE', 1],
         ['PROGRAMMING', 1],
@@ -1124,24 +1124,32 @@ describe('a PCB, a programming and an installation on one day', () => {
 
   // -- Rule 4: the Agency Summary agrees with the Device Summary --
   describe('the Agency Summary agrees with the Device Summary', () => {
-    // The roll-up is the same numbers minus the INSTALLATION / DISMANTLE lines
-    // the device blocks keep, so every category it DOES show must match.
-    test('each agency reads the categories its device block reads', () => {
+    // The two answer different questions, so they do not print the same
+    // numbers — but they must account for the same work. The agency's MAIN is
+    // its device block's MAINTENANCE, INSTALLATION and DISMANTLE added up, and
+    // every other category matches line for line.
+    test('each agency accounts for the work its device block accounts for', () => {
       const devices = deviceBlocksByType(a011())
-      const dropInstall = (cats) => cats.filter(([l]) => l !== 'INSTALLATION' && l !== 'DISMANTLE')
-      assert.deepEqual(agencyOf(a011(), 'PRI').cats, dropInstall(devices.AIRBUS[0].cats))
-      assert.deepEqual(agencyOf(a011(), 'PSD').cats, dropInstall(devices.SEPURA[0].cats))
+      const folded = (cats) => foldMaintenance(cats)
+      assert.deepEqual(agencyOf(a011(), 'PRI').cats, folded(devices.AIRBUS[0].cats))
+      assert.deepEqual(agencyOf(a011(), 'PSD').cats, folded(devices.SEPURA[0].cats))
+      // The car kit's block reads 2 + 2 across two lines; PSD's one MAIN cell
+      // carries the same 4.
+      assert.equal(agencyOf(a011(), 'PSD').cats.find(([l]) => l === 'MAINTENANCE')[1], 4)
+      assert.equal(devices.SEPURA[0].total, 4)
     })
 
-    test('it never absorbs programming into maintenance', () => {
-      // PRI and PSD tie on 2, so the tie-break puts them in alphabetical order.
+    test('the install lands inside MAIN rather than on a line of its own', () => {
+      // PSD leads on 4 (2 parts + 2 install) against PRI's 2, so it is named
+      // first. The roll-up has only the two rows there can be.
       assert.equal(
         agencyComment(a011()),
-        ['Agency Summary', DIVIDER, 'MAIN: [PRI = 1] [PSD = 2]', 'PROG: [PRI = 1]'].join('\n'),
+        ['Agency Summary', DIVIDER, 'MAIN: [PSD = 4] [PRI = 1]', 'PROG: [PRI = 1]'].join('\n'),
       )
-      // Installation folds into maintenance; programming does not. PRI keeps a
-      // PROG cell of its own rather than arriving on the MAIN line as a 2.
+      // Programming is NOT folded the same way: PRI keeps a PROG cell of its
+      // own rather than arriving on the MAIN line as a 2.
       assert.ok(!agencyComment(a011()).includes('MAIN: [PRI = 2]'))
+      assert.ok(!agencyComment(a011()).includes('INST:'))
     })
 
     test('an agency with nothing in a category is left off that line', () => {
@@ -1152,7 +1160,34 @@ describe('a PCB, a programming and an installation on one day', () => {
     })
   })
 
-  // -- Rule 5: Device Summary numbering --
+  // -- Rule 5: Materials Summary numbering --
+  //
+  // Every block counts its own materials from 1. The number answers "how many
+  // parts did this device take", so it has to restart per device — and the
+  // blocks print side by side in their own columns, where a sequence running
+  // on from the column to its left reads as a mistake.
+  describe('Materials Summary numbering', () => {
+    test('each block numbers its own lines from 1', () => {
+      const blocks = materialBlocksByType(a011())
+      assert.deepEqual(blocks.AIRBUS[0].lines, ['1. PCB (C) (MOI) = 1', '2. PROGRAMMING = 1'])
+      assert.deepEqual(blocks.SEPURA[0].lines, [
+        '1. FISTMIC (MOT) = 2',
+        '2. FUSE COVER (MOT) = 2',
+        '3. FUSE10 (MOT) = 2',
+        '4. INSTALLATION = 2',
+      ])
+    })
+
+    // The Device Summary's TXT numbers straight on across its blocks; the
+    // Materials Summary does not, and that difference is deliberate.
+    test('the second block restarts rather than continuing the first', () => {
+      const blocks = materialBlocksByType(a011())
+      assert.ok(blocks.AIRBUS[0].lines.length > 0)
+      assert.match(blocks.SEPURA[0].lines[0], /^1\. /)
+    })
+  })
+
+  // -- Rule 6: Device Summary numbering --
   describe('Device Summary numbering', () => {
     const deviceSection = (entries) =>
       buildTxt(report(entries)).split(`\n${DIVIDER}\nAgency Summary`)[0].split(`Device Summary\n${DIVIDER}\n`)[1]
@@ -1197,14 +1232,14 @@ describe('a PCB, a programming and an installation on one day', () => {
         'Entry & Materials Summary',
         DIVIDER,
         'AIRBUS (TH1N)',
-        'PCB (C) (MOI) = 1',
-        'PROGRAMMING = 1',
+        '1. PCB (C) (MOI) = 1',
+        '2. PROGRAMMING = 1',
         DIVIDER,
         'SEPURA (CARKIT)',
-        'FISTMIC (MOT) = 2',
-        'FUSE COVER (MOT) = 2',
-        'FUSE10 (MOT) = 2',
-        'INSTALLATION = 2',
+        '1. FISTMIC (MOT) = 2',
+        '2. FUSE COVER (MOT) = 2',
+        '3. FUSE10 (MOT) = 2',
+        '4. INSTALLATION = 2',
         DIVIDER,
         'Device Summary',
         DIVIDER,
@@ -1220,7 +1255,7 @@ describe('a PCB, a programming and an installation on one day', () => {
         DIVIDER,
         'Agency Summary',
         DIVIDER,
-        'MAIN: [PRI = 1] [PSD = 2]',
+        'MAIN: [PSD = 4] [PRI = 1]',
         'PROG: [PRI = 1]',
       ].join('\n'),
     )

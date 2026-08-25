@@ -72,7 +72,7 @@ export default function AgencyTotals({
     }
     // Installation and Dismantle count as maintenance here, the same as they do
     // in the report's own Agency Summary (see foldMaintenance) — this screen is
-    // the same tally over a longer period, so it must not tell a different story.
+    // that tally over a longer period, so it must not tell a different story.
     return agencyBlocks(entries).map((b) => ({ ...b, cats: foldMaintenance(b.cats) }))
   }, [saved, branch, start, end])
 

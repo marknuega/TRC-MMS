@@ -215,24 +215,25 @@ function isStandaloneItem(issue) {
 // + (max quantity among the remaining maintenance faults). A multi-component
 // repair still counts once; each charger/PSU adds on top.
 //
-// An ordinary (non-standalone) maintenance fault on an entry that ALSO has an
-// install fault contributes nothing: fitting a fuse cover or a FUSE10 while
-// mounting a car kit is part of doing the install, not a second, separate
-// repair — the install count already covers the device. Programming does not
-// get the same treatment: a PCB changed alongside a re-program is two
-// genuinely separate jobs on the bench, not one. A standalone charger/PSU
-// still adds on top either way — it is a unit physically handed out, which an
-// install happening on the same entry does not change.
+// An install on the same entry does NOT absorb its parts work. Fitting a car
+// kit and changing a fistmic and an antenna while doing it is an installation
+// AND a repair — two things happened to that device, and the summary is read
+// as saying what happened. So an entry carrying both counts once under
+// INSTALLATION and once under MAINTENANCE, exactly as an entry carrying a
+// programming and a PCB already counted under both.
+//
+// This is the whole reason the categories are separate. Suppressing one
+// because another was present made an entry with more work on it report less
+// of that work than an entry with less.
 function maintenanceCount(faults) {
   const list = faults ?? []
-  const hasInstall = list.some((f) => classify(f.action) === 'install')
   let standalone = 0
   let otherMax = 0
   for (const f of list) {
     if (classify(f.action) !== 'maintenance') continue
     const q = Math.max(0, Number(f.quantity) || 0)
     if (isStandaloneItem(f.issue)) standalone += q
-    else if (!hasInstall) otherMax = Math.max(otherMax, q)
+    else otherMax = Math.max(otherMax, q)
   }
   return standalone + otherMax
 }
@@ -550,9 +551,16 @@ export function materialBlocksByType(entries) {
         // Materials Summary is sorted alphabetically by label (unlike Entry Summary).
         .sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base', numeric: true }))
       if (!rows.length) continue
+      // Numbered, and restarting at 1 in every block: the number says how many
+      // materials this device took, which is the question the block answers.
+      // Running the count on across blocks — the way the Device Summary's TXT
+      // does — would answer a different one, and the blocks print side by side
+      // in their own columns where a run-on sequence reads as an error.
       blocks.push({
         header: blockHeader(type, rawOf.get(md)),
-        lines: rows.map((r) => (isNoActivityIssue(r.label) ? r.label : `${r.label}${r.code}${r.company} = ${r.qty}`)),
+        lines: rows.map(
+          (r, i) => `${i + 1}. ${isNoActivityIssue(r.label) ? r.label : `${r.label}${r.code}${r.company} = ${r.qty}`}`,
+        ),
       })
     }
     byType[type] = blocks
@@ -668,31 +676,29 @@ export function reportNotes(entries) {
     })
 }
 
-// Installation and Dismantle ALSO count under MAINTENANCE: fitting a car kit
-// or stripping one out is maintenance work on that device, and the day's
-// maintenance figure is read as including it.
+// Installation and Dismantle count under MAINTENANCE for the AGENCY roll-up:
+// fitting a car kit or stripping one out is maintenance work by that agency,
+// and "how much did PSD do today" is read as including it.
 //
-// keepLines says whether the two survive as lines of their own on top of that.
-// The Device Summary keeps them, so the block still says what the work was —
-// which does mean its MAINTENANCE and INSTALLATION lines describe the one job
-// from two angles, and its TOTAL counts it twice. Deliberate: MAINTENANCE
-// answers "how much maintenance", INSTALLATION "how much of it was an
-// install". The Agency Summary is the compact roll-up pasted into a message
-// and drops them, so it shows the folded MAINTENANCE alone.
+// The DEVICE Summary does not fold. It has a line per category and a TOTAL
+// under them, so folding there made the block disagree with itself — the one
+// install appeared on the MAINTENANCE line and on its own line, and TOTAL
+// counted it twice, turning three jobs into four. The roll-up has no TOTAL and
+// no INSTALLATION line to double against: it is one number per agency per
+// category, and the number wanted there is all the maintenance work.
 //
-// Folded here rather than in classify() so the underlying tallies stay
-// separate: the monthly spare-parts sheet reports Installation and
+// So the two summaries answer different questions on purpose. The device block
+// says what was done to that device; the agency line says how much that agency
+// did. Folded here rather than in classify() so the underlying tallies stay
+// separate — the monthly spare-parts sheet reports Installation and
 // Dismantling in columns of their own.
 const FOLDS_INTO_MAINTENANCE = new Set(['MAINTENANCE', 'INSTALLATION', 'DISMANTLE'])
-export function foldMaintenance(cats, { keepLines = false } = {}) {
+export function foldMaintenance(cats) {
   let maintenance = 0
   const rest = []
   for (const [label, v] of cats) {
-    if (!FOLDS_INTO_MAINTENANCE.has(label)) rest.push([label, v])
-    else {
-      maintenance += v
-      if (keepLines && label !== 'MAINTENANCE') rest.push([label, v])
-    }
+    if (FOLDS_INTO_MAINTENANCE.has(label)) maintenance += v
+    else rest.push([label, v])
   }
   return [['MAINTENANCE', maintenance], ...rest].filter(([, v]) => v > 0)
 }
@@ -730,19 +736,17 @@ export function deviceBlocksByType(entries) {
     const blocks = []
     for (const dev of order) {
       const a = byDevice.get(dev)
-      const cats = foldMaintenance(
-        [
-          ['MAINTENANCE', a.maintenance],
-          ['PROGRAMMING', a.program],
-          ['INSTALLATION', a.install],
-          ['DISMANTLE', a.dismantle],
-        ],
-        { keepLines: true },
-      )
+      // Empty categories are dropped rather than printed as a "= 0" the
+      // reader has to skip past.
+      const cats = [
+        ['MAINTENANCE', a.maintenance],
+        ['PROGRAMMING', a.program],
+        ['INSTALLATION', a.install],
+        ['DISMANTLE', a.dismantle],
+      ].filter(([, v]) => v > 0)
       if (!cats.length) continue
       // The sum of the lines actually printed, which is what TOTAL has always
-      // been. An install therefore lands in it twice — once as itself and once
-      // inside MAINTENANCE — see foldMaintenance.
+      // been — and now that nothing folds, each job is in it exactly once.
       const total = cats.reduce((n, [, v]) => n + v, 0)
       // Per-block numbered lines (used by the PDF split columns).
       const lines = cats.map(([label, v], i) => `${i + 1}. ${label} = ${v}`)
@@ -835,9 +839,8 @@ export function agencyComment(entries) {
     const cells = agencies.filter((a) => a.cats.get(label) > 0).map((a) => `[${a.agency} = ${a.cats.get(label)}]`)
     if (cells.length) lines.push(`${abbr}: ${cells.join(' ')}`)
   }
-  // No TOTAL line: the block is the roll-up, and a total under it would not
-  // match the Device Summary's totals added up anyway — those count an install
-  // twice on purpose (see foldMaintenance).
+  // No TOTAL line: the block is the roll-up, and the Device Summary's own
+  // totals are where the arithmetic is meant to be read.
   return ['Agency Summary', DIVIDER, ...lines].join('\n')
 }
 
