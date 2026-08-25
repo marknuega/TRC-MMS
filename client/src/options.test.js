@@ -572,7 +572,7 @@ describe('optionFullForm', () => {
 
 describe('isServiceAction', () => {
   test('work with no part fitted is a service', () => {
-    for (const a of ['REPAIR', 'PROGRAM', 'RE-PROGRAM', 'INSTALL', 'RE-INSTALL', 'DISMANTLE']) {
+    for (const a of ['RTO', 'REPAIR', 'PROGRAM', 'RE-PROGRAM', 'INSTALL', 'RE-INSTALL', 'DISMANTLE']) {
       assert.equal(isServiceAction(a), true, a)
     }
   })
@@ -581,10 +581,12 @@ describe('isServiceAction', () => {
     for (const a of ['CHANGE', 'NEW', 'PCB']) assert.equal(isServiceAction(a), false, a)
   })
 
-  // RTO consumes no part either, but it already carries its own meaning (the
-  // report is marked reference-only) and was not among the actions asked for.
-  test('RTO is left out', () => {
-    assert.equal(isServiceAction('RTO'), false)
+  // The device went back untouched: no part fitted, and nothing done at all.
+  // Its OTHER meaning — marking the report reference-only — runs off
+  // isRtoAction and is untouched by it being named here.
+  test('RTO is a service, so no company supplied a part', () => {
+    assert.equal(isServiceAction('RTO'), true)
+    assert.equal(isServiceAction(' rto '), true)
   })
 
   test('matching ignores case and padding, as the actions list is user-editable', () => {
@@ -600,7 +602,7 @@ describe('isServiceAction', () => {
 
   test('every service action is one the app actually offers', () => {
     const offered = new Set(DEFAULT_OPTIONS.actions.map((a) => a.toUpperCase()))
-    for (const a of ['REPAIR', 'PROGRAM', 'RE-PROGRAM', 'INSTALL', 'RE-INSTALL', 'DISMANTLE']) {
+    for (const a of ['RTO', 'REPAIR', 'PROGRAM', 'RE-PROGRAM', 'INSTALL', 'RE-INSTALL', 'DISMANTLE']) {
       assert.ok(offered.has(a), `${a} is not in the actions list`)
     }
   })
