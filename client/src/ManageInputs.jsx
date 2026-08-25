@@ -791,8 +791,18 @@ export default function ManageInputs({
         </>
       ) : (
         <>
-          <span className="manage-item-label">
-            {isIssues && issueCode(value) && <span className="manage-item-code">{issueCode(value)}</span>}
+          <span className={`manage-item-label${isIssues && perDeviceRows(value).length > 0 ? ' with-devices' : ''}`}>
+            {/* The VARIANT alone, because the card head above already says
+                which parts code these are variants of. Repeating it on every
+                row — 99A, 99B, 99C under a head reading 99 — spent the width
+                that makes the letters line up, and buried the one character
+                that actually differs between the rows. The full code stays in
+                the title, and on every badge that leaves this card. */}
+            {isIssues && issueCode(value) && (
+              <span className="manage-item-code variant-code" title={issueCode(value)}>
+                {issueVariant(value)}
+              </span>
+            )}
             {/* The Model Codes this part is STOCKED under — the
                             parts code beside it says what the part is, these say
                             whose shelves it sits on. Read from inventory, not
@@ -861,7 +871,13 @@ export default function ManageInputs({
                     .join(' / ')}
                 </span>
               )}
-            {nameOf(value)}
+            {/* The row's own name, but only while nothing more specific is
+                on show. Once the per-device rows are there they carry a name
+                each, and the row's own is merely the default they fall back
+                to — printing it above them said "Charger" over a list that
+                already read Charger12 and Charger818, and made the card twice
+                as tall to say nothing. */}
+            {perDeviceRows(value).length === 0 && nameOf(value)}
             {isMaterials && descOf(value) && <span className="manage-item-desc">{descOf(value)}</span>}
             {isCompanies && companyCode(value) && <span className="manage-item-desc">stock {companyCode(value)}</span>}
             {fullFormOf(value) && <span className="manage-item-desc">{fullFormOf(value)}</span>}
@@ -875,7 +891,7 @@ export default function ManageInputs({
                             repeating it ten times would bury the rows that do
                             differ. */}
             {isIssues && issueCode(value) && perDeviceRows(value).length > 0 && (
-              <span className="issue-devices">
+              <span className="issue-devices issue-devices-stacked">
                 {perDeviceRows(value).map((r) => (
                   <span key={r.model} className="issue-device" title={r.model}>
                     <span className="manage-item-code">{r.code}</span>

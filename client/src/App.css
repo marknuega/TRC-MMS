@@ -2818,6 +2818,24 @@ button.sync-pill {
   padding: 0.4rem 0.5rem 0.4rem 0.85rem;
   min-height: 2.9rem;
 }
+/* The edit button is PINNED to the top right of its row rather than laid out
+   after the label. Flowed, it sat wherever the label left it — one row's
+   content is a single name, another's is three device lines — so the buttons
+   landed at different heights and different widths down the card and there was
+   no column to run your eye down. Pinned, every row's is in the same place,
+   and a row can grow to any height without moving it.
+   The row reserves the width it occupies, so a long device name ellipsises
+   before it reaches the button instead of running underneath. */
+.manage-group .manage-row:not(.editing) {
+  position: relative;
+  align-items: flex-start;
+  padding-right: 1.95rem;
+}
+.manage-group .manage-row:not(.editing) > .manage-item-actions {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.35rem;
+}
 .manage-group .manage-row + .manage-row {
   border-top: 1px solid var(--border);
 }
@@ -2863,6 +2881,26 @@ button.sync-pill {
   flex-direction: column;
   gap: 0.15rem;
   min-width: 0;
+}
+/* A variant with per-device rows reads across, not down: the variant code on
+   the left, its devices stacked beside it. Down the card the codes then line
+   up in a column of their own — 99A, 99B, 99C — which is what makes a group of
+   variants scannable rather than a wall of names.
+
+   Flagged from the render rather than matched with :has(), so what the layout
+   depends on is stated where it is decided instead of inferred from a
+   descendant. */
+/* One character wide but a fixed box, so A, B, C and D line up down the card
+   instead of each badge shrinking to its own letter. */
+.manage-list li span.manage-item-code.variant-code {
+  min-width: 1.6rem;
+  text-align: center;
+  font-size: 0.85rem;
+}
+.manage-item-label.with-devices {
+  flex-direction: row;
+  align-items: baseline;
+  gap: 0.5rem;
 }
 .manage-list li span.manage-item-desc {
   font-size: 0.82rem;
@@ -2992,6 +3030,16 @@ button.sync-pill {
   flex-wrap: wrap;
   gap: 0.2rem 0.4rem;
   margin-top: 0.15rem;
+}
+/* One device per line, so a part on four radios reads as four rows rather than
+   a wrapped paragraph you have to pick apart. */
+.issue-devices-stacked {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  gap: 0.1rem;
+  margin-top: 0;
+  min-width: 0;
 }
 .issue-device {
   display: inline-flex;
@@ -3175,23 +3223,41 @@ button.sync-pill {
 .manage-inputs .manage-list li span.manage-item-desc {
   line-height: 1.5;
 }
-.manage-inputs .manage-item-actions .icon-edit {
+/* The icon alone — no box, no border, no fill. At 2.4rem with a filled
+   background it was the heaviest thing on a card otherwise made of codes and
+   names, so the one control read as the point of the row. A pencil is enough
+   to say "edit"; the chrome around it was saying it twice and louder.
+   
+   Selected deep enough to actually reach it. `.manage-inputs .manage-body
+   button:not(...):not(...)` above scores 0,4,1 and paints every button in here
+   with the action fill — which is what made this one a dark square — so a
+   0,3,0 selector never applied. This one matches its weight and comes later.
+   The comment at the top of the Manage Inputs section warns about exactly this
+   selector; here it is again. */
+.manage-inputs .manage-body .manage-item-actions button.icon-edit {
   flex: 0 0 auto;
-  width: 2.4rem;
-  height: 2.4rem;
+  width: 1.5rem;
+  height: 1.5rem;
   padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--surface-2);
+  background: none;
+  border: none;
+  box-shadow: none;
   color: var(--muted);
-  border-color: var(--border);
-  font-size: 1rem;
+  font-size: 0.95rem;
 }
-.manage-inputs .manage-item-actions .icon-edit:hover:not(:disabled) {
-  background: var(--surface-3);
+/* Hover darkens the icon rather than growing a box behind it — a control with
+   no chrome at rest should not gain some on the way to being clicked. */
+.manage-inputs .manage-body .manage-item-actions button.icon-edit:hover:not(:disabled) {
+  background: none;
+  border-color: transparent;
   color: var(--text-h);
-  border-color: var(--border-strong);
+}
+.manage-inputs .manage-body .manage-item-actions button.icon-edit:disabled {
+  background: none;
+  opacity: 0.35;
 }
 
 /* The row being edited: a heavier border marks it as the one thing in hand. */
