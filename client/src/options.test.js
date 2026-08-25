@@ -5,6 +5,7 @@ import {
   DEFAULT_OPTIONS,
   issueCodeIndex,
   issueFitsModel,
+  issueOffered,
   issueNameForModel,
   issueNameOverrides,
   issueAllNames,
@@ -962,5 +963,47 @@ describe('per-device issue names', () => {
       const next = withIssueName(charger, 'STP9000', '')
       assert.equal(Object.prototype.hasOwnProperty.call(next, 'names'), false)
     })
+  })
+})
+
+// A part listed for several devices is one box serving all of them, and the
+// shelf it happens to sit on must not take it away from the rest.
+//
+// The real case: Antenna With Cable is stocked under C11A (SRG Carkit) and
+// listed for the Carkit, the Desktop, the Bike and the TH1N Carkit. Read off
+// the shelf alone it is the Carkit's and nobody else's — which hid it from
+// three of the four devices somebody had just named.
+describe('issueOffered', () => {
+  const antenna = {
+    name: 'Antenna With Cable',
+    parts: '11',
+    variant: 'A',
+    models: ['TMR 880i', 'SRG3900 CARKIT', 'SRG3900 DESKTOP', 'SRG3900 BIKE', 'TH1N Carkit'],
+  }
+  const sidegrip = { name: 'Sidegrip', parts: '43', variant: 'S' }
+
+  test('a listed device gets the part even when the shelf says otherwise', () => {
+    for (const model of ['TH1N Carkit', 'SRG3900 DESKTOP', 'SRG3900 BIKE']) {
+      assert.equal(issueOffered(antenna, model, true), true, model)
+    }
+  })
+
+  // The list still narrows: a device NOT on it is refused however the stock sits.
+  test('a device off the list is refused either way', () => {
+    assert.equal(issueOffered(antenna, 'TH1N', false), false)
+    assert.equal(issueOffered(antenna, 'STP9000', true), false)
+  })
+
+  // Nothing here unhides the rest of the store. A part nobody has listed is
+  // still narrowed by the shelf it is stocked on, which is the only thing
+  // narrowing it at all.
+  test('an unlisted part is still narrowed by its shelf', () => {
+    assert.equal(issueOffered(sidegrip, 'TH1N', true), false)
+    assert.equal(issueOffered(sidegrip, 'TH1N', false), true)
+  })
+
+  test('a shared part is offered to everything, as it always was', () => {
+    assert.equal(issueOffered(sidegrip, 'TH1N'), true)
+    assert.equal(issueOffered('ANTENNA', 'TH1N'), true)
   })
 })

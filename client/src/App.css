@@ -3799,6 +3799,13 @@ button.sync-pill {
   .split-empty {
     opacity: 0.6;
   }
+  /* The agency roll-up: one bordered block the width of the sheet, since it is
+     one line per category across every agency rather than a column per type. */
+  .print-agency {
+    border: 1px solid #000;
+    padding: 6px 8px;
+    page-break-inside: avoid;
+  }
   .print-footer {
     margin-top: 14px;
     padding-top: 6px;
