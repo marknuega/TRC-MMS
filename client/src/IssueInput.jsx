@@ -361,37 +361,64 @@ export default function IssueInput({
                       width that name happens to be — a ragged edge you have to
                       read across rather than a list you can scan down. */}
                   <span className="issue-opt-spacer" />
-                  {/* The Model Code, beside the parts code it is built from —
-                      the parts code says WHAT the item is, this says which
-                      radio's shelf it comes off. A real code (C99A) is shown
-                      whole; a provisional one is shown as its device letter
-                      alone, because the rest of it is the item's own name and
-                      that is already the text on the left of this row. */}
-                  {s.pairCode && (
-                    <span className="issue-pair-code" title={`Model Code ${s.pairCode}`}>
-                      {parsePairCode(s.pairCode)?.provisional ? parsePairCode(s.pairCode).letter : s.pairCode}
-                    </span>
-                  )}
-                  {s.code && <span className="issue-code">{s.code}</span>}
-                  {/* Whose shelf the stock is on. MOT, X1 and X2 hold the same
-                      parts in one branch and a fault draws from the shelf of
-                      the company paying for it, so which companies stock this
-                      is worth seeing while choosing rather than discovering in
-                      the ledger afterwards.
+                  {/* Three fixed slots, filled or not. A row missing its parts
+                      code used to pull the company badge left into the column
+                      the codes were in, so the three kinds of badge no longer
+                      lined up down the menu and each row had to be read across
+                      to see which badge was which. A slot that holds its width
+                      while empty is what keeps them a column.
 
-                      Both are listed when both stock it — that is the ordinary
-                      case here, not an ambiguity. Nothing is shown for shared
-                      stock, which belongs to whoever needs it. */}
-                  {s.companies?.length > 0 && (
-                    <span
-                      className="issue-company"
-                      title={
-                        s.companies.length > 1 ? `Stocked by ${s.companies.join(' and ')}` : `${s.companies[0]}'s stock`
-                      }
-                    >
-                      {s.companies.join(' ')}
+                      Left to right: the Model Code — which radio's shelf this
+                      comes off; the parts code — WHAT the item is; the company
+                      — whose stock it is. Widest first, so the ragged edge is
+                      on the inside where the name already is. */}
+                  <span className="issue-opt-badges">
+                    <span className="issue-opt-slot">
+                      {/* One code, not two. T99A already CONTAINS 99A — the
+                          device letter in front of the parts code is the whole
+                          construction — so showing both said the same thing
+                          twice and made the row longer for it.
+
+                          The parts code is not deleted, it is the fallback.
+                          With no Model chosen on the entry an unstocked part
+                          has no pair code to show, and 99A is then the only
+                          code that row can offer; dropping it outright would
+                          leave those rows blank. Shown whole for a real code;
+                          a provisional one shows its device letter alone,
+                          because the rest of it is the item's own name and
+                          that is already the text on the left of this row. */}
+                      {s.pairCode ? (
+                        <span className="issue-pair-code" title={`Model Code ${s.pairCode}`}>
+                          {parsePairCode(s.pairCode)?.provisional ? parsePairCode(s.pairCode).letter : s.pairCode}
+                        </span>
+                      ) : (
+                        s.code && (
+                          <span className="issue-code" title={`Parts code ${s.code}`}>
+                            {s.code}
+                          </span>
+                        )
+                      )}
                     </span>
-                  )}
+                    <span className="issue-opt-slot">
+                      {/* Whose shelf the stock is on. MOT, X1 and X2 hold the
+                          same parts in one branch and a fault draws from the
+                          shelf of the company paying for it, so which company
+                          stocks this is worth seeing while choosing rather
+                          than discovering in the ledger afterwards. */}
+                      {s.companies?.length > 0 && (
+                        <span
+                          className="issue-company"
+                          title={
+                            s.companies.length > 1
+                              ? `Stocked by ${s.companies.join(' and ')}`
+                              : `${s.companies[0]}'s stock`
+                          }
+                        >
+                          {s.companies.join(' ')}
+                        </span>
+                      )}
+                    </span>
+                  </span>
                   {/* One control per row, and it is the mild one. Setting a
                       code, changing it and deleting the entry are all edits to
                       the same shared list, so they open together rather than
