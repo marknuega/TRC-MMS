@@ -27,6 +27,17 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { parsePairCode } from './pairCode.js'
 
+// Badge geometry, in rem. The badges inside the field are positioned OVER the
+// input, so the input has to reserve exactly the room they take — which means
+// this file has to know how wide they are. Kept as named numbers rather than
+// spelled into three separate style literals, because the three have to move
+// together and did not, last time one of them changed.
+//
+// Must match .issue-pair-code / .issue-company / .issue-code in App.css.
+const BADGE_W = 2.6
+const BADGE_GAP = 0.3
+const FIELD_EDGE = 0.6
+
 // A code is two digits and a letter — "72" + "A". Half a code is not a code
 // (issueCode in options.js says the same), so both halves are required here.
 const PARTS_RE = /^\d{2}$/
@@ -117,6 +128,11 @@ export default function IssueInput({
     if (!want) return ''
     return suggestions.find((s) => s.name.trim().toUpperCase() === want)?.pairCode ?? ''
   }, [value, suggestions])
+
+  // How many badges sit inside the field, which is what its right padding has
+  // to clear so a long issue name ellipsises before it reaches them instead of
+  // sliding underneath.
+  const badgeCount = (selectedPairCode ? 1 : 0) + (companyCode ? 1 : 0)
 
   const commit = (name, company = '') => {
     onChange({ target: { value: name } })
@@ -231,11 +247,7 @@ export default function IssueInput({
         aria-autocomplete="list"
         autoComplete="off"
         list={list}
-        style={
-          selectedPairCode || companyCode
-            ? { paddingRight: `${(selectedPairCode ? 3.9 : 0.6) + (companyCode ? 2.6 : 0)}rem` }
-            : undefined
-        }
+        style={badgeCount ? { paddingRight: `${FIELD_EDGE + badgeCount * (BADGE_W + BADGE_GAP)}rem` } : undefined}
         {...rest}
       />
       {/* Pinned inside the right edge of the field rather than after it: it
@@ -246,7 +258,7 @@ export default function IssueInput({
       {selectedPairCode && (
         <span
           className="issue-pair-code issue-pair-code-inline"
-          style={companyCode ? { right: '3.2rem' } : undefined}
+          style={companyCode ? { right: `${FIELD_EDGE + BADGE_W + BADGE_GAP}rem` } : undefined}
           title={`Model Code ${selectedPairCode}`}
         >
           {parsePairCode(selectedPairCode)?.provisional ? parsePairCode(selectedPairCode).letter : selectedPairCode}
