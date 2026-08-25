@@ -15,7 +15,7 @@ import { shortIdOf } from '../../../client/src/report.js'
 // never drift apart.
 import { normalizePairCode, pairCodeForFault } from '../../../client/src/pairCode.js'
 // Which company's shelf a fault draws from. See client/src/company.js.
-import { shelfCompanyForFault } from '../../../client/src/company.js'
+import { shelfCompanyFor } from '../../../client/src/company.js'
 import { mergeOptions } from '../../../client/src/options.js'
 import { CODEMAP_SEED } from '../codemapSeed.js'
 
@@ -152,6 +152,11 @@ export function resolveInventoryUsage(snapshot, items, vocab = {}) {
   const byPair = new Map() // pair code -> rows carrying it
   const byName = new Map() // item code -> shared rows carrying it
   const companies = vocab.companies ?? []
+  // The companies this branch's stock is actually filed under. A fault company
+  // may narrow to one of these by name alone (MOT, X1) without anyone typing a
+  // code — but only to one of THESE, so a name that is nobody's shelf stays
+  // unnarrowed rather than narrowing to nothing. See shelfCompanyFor.
+  const known = new Set((items ?? []).map(itemCompany).filter(Boolean))
   for (const it of items ?? []) {
     const pair = normalizePairCode(it.pairCode)
     // A coded row is model-specific and is NEVER reachable by name: letting it
@@ -178,7 +183,7 @@ export function resolveInventoryUsage(snapshot, items, vocab = {}) {
 
       // Who is paying, as a shelf code. '' when the Companies list gives this
       // company no code — see forCompany() for why that is not an error.
-      const company = shelfCompanyForFault(f.company, companies)
+      const company = shelfCompanyFor(f.company, companies, known)
 
       const pairCode = pairCodeForFault({ model: e.model, issue }, vocab)
       // Narrowed by company at EACH step rather than once at the end: a company

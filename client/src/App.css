@@ -2421,6 +2421,14 @@ button.sync-pill {
   transform: translateY(-50%);
   pointer-events: none;
 }
+/* The company badge pinned inside the field, beside the Model Code. */
+.issue-company-inline {
+  position: absolute;
+  top: 50%;
+  right: 0.6rem;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
 /* One control per row, and deliberately quiet: it opens an editor, it does not
    change anything by itself. Faint until the row is hovered or arrowed onto, so
    a list being read does not look like a list being edited. */
@@ -2501,16 +2509,6 @@ button.sync-pill {
 }
 /* Destructive, so it is coloured as such — but it lives inside the editor, one
    step in from the row, which is the distance that keeps it off a mis-click. */
-.issue-code-del {
-  border: 1px solid var(--danger);
-  background: none;
-  color: var(--danger);
-  font-weight: 600;
-}
-.issue-code-del:hover {
-  background: var(--danger);
-  color: #fff;
-}
 
 .ref-badge {
   display: inline-block;

@@ -8,7 +8,7 @@
  */
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
-import { companyFromSku, companyCodeMap, shelfCompanyForFault, companyNameForCode } from './company.js'
+import { companyFromSku, companyCodeMap, shelfCompanyForFault, companyNameForCode, shelfCompanyFor } from './company.js'
 
 describe('the company in a SKU', () => {
   test('is the segment before the first hyphen', () => {
@@ -80,5 +80,49 @@ describe('a shelf code to a company name', () => {
 
   test('round-trips with shelfCompanyForFault', () => {
     assert.equal(shelfCompanyForFault(companyNameForCode('X1', companies), companies), 'X1')
+  })
+})
+
+// A list whose names ARE the codes needs no configuring. Both directions allow
+// it, but not equally — see shelfCompanyFor.
+describe('a company whose name is its own code', () => {
+  const plain = ['MOT', 'X1', '2X']
+
+  test('the name answers to the code for the UI', () => {
+    assert.equal(companyNameForCode('MOT', plain), 'MOT')
+    assert.equal(companyNameForCode('2X', plain), '2X')
+  })
+
+  // An explicit code is never second-guessed by a coincidence of spelling.
+  test('an explicit code still wins over a name that looks like one', () => {
+    const mixed = [{ name: 'MOTECO', code: 'X1' }, 'X1']
+    assert.equal(companyNameForCode('X1', mixed), 'MOTECO')
+  })
+
+  describe('shelfCompanyFor', () => {
+    const known = new Set(['MOT', 'X1'])
+
+    test('narrows to a shelf the stock is actually filed under', () => {
+      assert.equal(shelfCompanyFor('MOT', plain, known), 'MOT')
+      assert.equal(shelfCompanyFor('X1', plain, known), 'X1')
+    })
+
+    // THE asymmetry. Narrowing to a company nothing stocks would fall through
+    // to shared stock, find none, and deduct nothing — silently, mid-save.
+    // Unnarrowed is a question somebody gets asked; a wrong narrowing is an
+    // answer nobody gets told.
+    test('does NOT narrow to a name no shelf is filed under', () => {
+      assert.equal(shelfCompanyFor('MOTECO', ['MOTECO', 'MOI'], known), '')
+      assert.equal(shelfCompanyFor('2X', plain, known), '')
+    })
+
+    test('an explicit code is honoured whether or not it is in known', () => {
+      const coded = [{ name: 'MOTECO', code: 'MOT' }]
+      assert.equal(shelfCompanyFor('MOTECO', coded, known), 'MOT')
+    })
+
+    test('a missing known set narrows nothing by name', () => {
+      assert.equal(shelfCompanyFor('MOT', plain, undefined), '')
+    })
   })
 })

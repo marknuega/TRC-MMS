@@ -39,11 +39,14 @@ export default function IssueInput({
   // Company field follows it. An auto-select, not a lock: the caller may set
   // it and the person may change it afterwards.
   onPickCompany,
-  suggestions = [], // [{ name, code, pairCode, companies, source, removable }] — either code '' when it has none
+  // The shelf code this fault will draw from ('MOT'), derived from the Company
+  // field rather than remembered from the pick — so it is still right after a
+  // reload, and still right when the company is changed by hand afterwards.
+  companyCode = '',
+  suggestions = [], // [{ name, code, pairCode, companies, source }] — either code '' when it has none
   onAssignCode, // (name, parts, variant) => string|void — a string is an error
   onAssignPairCode, // async (name, letter) => string|'' — puts the item on that model's shelf
   deviceLetters = [], // [{ letter, label }] — the devices the code map names
-  onRemove, // (suggestion) => void — drops it from the list it came from
   placeholder,
   ariaLabel = 'Issue',
   list, // fallback datalist id, for modes that keep the native list
@@ -228,7 +231,11 @@ export default function IssueInput({
         aria-autocomplete="list"
         autoComplete="off"
         list={list}
-        style={selectedPairCode ? { paddingRight: '3.9rem' } : undefined}
+        style={
+          selectedPairCode || companyCode
+            ? { paddingRight: `${(selectedPairCode ? 3.9 : 0.6) + (companyCode ? 2.6 : 0)}rem` }
+            : undefined
+        }
         {...rest}
       />
       {/* Pinned inside the right edge of the field rather than after it: it
@@ -237,8 +244,22 @@ export default function IssueInput({
           so a long issue name ellipsises before it reaches the badge instead
           of sliding underneath. */}
       {selectedPairCode && (
-        <span className="issue-pair-code issue-pair-code-inline" title={`Model Code ${selectedPairCode}`}>
+        <span
+          className="issue-pair-code issue-pair-code-inline"
+          style={companyCode ? { right: '3.2rem' } : undefined}
+          title={`Model Code ${selectedPairCode}`}
+        >
           {parsePairCode(selectedPairCode)?.provisional ? parsePairCode(selectedPairCode).letter : selectedPairCode}
+        </span>
+      )}
+      {/* Whose shelf this fault draws from, beside the code it draws by. Shown
+          from the Company field, not from the row that was picked: the company
+          stays editable afterwards, and a badge still showing the picked shelf
+          after it was changed would be a label disagreeing with the field two
+          boxes to its right. */}
+      {companyCode && (
+        <span className="issue-company issue-company-inline" title={`Drawn from ${companyCode}'s shelf`}>
+          {companyCode}
         </span>
       )}
       {open && filtered.length > 0 && (
@@ -312,23 +333,14 @@ export default function IssueInput({
                   <button type="button" className="issue-code-save" onClick={saveCode}>
                     Save
                   </button>
-                  {/* Delete lives in here rather than on the row: it is one
-                      click away instead of one click, which is the right
-                      distance for the only control that destroys something. */}
-                  {s.removable && (
-                    <button
-                      type="button"
-                      className="issue-code-del"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setCoding(null)
-                        onRemove?.(s)
-                      }}
-                      title={`Remove "${s.name}" from the list`}
-                    >
-                      Delete
-                    </button>
-                  )}
+                  {/* No Delete here. This editor is opened mid-entry, with a
+                      device on the bench and a fault half-written, and removing
+                      a part from the shared list is not a thing to do from
+                      there — it takes the name out of the Action dropdown and
+                      out of everyone else's suggestions too. It belongs where
+                      that list is managed and its consequences are visible:
+                      Manage inputs. This control sets a code, and that is all
+                      it does. */}
                   <button
                     type="button"
                     className="ghost"

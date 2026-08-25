@@ -463,3 +463,53 @@ describe('resolveInventoryUsage across companies', () => {
     )
   })
 })
+
+// A branch whose Companies list is just MOT, X1, 2X — names that are already
+// the shelf codes, with nobody having typed a code anywhere. It must resolve
+// without configuration, and must NOT resolve to a shelf that does not exist.
+describe('resolveInventoryUsage with uncoded company names', () => {
+  const VOCAB = {
+    equipmentCodes: CODEMAP_SEED.equipmentCodes,
+    issueTypes: [{ name: 'SPEAKER LOW', parts: '45', variant: 'A' }],
+    companies: ['MOT', 'X1', '2X'], // plain strings: no code declared on any
+  }
+  const item = (id, sku) => ({
+    id,
+    sku,
+    company: sku.split('-')[0],
+    itemCode: 'SPEAKER LOW',
+    alias: '',
+    pairCode: 'C45A',
+    begin: 10,
+    out: 0,
+  })
+  const MOT = item(1, 'MOT-MAK-1')
+  const X1 = item(2, 'X1-MAK-2')
+  const entries = (company) => [
+    { model: 'SRG Carkit', faults: [{ issue: 'SPEAKER LOW', quantity: 1, action: 'CHANGE', company }] },
+  ]
+  const drawn = (u) => u.map((x) => x.item.sku)
+
+  test('a company named after its own shelf draws from it', () => {
+    assert.deepEqual(drawn(resolveInventoryUsage(entries('MOT'), [MOT, X1], VOCAB)), ['MOT-MAK-1'])
+    assert.deepEqual(drawn(resolveInventoryUsage(entries('X1'), [MOT, X1], VOCAB)), ['X1-MAK-2'])
+  })
+
+  // 2X is a real company on the list, but nothing on this shelf is filed under
+  // it. Narrowing to it would find no rows, fall through to shared stock, find
+  // none of that either, and deduct NOTHING — silently. Refusing is the answer.
+  test('a company that stocks nothing here refuses rather than drawing nothing', () => {
+    assert.throws(
+      () => resolveInventoryUsage(entries('2X'), [MOT, X1], VOCAB),
+      (err) => {
+        assert.equal(err.status, 409)
+        assert.match(err.message, /stocked by 2 companies \(MOT, X1\)/)
+        return true
+      },
+    )
+  })
+
+  test('and still resolves when only one company stocks the part', () => {
+    assert.deepEqual(drawn(resolveInventoryUsage(entries('2X'), [MOT], VOCAB)), ['MOT-MAK-1'])
+  })
+})

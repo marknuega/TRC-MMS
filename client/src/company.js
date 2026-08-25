@@ -111,7 +111,13 @@ export function companyCodeMap(companies) {
  * need the word: a fault records the company in the words the report prints,
  * so picking a part off MOT's shelf has to set 'MOTECO', not 'MOT'.
  *
- * '' when no entry claims the code, which is the same "unnarrowed" answer
+ * A company whose NAME is already the code answers to it without one being
+ * typed: a list of MOT, X1, 2X needs no configuring, because the word and the
+ * code are the same word. Checked only after every explicit code has failed,
+ * so a list that does declare them is never second-guessed by a coincidence of
+ * spelling.
+ *
+ * '' when nothing claims the code, which is the same "unnarrowed" answer
  * everything else here gives: the caller selects nothing rather than writing a
  * company the dropdown does not offer.
  */
@@ -120,6 +126,9 @@ export function companyNameForCode(code, companies) {
   if (!want) return ''
   for (const it of companies ?? []) {
     if (companyCode(it) === want) return companyName(it).trim()
+  }
+  for (const it of companies ?? []) {
+    if (normalizeCompany(companyName(it)) === want) return companyName(it).trim()
   }
   return ''
 }
@@ -130,4 +139,32 @@ export function shelfCompanyForFault(faultCompany, companies) {
     .toUpperCase()
   if (!name) return ''
   return companyCodeMap(companies)[name] ?? ''
+}
+
+/**
+ * The shelf a fault draws from, allowing a company whose NAME is its code.
+ *
+ * The same convenience companyNameForCode gives — a list of MOT, X1, 2X needs
+ * no configuring — but it CANNOT be granted as freely in this direction, and
+ * the asymmetry is deliberate.
+ *
+ * Getting it wrong here is not a wrong word in a dropdown someone can see and
+ * change. It narrows the shelf a save draws from: a company nothing stocks
+ * falls through to shared stock, finds none, and deducts NOTHING — silently,
+ * inside the transaction, with a document number already printed. Turning
+ * "MOTECO" into a shelf code nothing is filed under would do exactly that.
+ *
+ * So the fallback is checked against `known` — the companies the branch's
+ * stock is ACTUALLY filed under. "MOT" narrows because a MOT shelf exists;
+ * "MOTECO" does not, and stays unnarrowed, where the ambiguity check can still
+ * refuse and say which companies stock the part. Unnarrowed is a question
+ * somebody gets asked; a wrong narrowing is an answer nobody gets told.
+ *
+ * @param known Set of UPPERCASE company codes that actually hold stock
+ */
+export function shelfCompanyFor(faultCompany, companies, known) {
+  const mapped = shelfCompanyForFault(faultCompany, companies)
+  if (mapped) return mapped
+  const own = normalizeCompany(faultCompany)
+  return own && known?.has?.(own) ? own : ''
 }
