@@ -1089,32 +1089,29 @@ h2 {
 }
 
 /* ---- Saved reports list ---- */
-/* Hint left, tally right, on one line. The hint is allowed to shrink but keeps
-   a floor so it never collapses to a column of single words; the badges never
-   shrink, because a truncated quantity is worse than a wrapped one, and below
-   that floor the two simply stack. Baseline alignment, not centre: the chips
-   sit on the same reading line as the sentence beside them. */
+/* The headline owns the full width of the card, and whatever is in it — the
+   hint sentence, or the tally's columns — gets all of it. They never appear
+   together (see the comment beside the markup), so there is nothing to divide
+   it between. */
 .saved-headline {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.75rem 1.25rem;
-  flex-wrap: wrap;
+  margin-bottom: 0.9rem;
 }
 .saved-headline > .saved-hint {
-  flex: 1 1 20rem;
-  min-width: 0;
+  margin: 0;
 }
 /* One column per device: heading, then that device's parts down the column.
-   Columns start at the top so their headings sit on one line whatever their
-   lengths, and the whole set right-aligns against the hint as before. */
+   A grid rather than a wrapping row, so the columns are laid on a common set
+   of tracks — equal widths, aligned tops, every heading on one line — instead
+   of falling wherever their contents happened to end. auto-fit fills the row
+   with as many as will fit and then shares the width out, which is what makes
+   two devices read as two halves and five as five columns rather than a line
+   of badges that happens to have gaps in it. */
 .item-tally {
-  margin: 0 0 1rem;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: flex-end;
-  gap: 0.6rem 1rem;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  align-items: start;
+  gap: 0.9rem 1.1rem;
 }
 .tally-col {
   display: flex;
@@ -1182,11 +1179,11 @@ h2 {
   font-weight: 600;
 }
 @media (max-width: 620px) {
-  /* Stacked, and then left-aligned: right-aligned badges under a left-aligned
-     sentence read as belonging to something else. The columns stay columns —
-     they are the alignment, not a wide-screen luxury. */
+  /* Narrower tracks rather than fewer of them: two short columns still read as
+     two devices, where one column of everything reads as one long list. */
   .item-tally {
-    justify-content: flex-start;
+    grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+    gap: 0.75rem;
   }
 }
 

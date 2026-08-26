@@ -2579,6 +2579,9 @@ function App({ user, onLogout }) {
     // Only what the current query matched — with no query there are no results
     // and so no badges, which is the wanted behaviour rather than a special case.
     const tally = tallyByModel(results)
+    // The sentence describes the card, so it is worth the room only while
+    // nobody is using the card to look for something.
+    const showHint = Boolean(hint) && !search.trim()
     return (
       <section className="saved">
         <button type="button" className="manage-toggle" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
@@ -2589,43 +2592,48 @@ function App({ user, onLogout }) {
         </button>
         {open && (
           <div className="saved-body">
-            {/* Hint and tally share one line: the sentence explains what the card
-              is, the badges answer what the query just asked. Side by side
-              because the tally is a caption on THESE results, not a heading of
-              its own — and the hint line is the one place with room for it that
-              is already above the results it counts. It appears only while a
-              search is live, so an unfiltered card looks exactly as it did. */}
-            <div className="saved-headline">
-              <p className="saved-hint">{hint}</p>
-              {/* One column per device, its parts under it. Reading a day off a
+            {/* The hint describes the card; the tally answers the question just
+              asked. They no longer share a line, because they are never both
+              what someone is reading: a live search wants the whole width for
+              its columns, and a card nobody has searched has nothing competing
+              for the room. So the sentence steps aside while a query is in the
+              box, and comes back when it is cleared. */}
+            {/* Nothing to say and nothing counted yet — a card with no hint and no
+              live search skips the row entirely rather than opening with a
+              band of empty space above its own search box. */}
+            {(showHint || tally.length > 0) && (
+              <div className="saved-headline">
+                {showHint && <p className="saved-hint">{hint}</p>}
+                {/* One column per device, its parts under it. Reading a day off a
                   single wrapping row meant picking one model out of the line on
                   every badge — the device is said once, as the heading, and the
                   counts then line up in a column of their own to be read down.
                   The limit is per column, so no device is ever quietly shown a
                   partial total because another had a long list. */}
-              {tally.length > 0 && (
-                <div className="item-tally" aria-label={`Quantity per item matching “${search.trim()}”`}>
-                  {tally.map((g) => (
-                    <div className="tally-col" key={g.model || '—'}>
-                      <span className="tally-model" title={g.model || 'No model'}>
-                        {g.model || '—'}
-                      </span>
-                      <ul>
-                        {g.items.slice(0, TALLY_LIMIT).map((t) => (
-                          <li key={t.item} className="tally-chip" title={`${t.item} — ${t.qty} in total`}>
-                            <span className="tally-name">{t.name}</span>
-                            <b className="tally-qty">{t.qty}</b>
-                          </li>
-                        ))}
-                        {g.items.length > TALLY_LIMIT && (
-                          <li className="tally-chip more">+{g.items.length - TALLY_LIMIT} more</li>
-                        )}
-                      </ul>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                {tally.length > 0 && (
+                  <div className="item-tally" aria-label={`Quantity per item matching “${search.trim()}”`}>
+                    {tally.map((g) => (
+                      <div className="tally-col" key={g.model || '—'}>
+                        <span className="tally-model" title={g.model || 'No model'}>
+                          {g.model || '—'}
+                        </span>
+                        <ul>
+                          {g.items.slice(0, TALLY_LIMIT).map((t) => (
+                            <li key={t.item} className="tally-chip" title={`${t.item} — ${t.qty} in total`}>
+                              <span className="tally-name">{t.name}</span>
+                              <b className="tally-qty">{t.qty}</b>
+                            </li>
+                          ))}
+                          {g.items.length > TALLY_LIMIT && (
+                            <li className="tally-chip more">+{g.items.length - TALLY_LIMIT} more</li>
+                          )}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             {list.length > 0 && (
               <input
                 type="search"
@@ -3676,7 +3684,6 @@ function App({ user, onLogout }) {
                   setSearch: setSavedSearch,
                   results: reportResults,
                   idHits: reportIdHits,
-                  hint: 'Daily-report snapshots, saved under a unique REP-#### number. Load one back to review or edit it, then Save again to store it as a new report.',
                   empty: 'No saved reports yet — in Report mode, click “Save report” above.',
                   placeholder: '🔎 Search reports (id, item, model, branch, date, tel, ISSI)…',
                 })}
