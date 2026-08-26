@@ -55,6 +55,8 @@ const itemLabel = (model, text) => `${model ? `${model} · ` : ''}${text}`
 // which device and which report; the part says how many of THIS were used, and
 // the tally can only add up parts.
 const partOf = (model, f) => ({
+  model,
+  name: faultLabel(f),
   item: itemLabel(model, faultLabel(f)),
   qty: Math.max(0, Number(f.quantity) || 0),
 })
@@ -128,10 +130,12 @@ export function searchInside(list, query) {
   return out.slice(0, 300)
 }
 
-// A tally that runs past the hint line stops being a summary and becomes a
-// second list. Twelve is what fits beside the sentence on a normal screen; the
-// rest are counted into a "+N more", which is honest because the badges are
-// ordered by quantity — what falls off the end is by definition the smallest.
+// A column that runs past a dozen parts stops being a summary and becomes a
+// second list. Counted PER DEVICE, because the limit is there to keep one
+// column readable, not to ration the answer across all of them — and what falls
+// off the end is by definition the smallest, since the parts are ordered by
+// quantity. The remainder is counted into a "+N more" at the foot of its own
+// column, so no device is ever silently shown a partial total.
 export const TALLY_LIMIT = 12
 
 /**
@@ -144,25 +148,55 @@ export const TALLY_LIMIT = 12
  * chargers, on that day. Quantities are summed, not rows counted, because a
  * line for 3 sidegrips is three sidegrips.
  *
- * Grouped on the item label the Item column shows, model prefix and all: TH1N ·
- * Sidegrip and TH1N · Sidegrip3D are two different parts and must never be
- * pooled into one badge. Biggest first, so the answer is the first thing read.
+ * Counted per DEVICE and part together: TH1N · Sidegrip and TH1N · Sidegrip3D
+ * are two parts, and a sidegrip off a car kit is not one off a handheld.
+ * Biggest first, so the answer is the first thing read.
  *
  * Nothing counts a zero. A no-activity row records a day on which nothing was
  * done — a badge saying so would be a part that was never used.
  */
-export function tallyItems(results) {
-  const totals = new Map()
+function countParts(results) {
+  const totals = new Map() // item label -> the running total for it
   for (const r of results ?? []) {
     // A row with no parts of its own is counted as itself — the shape the
     // caller already had, and the honest reading of a row that names one thing.
-    for (const p of r.parts ?? [{ item: r.item, qty: r.qty }]) {
-      const name = p.item || '—'
-      totals.set(name, (totals.get(name) ?? 0) + (Number(p.qty) || 0))
+    for (const p of r.parts ?? [{ item: r.item, name: r.item, model: '', qty: r.qty }]) {
+      const item = p.item || '—'
+      const qty = Number(p.qty) || 0
+      const prev = totals.get(item)
+      if (prev) prev.qty += qty
+      else totals.set(item, { model: p.model ?? '', name: p.name ?? item, item, qty })
     }
   }
-  return [...totals]
-    .filter(([, qty]) => qty > 0)
-    .map(([item, qty]) => ({ item, qty }))
-    .sort((a, b) => b.qty - a.qty || a.item.localeCompare(b.item))
+  return [...totals.values()].filter((t) => t.qty > 0).sort((a, b) => b.qty - a.qty || a.item.localeCompare(b.item))
+}
+
+/** The flat answer: every part the search found, biggest first. */
+export const tallyItems = (results) => countParts(results).map(({ item, qty }) => ({ item, qty }))
+
+/**
+ * The same totals, gathered under the device they came off.
+ *
+ * A wrapping row of badges puts a car kit's fistmic beside a handheld's antenna
+ * beside another car kit's dismantle, in whatever order the widths happened to
+ * fall — and reading a day's work off it means picking the one model out of the
+ * line every time. One column per device, its parts under it, and the counts
+ * line up in a column of their own: what came off which radio, and how many,
+ * without re-reading a name that is already the heading.
+ *
+ * Devices by their total, parts by theirs — the busiest first at both levels.
+ * A part on an entry with no model at all still has to go somewhere, and goes
+ * under a group with no name rather than being dropped.
+ */
+export function tallyByModel(results) {
+  const groups = new Map() // model -> { model, items, total }
+  for (const t of countParts(results)) {
+    const key = t.model || ''
+    if (!groups.has(key)) groups.set(key, { model: key, items: [], total: 0 })
+    const g = groups.get(key)
+    g.items.push({ name: t.name, item: t.item, qty: t.qty })
+    g.total += t.qty
+  }
+  // countParts already ordered the parts, so each group's items keep that order.
+  return [...groups.values()].sort((a, b) => b.total - a.total || a.model.localeCompare(b.model))
 }

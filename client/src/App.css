@@ -1105,19 +1105,50 @@ h2 {
   flex: 1 1 20rem;
   min-width: 0;
 }
+/* One column per device: heading, then that device's parts down the column.
+   Columns start at the top so their headings sit on one line whatever their
+   lengths, and the whole set right-aligns against the hint as before. */
 .item-tally {
-  list-style: none;
   margin: 0 0 1rem;
-  padding: 0;
   display: flex;
   flex-wrap: wrap;
+  align-items: flex-start;
   justify-content: flex-end;
-  gap: 0.35rem 0.4rem;
+  gap: 0.6rem 1rem;
+}
+.tally-col {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch; /* every chip the width of the column, so the counts line up */
+  gap: 0.3rem;
+  min-width: 0;
+}
+.tally-col ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+/* The device, said once. Quieter than the parts under it — it is what they
+   have in common, not one of the answers. */
+.tally-model {
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 0 0.2rem;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.15rem;
+  overflow-wrap: anywhere;
 }
 .tally-chip {
-  display: inline-flex;
+  display: flex;
   align-items: baseline;
-  gap: 0.4rem;
+  justify-content: space-between;
+  gap: 0.5rem;
   max-width: 100%;
   padding: 0.2rem 0.3rem 0.2rem 0.6rem;
   border: 1px solid var(--border-strong);
@@ -1152,7 +1183,8 @@ h2 {
 }
 @media (max-width: 620px) {
   /* Stacked, and then left-aligned: right-aligned badges under a left-aligned
-     sentence read as belonging to something else. */
+     sentence read as belonging to something else. The columns stay columns —
+     they are the alignment, not a wide-screen luxury. */
   .item-tally {
     justify-content: flex-start;
   }
