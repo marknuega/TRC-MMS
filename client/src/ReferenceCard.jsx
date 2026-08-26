@@ -38,7 +38,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { COPYRIGHT_HTML } from './copyright'
 import { printDocument } from './printDoc.js'
 import { FALLBACK, useCodeMap } from './codes'
-import { issueCodeIndex } from './options'
+import { claimIndex } from './pairCode.js'
 import { groupComponents, PARTS_RE, COMPONENT_BUCKETS } from './refGroups'
 import { getCodeMap, saveCodeMap } from './api'
 import SearchSelect from './SearchSelect'
@@ -52,6 +52,14 @@ const chunk = (rows, n) => {
 // Preserve the curated brand grouping from the source map (insertion order).
 const asPairs = (obj) => Object.entries(obj || {}).map(([k, v]) => [String(k), String(v)])
 const sortedPairs = (obj) => asPairs(obj).sort(numericSort)
+// Claimed fault codes sort by the parts number they belong to. A code claimed
+// once per device is keyed with its letter in front ('H44A', 'T44A'), and a
+// plain sort files those under H and T, pages away from the 44 they are. The
+// letter breaks the tie instead, so one parts number reads as one run.
+const bareCode = (c) => (c.length === 4 ? c.slice(1) : c)
+const claimSort = ([a], [b]) =>
+  bareCode(a).localeCompare(bareCode(b), undefined, { numeric: true, sensitivity: 'base' }) || a.localeCompare(b)
+const sortedClaims = (obj) => asPairs(obj).sort(claimSort)
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
 
@@ -680,7 +688,9 @@ export default function ReferenceCard({ isAdmin = false, issueTypes = [] }) {
       // App.jsx already threads through Manage Inputs), not from the code-map
       // poll above, so an edit there shows up here the instant it lands in
       // that shared state — no poll delay.
-      claims: sortedPairs(issueCodeIndex(issueTypes)),
+      // Keyed per device where two Issue types claim one code, so the catalog
+      // shows H44A and T44A as the two different batteries they are.
+      claims: sortedClaims(claimIndex(issueTypes, src.equipmentCodes || FALLBACK.equipmentCodes)),
       actions: asPairs(src.actions || FALLBACK.actions),
       companies: asPairs(src.companies || FALLBACK.companies),
       agencies: sortedPairs(src.agencies || FALLBACK.agencies),

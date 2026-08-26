@@ -183,12 +183,24 @@ export function setIssueClaims(issueTypes) {
   const standalone = new Set()
   const coded = new Set()
   const codeOf = new Map()
+  // How many rows claim each code. One is the ordinary case and the code IS
+  // that part's identity. But a code may be claimed once per device — 44A is
+  // Battery 1590 on a TH1n and Battery 1880 on an STP9000 — and those are two
+  // different batteries off two different shelves. Bucketing them together
+  // because they share three characters would report one line of 44A where two
+  // separate parts were consumed, so a contested code is not an identity here
+  // and its rows fall back to their own names, which the list keeps unique.
+  const claimants = new Map()
+  for (const it of issueTypes ?? []) {
+    const code = issueCode(it)
+    if (code && claimKey(issueName(it))) claimants.set(code, (claimants.get(code) ?? 0) + 1)
+  }
   for (const it of issueTypes ?? []) {
     const code = issueCode(it) // '' unless BOTH parts and variant are present
     const key = claimKey(issueName(it))
     if (!code || !key) continue
     coded.add(key)
-    codeOf.set(key, code)
+    if (claimants.get(code) === 1) codeOf.set(key, code)
     if (STANDALONE_PARTS.has(code.slice(0, 2))) standalone.add(key)
   }
   claims = coded.size ? { standalone, coded, codeOf } : null

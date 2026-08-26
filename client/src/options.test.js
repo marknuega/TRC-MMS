@@ -5,6 +5,10 @@ import {
   DEFAULT_OPTIONS,
   issueCodeIndex,
   issueFitsModel,
+  issueModelsOverlap,
+  issueClaimFor,
+  issueClaimants,
+  issueName,
   issueOffered,
   issueNameForModel,
   issueNameOverrides,
@@ -1045,5 +1049,70 @@ describe('a model is recognised past its spelling', () => {
   test('the shipped list settles on the one spelling', () => {
     assert.ok(optionNames(DEFAULT_OPTIONS.models).includes('TMR880i'))
     assert.ok(!optionNames(DEFAULT_OPTIONS.models).includes('TMR 880i'))
+  })
+})
+
+/*
+ * The rule that lets a code be claimed twice, and the one that stops it being
+ * claimed twice for the same radio.
+ *
+ * 44A is Battery 1590 on a TH1n and Battery 1880 on an STP9000: one parts
+ * code, two different cells, told apart by the letter the technician already
+ * writes (H44A, T44A). What it must never be is two things on one device —
+ * H44A has to have exactly one answer.
+ */
+describe('two rows may share a code only where no device is claimed twice', () => {
+  const on = (...models) => ({ name: 'X', parts: '44', variant: 'A', models })
+  const everywhere = { name: 'X', parts: '44', variant: 'A' }
+
+  test('different devices do not overlap — this is the whole point', () => {
+    assert.equal(issueModelsOverlap(on('TH1N'), on('STP9000')), false)
+  })
+
+  test('the same device does, whichever else each row lists', () => {
+    assert.equal(issueModelsOverlap(on('TH1N', 'THR9'), on('STP9000', 'THR9')), true)
+  })
+
+  test('past spelling and punctuation, so one device cannot pass as two', () => {
+    assert.equal(issueModelsOverlap(on('TMR880i'), on('TMR 880I')), true)
+  })
+
+  test('a row nobody narrowed covers every device, so it overlaps anything', () => {
+    assert.equal(issueModelsOverlap(everywhere, on('STP9000')), true)
+    assert.equal(issueModelsOverlap(on('STP9000'), everywhere), true)
+    assert.equal(issueModelsOverlap(everywhere, everywhere), true)
+  })
+
+  // An ABSENT list is "every device"; an EMPTY one is "no device", which is a
+  // real state (a row on its way to being ticked) and a different answer.
+  test('a row narrowed to no device covers nothing, so it overlaps nothing', () => {
+    assert.equal(issueModelsOverlap(on(), on('STP9000')), false)
+    assert.equal(issueModelsOverlap(on(), everywhere), false)
+  })
+
+  test('the claim for a model is the row that device was ticked on', () => {
+    const list = [
+      { name: 'BATTERY 1590', parts: '44', variant: 'A', models: ['TH1N'] },
+      { name: 'BATTERY 1880', parts: '44', variant: 'A', models: ['STP9000'] },
+    ]
+    assert.equal(issueName(issueClaimFor(list, '44A', 'TH1N')), 'BATTERY 1590')
+    assert.equal(issueName(issueClaimFor(list, '44A', 'STP9000')), 'BATTERY 1880')
+    assert.equal(issueClaimFor(list, '44A', 'THR9'), null)
+  })
+
+  test('with no device named a contested code has no answer, and says so', () => {
+    const list = [
+      { name: 'BATTERY 1590', parts: '44', variant: 'A', models: ['TH1N'] },
+      { name: 'BATTERY 1880', parts: '44', variant: 'A', models: ['STP9000'] },
+    ]
+    // Not the first one: picking by list order is exactly how a TH1n battery
+    // gets filed against an STP9000.
+    assert.equal(issueClaimFor(list, '44A', ''), null)
+    // An uncontested code answers with or without a device, as it always did.
+    assert.equal(issueName(issueClaimFor([...list, { name: 'GRIP', parts: '43', variant: 'A' }], '43A', '')), 'GRIP')
+  })
+
+  test('a nameless row claims nothing — there is nothing to decode to', () => {
+    assert.deepEqual(issueClaimants([{ name: '  ', parts: '44', variant: 'A' }], '44A'), [])
   })
 })

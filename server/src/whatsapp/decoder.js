@@ -234,8 +234,15 @@ export function decodeBatch(rawText, map) {
     // The old fallback — look the parts number up in the code map's
     // `components` and append the variant's suffix — is gone, so a code that
     // nothing claims is refused rather than decoded to an approximate name.
+    //
+    // The DEVICE-specific claim is tried first and the shared one after it. A
+    // code one issue type claims is published bare and so means the same part
+    // on every radio, exactly as before; a code claimed once per device is
+    // published as 'H44A'/'T44A' and only ever resolves through its letter —
+    // 44A is Battery 1590 on a TH1n and Battery 1880 on an STP9000. See
+    // faultCodes() in routes/codemap.js, which publishes the map this reads.
     // Mirrors parseCodeReport() in client/src/codes.js.
-    const componentName = faults[`${partsNum}${variantLetter}`]
+    const componentName = faults[`${deviceLetter}${partsNum}${variantLetter}`] ?? faults[`${partsNum}${variantLetter}`]
 
     if (missing.length > 0) {
       return { ok: false, reason: `In "${token}": Unknown ${missing.join(', ')}. Add it in TRC-MMS under Code Map.` }
@@ -244,7 +251,13 @@ export function decodeBatch(rawText, map) {
       return {
         ok: false,
         reason:
-          `In "${token}": ${partsNum}${variantLetter} is not a defined code.\n` +
+          `In "${token}": ${partsNum}${variantLetter} is not a defined code${
+            // Claimed, but for other devices — a different mistake with a
+            // different fix, so it must not read as "nobody has defined this".
+            Object.keys(faults).some((k) => k.length === 4 && k.slice(1) === `${partsNum}${variantLetter}`)
+              ? ` for ${equipmentLabel}`
+              : ''
+          }.\n` +
           `Define it in TRC-MMS under Manage inputs → Issue types, giving the issue ` +
           `Parts Code ${partsNum} and Variant ${variantLetter}.`,
       }

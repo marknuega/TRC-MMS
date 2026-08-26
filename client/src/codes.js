@@ -21,9 +21,18 @@
  * defined by an Issue type CLAIMING it (Manage inputs -> Issue types). That is
  * the only way one resolves: a code nothing claims is refused, not guessed at.
  * So 99A and 99B are two different chargers rather than two builds of one, and
- * a code always means exactly what someone said it means. Claims are keyed
- * without the device letter, since that letter is the technician's and the
- * same part appears on every radio.
+ * a code always means exactly what someone said it means.
+ *
+ * A code is claimed for a device, and may be claimed once PER device. Most are
+ * claimed once and mean the same part on every radio, so the letter changes
+ * nothing: 19B is a Fistmic whichever handset it came off. Where two rows do
+ * claim one code they must cover different devices (Manage inputs refuses any
+ * overlap), and then the letter is what tells them apart —
+ *
+ *     H44A = Battery 1590 (TH1n)      T44A = Battery 1880 (STP9000)
+ *
+ * two genuinely different batteries under one parts code. See claimIndex in
+ * pairCode.js, which is where the letter is resolved.
  *
  * Every element may be run together or separated by a space, hyphen, underscore
  * or colon, so all of these are the same report:
@@ -52,8 +61,8 @@
 
 import { useEffect, useRef, useState } from 'react'
 // Extension-ful so `node --test` resolves it too, not just Vite.
-import { issueCodeIndex, optionNames, technicianName } from './options.js'
-import { matchOption, up } from './pairCode.js'
+import { optionNames, technicianName } from './options.js'
+import { claimIndex, matchOption, resolveClaim, up } from './pairCode.js'
 
 // This app now OWNS the code map, so the mirror is same-origin. It stays a
 // fetch rather than a bundled import because the map is edited at runtime and
@@ -323,8 +332,9 @@ export function parseCodeReport(text, map = FALLBACK, options = {}) {
   const companies = map?.companies ?? FALLBACK.companies
   const technicians = map?.technicians ?? FALLBACK.technicians
   // An Issue type claims a whole fault code (Manage inputs -> Issue types).
-  // This is the ONLY way parts + variant resolves to an issue.
-  const claimed = issueCodeIndex(options.issueTypes)
+  // This is the ONLY way parts + variant resolves to an issue. Keyed per
+  // device where two rows claim one code — see claimIndex in pairCode.js.
+  const claimed = claimIndex(options.issueTypes, devices)
   // Manage Inputs technicians may carry an {name, id} shape now (for the
   // WhatsApp ID); matchOption below only ever needs the plain name.
   const technicianList = (options.technicians ?? []).map(technicianName)
@@ -381,9 +391,10 @@ export function parseCodeReport(text, map = FALLBACK, options = {}) {
     rest = rest.slice(whole.length)
 
     const code = `${device}${partNo}${variant}`
-    // Claims are keyed on parts + variant only: the device letter is the
-    // technician's, and 19B is the same fault whichever radio it came off.
-    const owner = claimed[`${partNo}${variant}`]
+    // The device letter is consulted FIRST and the shared claim second, so a
+    // code one row claims still means the same thing on every radio, while a
+    // code claimed once per device resolves to that device's own part.
+    const owner = resolveClaim(claimed, device, `${partNo}${variant}`)
 
     const deviceName = devices[device]
     const actionName = actions[action]
@@ -418,8 +429,16 @@ export function parseCodeReport(text, map = FALLBACK, options = {}) {
       // issue type actually had — saved as typed, and only approximately what
       // the technician meant. An undefined code is now refused outright, and
       // the message says exactly where to define it.
+      // Claimed for OTHER devices but not this one is a different mistake from
+      // never defined at all, and it has a different fix — tick this device on
+      // the row that already holds the code, rather than inventing a second.
+      const perDevice = Object.keys(claimed).some((k) => k.length === 4 && k.slice(1) === `${partNo}${variant}`)
       errors.push(
-        `${partNo}${variant} in ${whole} is not a defined code. Give an issue type the code ${partNo}${variant} under Manage inputs → Issue types.`,
+        perDevice
+          ? `${partNo}${variant} is claimed per device and no issue type claims ${code}. Tick ${
+              deviceName ?? `device ${device}`
+            } on a ${partNo}${variant} row under Manage inputs → Issue types.`
+          : `${partNo}${variant} in ${whole} is not a defined code. Give an issue type the code ${partNo}${variant} under Manage inputs → Issue types.`,
       )
       issue = ''
       variantLabel = variant

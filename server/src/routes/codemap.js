@@ -13,6 +13,7 @@ import { Router } from 'express'
 import { prisma } from '../db.js'
 import { adminRequired } from '../auth.js'
 import { CODEMAP_SEED } from '../codemapSeed.js'
+import { claimIndex } from '../../../client/src/pairCode.js'
 
 // The categories the map is allowed to contain. Anything else in a PUT body is
 // rejected rather than stored: the bot indexes these keys directly, so a typo'd
@@ -159,34 +160,26 @@ export function validateCodeMap(data) {
  * cannot resolve is a report it cannot file. Publishing them on the public
  * mirror is what lets the bot decode the same 19B the app does.
  *
- * Keyed on parts + variant WITHOUT the device letter: the technician supplies
- * that, and 19B is the same fault whichever radio it came off.
+ * A code claimed by ONE row is published bare, on parts + variant, exactly as
+ * it always was: the technician supplies the device letter, and 19B is the same
+ * fault whichever radio it came off. Nothing about an existing code changes.
  *
- * Mirrors issueCode() / issueName() in client/src/options.js — the two are
- * pinned together by codemap.test.js, which runs the same rows through both.
+ * A code claimed once PER DEVICE is published per device instead — 'H44A' and
+ * 'T44A', because 44A is Battery 1590 on a TH1n and Battery 1880 on an STP9000,
+ * two real and different batteries. The bare key is deliberately left ABSENT
+ * for those: there is no honest device-free answer to "what is 44A" once two
+ * rows claim it, and a decoder with no letter to resolve by must refuse rather
+ * than pick the first.
+ *
+ * The rule itself is NOT restated here. It used to be — this file carried its
+ * own copy of issueCode()/issueName() with a test pinning the two together —
+ * but a mirror is a thing to keep in step, and what the bot decodes by and what
+ * the app decodes by must be the same sentence, not two that agree today.
+ * claimIndex is React-free for exactly this reason (see its header), and the
+ * desktop packager follows the import on its own.
  */
-const VARIANT_RE = /^[A-Z]$/
-const upTrim = (v) =>
-  String(v ?? '')
-    .trim()
-    .toUpperCase()
-
-export function faultCodes(issueTypes) {
-  const out = {}
-  for (const it of issueTypes ?? []) {
-    // Plain strings are issue types with no code — nothing to publish.
-    if (!it || typeof it !== 'object') continue
-    // `base` is the superseded shape (a combined "43A"); read it so rows saved
-    // by that version still publish.
-    const parts = upTrim(it.parts ?? upTrim(it.base).slice(0, 2))
-    const variant = upTrim(it.variant ?? upTrim(it.base).slice(2, 3))
-    const name = String(it.name ?? '').trim()
-    if (!name || !PARTS_ONLY_RE.test(parts) || !VARIANT_RE.test(variant)) continue
-    const code = parts + variant
-    // First claim wins, matching the client — order must not flip a meaning.
-    if (!out[code]) out[code] = name
-  }
-  return out
+export function faultCodes(issueTypes, equipmentCodes) {
+  return claimIndex(issueTypes, equipmentCodes)
 }
 
 /**
@@ -261,7 +254,7 @@ export async function fullCodeMap() {
   const [map, opts] = await Promise.all([readCodeMap(), prisma.appOptions.findUnique({ where: { id: 1 } })])
   return {
     ...map,
-    faults: faultCodes(opts?.data?.issueTypes),
+    faults: faultCodes(opts?.data?.issueTypes, map.equipmentCodes),
     technicians: { ...map.technicians, ...technicianCodes(opts?.data?.technicians) },
   }
 }

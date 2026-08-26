@@ -1,13 +1,14 @@
 import { Router } from 'express'
 import { prisma } from '../db.js'
 import { branchWhere, writeBranch, canAccessBranch } from '../scope.js'
+import { readCodeMap } from './codemap.js'
 // The Model+Parts pair code an item is held by — the same helpers the save
 // path resolves faults through, so a code that lists here is a code that
 // looks up there. See client/src/pairCode.js.
-import { normalizePairCode, parsePairCode } from '../../../client/src/pairCode.js'
+import { claimIndex, normalizePairCode, parsePairCode, resolveClaim } from '../../../client/src/pairCode.js'
 // Which company's shelf a row is, read out of its SKU prefix.
 import { companyFromSku } from '../../../client/src/company.js'
-import { issueCodeIndex, mergeOptions } from '../../../client/src/options.js'
+import { mergeOptions } from '../../../client/src/options.js'
 
 const router = Router()
 
@@ -75,12 +76,15 @@ function parseItem(body) {
  * Which parts codes the vocabulary currently means something by.
  *
  * A Model Code in the real form is a device letter in front of a parts code,
- * and a parts code only exists because an Issue type claims it. Read once per
- * request rather than per row, so a bulk import costs one query.
+ * and a parts code only exists because an Issue type claims it. The code map
+ * comes along because a code may be claimed once per device (44A is Battery
+ * 1590 on a TH1n and Battery 1880 on an STP9000), and the letters are what
+ * tell those apart. Read once per request rather than per row, so a bulk
+ * import costs one query.
  */
 async function claimedCodes() {
-  const row = await prisma.appOptions.findUnique({ where: { id: 1 } })
-  return issueCodeIndex(mergeOptions(row?.data ?? {}).issueTypes)
+  const [row, map] = await Promise.all([prisma.appOptions.findUnique({ where: { id: 1 } }), readCodeMap()])
+  return claimIndex(mergeOptions(row?.data ?? {}).issueTypes, map?.equipmentCodes)
 }
 
 /**
@@ -98,7 +102,10 @@ async function claimedCodes() {
 function unclaimedPartsCode(pairCode, claimed) {
   const parsed = parsePairCode(pairCode)
   if (!parsed || parsed.provisional) return null
-  return claimed[parsed.part] ? null : parsed
+  // The device's own claim first, the shared one after it — a parts code two
+  // Issue types claim (44A: Battery 1590 on a TH1n, Battery 1880 on an STP9000)
+  // is only published per device, so T44A must be looked up whole.
+  return resolveClaim(claimed, parsed.letter, parsed.part) ? null : parsed
 }
 
 const unclaimedError = ({ letter, part }) =>

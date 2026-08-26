@@ -7,6 +7,7 @@ import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 import { parseCodeReport, matchOption, denseCode, FALLBACK } from './codes.js'
 import { DEFAULT_OPTIONS, issueCode, issueCodeIndex, issueNames, optionNames } from './options.js'
+import { claimIndex } from './pairCode.js'
 
 // A fault code resolves through an issue type's CLAIM or not at all — the
 // parts+variant fallback through the code map is gone. So the fixture claims
@@ -484,7 +485,7 @@ test('the WhatsApp decoder reads the shorthand identically', async () => {
   // map it is given must carry the same ones the app is using.
   const map = {
     ...FALLBACK,
-    faults: issueCodeIndex(OPTS.issueTypes),
+    faults: claimIndex(OPTS.issueTypes, FALLBACK.equipmentCodes),
     technicians: { 1: 'Amir' },
   }
 
@@ -573,7 +574,7 @@ describe('RTO shorthand', () => {
 
   test('both decoders read an RTO code identically', async () => {
     const { decodeBatch } = await import('../../server/src/whatsapp/decoder.js')
-    const map = { ...FALLBACK, faults: issueCodeIndex(OPTS.issueTypes) }
+    const map = { ...FALLBACK, faults: claimIndex(OPTS.issueTypes, FALLBACK.equipmentCodes) }
     // WhatsApp is space-TOKENIZED, so one fault is one token there — the app's
     // free-form separators are a Quick Code Entry convenience, not a wire format.
     const bot = decodeBatch('H50FRTOMT 1', map)
@@ -618,5 +619,140 @@ describe('a retired parts number still decodes from its claim', () => {
     const r = parseCodeReport('H97A C 1 MT 2221 6575 1', FALLBACK, OPTS)
     assert.equal(r.ok, false)
     assert.match(r.errors.join(' '), /97A .* is not a defined code/)
+  })
+})
+
+/*
+ * One parts code, one variant, two real parts — told apart by the device
+ * letter the technician already writes.
+ *
+ * 44A is Battery 1590 on a TH1n and Battery 1880 on an STP9000. They are not
+ * two builds of one battery and not one battery under two names: they are two
+ * different cells off two different shelves, and H44A / T44A is what says
+ * which. Manage inputs allows the second claim only because the two rows name
+ * different devices (issueModelsOverlap); this is the decoding half of it.
+ */
+describe('a code claimed once per device', () => {
+  const BATTERIES = {
+    ...OPTS,
+    issueTypes: [
+      ...OPTS.issueTypes,
+      { name: 'BATTERY 1590', parts: '44', variant: 'A', models: ['TH1N'] },
+      { name: 'BATTERY 1880', parts: '44', variant: 'A', models: ['STP9000'] },
+    ],
+  }
+
+  test('the letter decides which battery it is', () => {
+    const h = parseCodeReport('H44A C 1 MT 2221 6575 1', FALLBACK, BATTERIES)
+    assert.equal(h.ok, true, h.errors.join('; '))
+    assert.equal(h.entry.faults[0].issue, 'BATTERY 1590')
+
+    const t = parseCodeReport('T44A C 1 MT 2221 6575 1', FALLBACK, BATTERIES)
+    assert.equal(t.ok, true, t.errors.join('; '))
+    assert.equal(t.entry.faults[0].issue, 'BATTERY 1880')
+  })
+
+  test('a device neither row claims is refused, and told which fix it needs', () => {
+    const r = parseCodeReport('R44A C 1 MT 2221 6575 1', FALLBACK, BATTERIES)
+    assert.equal(r.ok, false)
+    // NOT "44A is not a defined code" — it is defined, just not for a THR9, and
+    // the fix is to tick that device on a row rather than invent a third.
+    assert.match(r.errors.join(' '), /44A is claimed per device and no issue type claims R44A/)
+    assert.match(r.errors.join(' '), /Airbus THR9/)
+  })
+
+  test('a code only one row claims still means the same part on every radio', () => {
+    // The rule that was there before, untouched: 43A is a Side Grip whichever
+    // handset it came off, because nothing else claims 43A.
+    for (const letter of ['H', 'R', 'T', 'S']) {
+      const r = parseCodeReport(`${letter}43A C 1 MT 2221 6575 1`, FALLBACK, BATTERIES)
+      assert.equal(r.ok, true, r.errors.join('; '))
+      assert.equal(r.entry.faults[0].issue, 'SIDE GRIP')
+    }
+  })
+
+  test('the published index keys the contested code per device and nothing else', () => {
+    const index = claimIndex(BATTERIES.issueTypes, FALLBACK.equipmentCodes)
+    assert.equal(index.H44A, 'BATTERY 1590')
+    assert.equal(index.T44A, 'BATTERY 1880')
+    // No bare 44A: there is no honest device-free answer once two rows claim
+    // it, and publishing one would have the bot pick a battery by list order.
+    assert.equal(index['44A'], undefined)
+    assert.equal(index['43A'], 'SIDE GRIP')
+  })
+
+  test('the WhatsApp bot reads both batteries the same way the app does', async () => {
+    const { decodeBatch } = await import('../../server/src/whatsapp/decoder.js')
+    const map = {
+      ...FALLBACK,
+      faults: claimIndex(BATTERIES.issueTypes, FALLBACK.equipmentCodes),
+      technicians: { 1: 'Amir' },
+    }
+    for (const [code, expected] of [
+      ['H44AC1MT', 'BATTERY 1590'],
+      ['T44AC1MT', 'BATTERY 1880'],
+    ]) {
+      const bot = decodeBatch(`${code} 1`, map)
+      assert.ok(bot.ok, `${code}: ${bot.reason}`)
+      const faults = bot.batch.groups.flatMap((g) => g.faults)
+      assert.equal(faults[0].componentName, expected)
+      assert.equal(faults[0].componentCode, code.slice(0, 4))
+    }
+
+    // And refuses the device nobody claimed, saying so in those terms.
+    const miss = decodeBatch('R44AC1MT 1', map)
+    assert.equal(miss.ok, false)
+    assert.match(miss.reason, /44A is not a defined code for Airbus THR9/)
+  })
+
+  test('a per-device name reaches the decoder, not just the entry form', () => {
+    // One of the two rows calls itself something else on its own device. The
+    // bot decodes by the published index, so the override has to be published
+    // — otherwise it stops at the issue menu and the code means one thing in
+    // the app and another over WhatsApp.
+    const renamed = {
+      ...BATTERIES,
+      issueTypes: BATTERIES.issueTypes.map((it) =>
+        it.name === 'BATTERY 1880' ? { ...it, names: { STP9000: 'BATTERY 1880 SLIM' } } : it,
+      ),
+    }
+    const index = claimIndex(renamed.issueTypes, FALLBACK.equipmentCodes)
+    assert.equal(index.T44A, 'BATTERY 1880 SLIM')
+    assert.equal(index.H44A, 'BATTERY 1590')
+  })
+
+  test('rows stored before the rule existed keep decoding', () => {
+    // Two claims and neither narrowed is a state Manage inputs now refuses to
+    // create — but it may already be stored, and going dark is the one thing
+    // it must not do. First claim wins, exactly as it did before.
+    const legacy = {
+      ...OPTS,
+      issueTypes: [
+        ...OPTS.issueTypes,
+        { name: 'FIRST', parts: '44', variant: 'A' },
+        { name: 'SECOND', parts: '44', variant: 'A' },
+      ],
+    }
+    const r = parseCodeReport('H44A C 1 MT 2221 6575 1', FALLBACK, legacy)
+    assert.equal(r.ok, true, r.errors.join('; '))
+    assert.equal(r.entry.faults[0].issue, 'FIRST')
+  })
+
+  test('an un-narrowed claim still answers for the devices no narrowed one took', () => {
+    // The same legacy shape, half migrated: someone has narrowed one of the
+    // two rows. The narrowed one owns its device; the other goes on covering
+    // the rest, rather than the pair cancelling each other out.
+    const half = {
+      ...OPTS,
+      issueTypes: [
+        ...OPTS.issueTypes,
+        { name: 'BATTERY EVERYWHERE', parts: '44', variant: 'A' },
+        { name: 'BATTERY 1880', parts: '44', variant: 'A', models: ['STP9000'] },
+      ],
+    }
+    const t = parseCodeReport('T44A C 1 MT 2221 6575 1', FALLBACK, half)
+    assert.equal(t.entry.faults[0].issue, 'BATTERY 1880')
+    const h = parseCodeReport('H44A C 1 MT 2221 6575 1', FALLBACK, half)
+    assert.equal(h.entry.faults[0].issue, 'BATTERY EVERYWHERE')
   })
 })
