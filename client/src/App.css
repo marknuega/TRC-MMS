@@ -3048,6 +3048,13 @@ button.sync-pill {
 /* The CDS code an issue type owns — monospaced so H43A / H43B read apart. */
 .manage-list li span.manage-item-code {
   align-self: flex-start;
+  /* A code is one word and must break nowhere. Beside a long part name the
+     badge was being squeezed until it wrapped inside itself — "6X6 DESKTOP
+     CHARGER" split T99C into "T99" over "C", which reads as a different code
+     and a broken one. The name is the part that gives way: it already
+     ellipsises, so the shortfall comes out of it. */
+  flex-shrink: 0;
+  white-space: nowrap;
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
   font-size: 0.78rem;
   font-weight: 700;
