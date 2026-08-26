@@ -2,27 +2,33 @@
  * Software Developed by Muhammad Amir  MT# MT1063
  * © 2026 Muhammad Amir. All rights reserved.
  *
- * Rename the fistmic to "Fist Mic", everywhere the older spelling is still
+ * Rename the fistmic — and the 3D one — everywhere the older spelling is still
  * written down: the code map, the option lists, the saved reports, and the
  * entries still on the working set.
  *
- * The part has already been renamed in Manage inputs — that is the vocabulary,
- * and the vocabulary is what every new fault will be written as. What is left
- * is everything written BEFORE that: the saved reports still read "Fistmic",
- * and the code map still names 19 that way, so the Code Reference card and the
- * WhatsApp bot go on saying a name the app itself no longer uses.
+ *     Fistmic     ->  Fist Mic
+ *     Fistmic 3D  ->  Fist Mic 3D
  *
- * WHY THE VOCABULARY IS CHECKED FIRST, AND THE SCRIPT REFUSES WITHOUT IT: a
- * saved fault claims its parts code by an EXACT name match (claimedPartsCode —
- * exact on purpose, see consolidate-issue-names.js). Renaming a fault onto a
- * name no issue type carries would cost it its code and its shelf, quietly, in
- * every report at once. So the target spelling must be a name the vocabulary
- * already knows before a single record moves.
+ * The part has been renamed in Manage inputs, and that settles what every fault
+ * written from now on says. It settles nothing about what is already written:
+ * the saved reports still read "Fistmic", and the code map still names 19 that
+ * way, so the Code Reference card and the WhatsApp bot go on saying a name the
+ * app itself no longer uses.
+ *
+ * A NAME AND ITS CODE MOVE TOGETHER, OR NOT AT ALL. A saved fault claims its
+ * parts code by an EXACT name match (claimedPartsCode — exact on purpose, see
+ * consolidate-issue-names.js), so a fault renamed away from the issue type that
+ * names it loses its code and its shelf, quietly, in every report at once. That
+ * is why the vocabulary is rewritten in the same transaction as the records,
+ * and why the plan is checked before anything is written: every issue-type name
+ * that folds to one of the keys above must come out of this as the spelling
+ * above, or the run is refused.
  *
  * WHAT IS MATCHED is the folded key, through norm() — the same comparison the
  * codes are resolved by. "Fistmic", "FIST MIC" and "fist-mic" are one part
- * under three spellings, and all three land on the one below. A name folding
- * to anything else is a different part: "Fistmic 3D" is reported, not touched.
+ * under three spellings and all three land on "Fist Mic"; "Fistmic 3D" folds to
+ * a key of its own and lands on "Fist Mic 3D". A name folding to neither is a
+ * different part: it is reported and left exactly as it is.
  *
  * STOCK IS NOT AFFECTED. The inventory ledger recorded what was actually
  * deducted at the time and is never rewritten. This changes what the records
@@ -39,12 +45,15 @@ import { issueAllNames } from '../../client/src/options.js'
 
 const APPLY = process.argv.includes('--apply')
 
-// The one spelling, and the key every other spelling of it folds to.
-const TO = 'Fist Mic'
-const KEY = norm(TO)
+// The spellings to end on. Every other spelling of each folds onto it.
+const RENAMES = ['Fist Mic', 'Fist Mic 3D']
+const TARGETS = new Map(RENAMES.map((to) => [norm(to), to]))
 
-const isIt = (v) => norm(v) === KEY
-const near = (v) => !isIt(v) && norm(v).includes(KEY) // "Fistmic 3D" and friends
+// The spelling this name should end on, or null when it names something else.
+const targetFor = (v) => TARGETS.get(norm(v)) ?? null
+// Near enough to be worth mentioning, far enough to leave alone: a name that
+// contains one of the keys without folding to it, like "FISTMIC CABLE".
+const near = (v) => !targetFor(v) && [...TARGETS.keys()].some((k) => norm(v).includes(k))
 
 const tally = (names) => {
   const out = new Map()
@@ -55,19 +64,15 @@ const tally = (names) => {
 async function main() {
   const options = (await prisma.appOptions.findUnique({ where: { id: 1 } }))?.data ?? {}
 
-  // 1. The vocabulary has to name it, or nothing else may move (see header).
+  // 1. What the vocabulary calls these parts today. A key it does not name at
+  //    all claims no code, so renaming those records is only ever text.
   const vocabulary = []
   for (const t of options.issueTypes ?? []) for (const n of issueAllNames(t)) if (n) vocabulary.push(n)
-  const named = vocabulary.filter(isIt)
-  if (!named.length) {
-    console.log(`No issue type is named "${TO}", or any spelling of it.`)
-    console.log('Rename it in Manage inputs -> Issue types first, then run this again.')
-    process.exitCode = 1
-    return
+  for (const [key, to] of TARGETS) {
+    const named = vocabulary.filter((n) => norm(n) === key)
+    if (!named.length) console.log(`"${to}": no issue type names it — the records carry it as text and claim no code.`)
+    else console.log(`"${to}": ${named.length} issue-type name(s) — ${[...new Set(named)].join(', ')}`)
   }
-  console.log(`Vocabulary: ${named.length} issue-type name(s) fold to ${KEY}.`)
-  const wrongly = [...new Set(named.filter((n) => n !== TO))]
-  if (wrongly.length) console.log(`   still spelled otherwise: ${wrongly.join(', ')}`)
 
   // 2. The code map — what the Reference card and the WhatsApp bot say.
   const map = (await prisma.codeMap.findUnique({ where: { id: 1 } }))?.data ?? null
@@ -75,22 +80,24 @@ async function main() {
   const nextMap = map ? { ...map } : null
   for (const [category, entries] of Object.entries(map ?? {})) {
     if (!entries || typeof entries !== 'object' || Array.isArray(entries)) continue
-    const hits = Object.entries(entries).filter(([, n]) => typeof n === 'string' && isIt(n) && n !== TO)
+    const hits = Object.entries(entries).filter(([, n]) => typeof n === 'string' && targetFor(n) && targetFor(n) !== n)
     if (!hits.length) continue
     nextMap[category] = { ...entries }
     for (const [code, was] of hits) {
-      nextMap[category][code] = TO
-      mapEdits.push(`${category} ${code}: "${was}" -> "${TO}"`)
+      nextMap[category][code] = targetFor(was)
+      mapEdits.push(`${category} ${code}: "${was}" -> "${targetFor(was)}"`)
     }
   }
 
-  // 3. The option lists, for any row left on an older spelling — an issue
-  //    type's own name, its per-device names, and the materials.
+  // 3. The option lists: an issue type's own name, its per-device names, and
+  //    the materials. Rewritten in the same transaction as the records below,
+  //    so a fault never sits on a name its issue type has stopped carrying.
   const optionEdits = []
   const rename = (n) => {
-    if (typeof n !== 'string' || !isIt(n) || n === TO) return n
-    optionEdits.push(n)
-    return TO
+    const to = typeof n === 'string' ? targetFor(n) : null
+    if (!to || to === n) return n
+    optionEdits.push(`"${n}" -> "${to}"`)
+    return to
   }
   const nextIssueTypes = (options.issueTypes ?? []).map((t) => {
     if (typeof t === 'string') return rename(t)
@@ -103,6 +110,21 @@ async function main() {
   const nextMaterials = (options.materials ?? []).map((m) =>
     typeof m === 'string' ? rename(m) : { ...m, name: rename(m?.name) },
   )
+
+  // The check the header promises: after this plan, no issue-type name that
+  // folds to one of our keys may be spelled anything but its target. If one
+  // survives, the records must not move — they would land on a name the
+  // vocabulary no longer carries and lose their code.
+  const survivors = []
+  for (const t of nextIssueTypes)
+    for (const n of issueAllNames(t)) if (targetFor(n) && targetFor(n) !== n) survivors.push(n)
+  if (survivors.length) {
+    console.log(
+      `\nRefusing: these issue-type names would still read differently: ${[...new Set(survivors)].join(', ')}`,
+    )
+    process.exitCode = 1
+    return
+  }
 
   // 4. The records: every saved report, and the entries still on the bench.
   const reports = await prisma.savedReport.findMany({
@@ -120,10 +142,11 @@ async function main() {
       faults: (e.faults ?? []).map((f) => {
         const was = String(f.issue ?? '').trim()
         if (near(was)) left.add(was)
-        if (!isIt(was) || was === TO) return f
+        const to = targetFor(was)
+        if (!to || to === was) return f
         touched++
-        spellings.push(was)
-        return { ...f, issue: TO }
+        spellings.push(`"${was}" -> "${to}"`)
+        return { ...f, issue: to }
       }),
     }))
     if (touched) {
@@ -134,14 +157,14 @@ async function main() {
 
   const working = await prisma.fault.findMany({ select: { id: true, issue: true } })
   for (const f of working) if (near(f.issue)) left.add(f.issue)
-  const workingEdits = working.filter((f) => isIt(f.issue) && f.issue !== TO)
+  const workingEdits = working.map((f) => ({ ...f, to: targetFor(f.issue) })).filter((f) => f.to && f.to !== f.issue)
 
   console.log(`\nCode map:      ${mapEdits.length} entry(ies)`)
   for (const line of mapEdits) console.log(`   ${line}`)
   console.log(`Option lists:  ${optionEdits.length} name(s)`)
-  for (const [name, count] of tally(optionEdits)) console.log(`   "${name}" -> "${TO}"   x${count}`)
+  for (const [line, count] of tally(optionEdits)) console.log(`   ${line}   x${count}`)
   console.log(`Saved reports: ${faultsInReports} fault(s) across ${reportEdits.length} report(s)`)
-  for (const [was, count] of tally(spellings)) console.log(`   "${was}" -> "${TO}"   x${count}`)
+  for (const [line, count] of tally(spellings)) console.log(`   ${line}   x${count}`)
   console.log(`Working set:   ${workingEdits.length} fault(s)`)
   if (left.size) {
     console.log('\na different part, so left exactly as it is:')
@@ -150,7 +173,7 @@ async function main() {
 
   const total = mapEdits.length + optionEdits.length + faultsInReports + workingEdits.length
   if (!total) {
-    console.log(`\nEverything already reads "${TO}" - nothing to change.`)
+    console.log(`\nEverything already reads as it should - nothing to change.`)
     return
   }
   if (!APPLY) {
@@ -168,7 +191,7 @@ async function main() {
         })
       }
       for (const e of reportEdits) await tx.savedReport.update({ where: { id: e.id }, data: { entries: e.entries } })
-      for (const f of workingEdits) await tx.fault.update({ where: { id: f.id }, data: { issue: TO } })
+      for (const f of workingEdits) await tx.fault.update({ where: { id: f.id }, data: { issue: f.to } })
     },
     { timeout: 5 * 60 * 1000, maxWait: 30 * 1000 },
   )
