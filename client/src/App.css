@@ -2890,13 +2890,20 @@ button.sync-pill {
 }
 .manage-group-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 0.5rem;
+  gap: 0.1rem 0.5rem;
   padding: 0.35rem 0.85rem;
   border-bottom: 1px solid var(--border);
   background: var(--surface-2);
 }
+/* The number and its count are one phrase — "44 · 3 variants" — and neither
+   half survives being broken. Sharing a line with the family name, they were:
+   "Electronics Components" took the width it needed and left 32 to wrap into
+   "3" over "2", a parts code that does not exist, above a count folded in
+   half. Both hold their line now and the name takes its own, below. */
 .manage-group-code {
+  white-space: nowrap;
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
   font-size: 0.92rem;
   font-weight: 800;
@@ -2904,20 +2911,21 @@ button.sync-pill {
   color: var(--text-h);
 }
 .manage-group-count {
+  white-space: nowrap;
   font-size: 0.72rem;
   color: var(--muted);
 }
-/* The family the variants belong to — pushed to the far end so the number and
-   its count stay together on the left and the name reads as the answer to
-   them. Quieter than the code, louder than the count: it is the word somebody
-   scans the list for. */
+/* The family the variants belong to, on a line of its own beneath them.
+   Quieter than the code, louder than the count: it is the word somebody scans
+   the list for, and a line to itself is what lets a long one be read at all.
+   Wrapping at spaces, so "Electronics Components" breaks between its words
+   rather than through one. */
 .manage-group-base {
-  margin-left: auto;
+  flex: 0 0 100%;
   font-size: 0.78rem;
   font-weight: 700;
   color: var(--text-h);
-  text-align: right;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 /* Outside a group the wrapper must not exist as far as layout is concerned:
    the <li> is still the row, and the label and the actions are still its
