@@ -130,14 +130,6 @@ export function searchInside(list, query) {
   return out.slice(0, 300)
 }
 
-// A column that runs past a dozen parts stops being a summary and becomes a
-// second list. Counted PER DEVICE, because the limit is there to keep one
-// column readable, not to ration the answer across all of them — and what falls
-// off the end is by definition the smallest, since the parts are ordered by
-// quantity. The remainder is counted into a "+N more" at the foot of its own
-// column, so no device is ever silently shown a partial total.
-export const TALLY_LIMIT = 12
-
 /**
  * What the search found, counted one PART at a time.
  *

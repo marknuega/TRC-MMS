@@ -106,7 +106,7 @@ import {
   displayNumber,
   TYPE_ORDER,
 } from './report'
-import { searchInside, tallyByModel, TALLY_LIMIT } from './search.js'
+import { searchInside, tallyByModel } from './search.js'
 import { PeriodPicker, makePeriod, periodLabel } from './period'
 import './App.css'
 
@@ -2608,8 +2608,10 @@ function App({ user, onLogout }) {
                   single wrapping row meant picking one model out of the line on
                   every badge — the device is said once, as the heading, and the
                   counts then line up in a column of their own to be read down.
-                  The limit is per column, so no device is ever quietly shown a
-                  partial total because another had a long list. */}
+                  Every part is listed. A "+8 more" saved a few centimetres of
+                  card and cost the answer: what it swallowed were the smallest
+                  counts, which is exactly where someone checking what went out
+                  looks for the one they had forgotten. */}
                 {tally.length > 0 && (
                   <div className="item-tally" aria-label={`Quantity per item matching “${search.trim()}”`}>
                     {tally.map((g) => (
@@ -2618,15 +2620,12 @@ function App({ user, onLogout }) {
                           {g.model || '—'}
                         </span>
                         <ul>
-                          {g.items.slice(0, TALLY_LIMIT).map((t) => (
+                          {g.items.map((t) => (
                             <li key={t.item} className="tally-chip" title={`${t.item} — ${t.qty} in total`}>
                               <span className="tally-name">{t.name}</span>
                               <b className="tally-qty">{t.qty}</b>
                             </li>
                           ))}
-                          {g.items.length > TALLY_LIMIT && (
-                            <li className="tally-chip more">+{g.items.length - TALLY_LIMIT} more</li>
-                          )}
                         </ul>
                       </div>
                     ))}
