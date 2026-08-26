@@ -46,7 +46,7 @@ const CLAIMS = {
   '12A': 'A Cover',
   '12B': 'B Cover', //               not "A Cover 3D" — the variant is not a 3D build here
   '15A': 'DV15',
-  '19A': 'Fistmic',
+  '19A': 'Fist Mic',
   '20A': 'PowerCable', //            was listed as Programming
   '21A': 'Hand-MicroLoudSpeaker', // was listed as Dismantle
   '22A': 'Installation',

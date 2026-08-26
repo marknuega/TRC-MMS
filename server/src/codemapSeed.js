@@ -36,7 +36,7 @@ export const CODEMAP_SEED = {
     14: 'Belt Clip',
     15: 'DV15',
     17: 'Battery Connector',
-    19: 'Fistmic',
+    19: 'Fist Mic',
     20: 'Programming',
     21: 'Dismantle',
     22: 'Installation',
