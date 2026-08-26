@@ -2957,6 +2957,26 @@ button.sync-pill {
 .manage-group .manage-row + .manage-row {
   border-top: 1px solid var(--border);
 }
+/* ...except where the next row is the SAME variant claimed for another device.
+   44A is Battery 1590 on a TH1n and Battery 1880 on an STP9000: one variant
+   of 44, claimed twice, and a rule between them with the letter reprinted
+   above each read as two variants both called A. Run together under one
+   letter they read as what they are, exactly as a single row narrowed to two
+   devices already does.
+
+   Both claims keep their own edit button. They are separate rows to EDIT —
+   each has its own name, its own devices, its own stock — and only one
+   variant to READ, which is what the letter is answering. */
+.manage-group .manage-row.variant-cont:not(.editing) {
+  border-top: 0;
+  min-height: 0;
+  padding-top: 0;
+}
+/* The badge keeps its box and loses only its ink, so the device rows beneath
+   stay in the column the letter set rather than sliding under it. */
+.manage-group .manage-row.variant-cont:not(.editing) .variant-code {
+  visibility: hidden;
+}
 /* The open editor is laid out by `.manage-list li.editing`, which is on the
    card — so the wrapper steps out of the way again and lets those rules reach
    the editor's own children, exactly as when the row was the <li>. */

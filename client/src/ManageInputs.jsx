@@ -979,11 +979,25 @@ export default function ManageInputs({
     for (const entry of displayList) {
       const parts = isIssues ? issueParts(entry.value) : ''
       const last = out[out.length - 1]
-      if (parts && last && last.parts === parts) last.items.push(entry)
-      else out.push({ key: `${parts || 'x'}-${entry.i}`, parts, items: [entry] })
+      if (parts && last && last.parts === parts) {
+        // A variant claimed once per device is ONE variant with two claims,
+        // not two variants that happen to share a letter. 44A is Battery 1590
+        // on a TH1n and Battery 1880 on an STP9000, and the card should read
+        // the way a single row narrowed to two devices already reads: the
+        // letter once, the devices under it. `cont` marks the claims that run
+        // on beneath the letter rather than restating it. displayList is
+        // ordered by parts then variant, so they are always adjacent.
+        const prev = last.items[last.items.length - 1]
+        last.items.push({ ...entry, cont: issueVariant(prev.value) === issueVariant(entry.value) })
+      } else out.push({ key: `${parts || 'x'}-${entry.i}`, parts, items: [{ ...entry, cont: false }] })
     }
     return out
   })()
+
+  // How many VARIANTS a card heads — letters, not rows. Two claims on 44A are
+  // one variant of 44, so a card of A, A, B, B, C heads "3 variants": counting
+  // rows said 5 and sent the reader looking for two letters that do not exist.
+  const variantCount = (g) => g.items.filter((x) => !x.cont).length
 
   const perDeviceRows = (value) => {
     if (!isIssues) return []
@@ -1603,7 +1617,7 @@ export default function ManageInputs({
                   <div className="manage-group-head">
                     <span className="manage-group-code">{g.parts}</span>
                     <span className="manage-group-count">
-                      {g.items.length} {g.items.length === 1 ? 'variant' : 'variants'}
+                      {variantCount(g)} {variantCount(g) === 1 ? 'variant' : 'variants'}
                     </span>
                     {/* The family name, from the parts list. Silent when the
                         number has none rather than printing a placeholder: an
@@ -1613,8 +1627,11 @@ export default function ManageInputs({
                     {partsName(g.parts) && <span className="manage-group-base">{partsName(g.parts)}</span>}
                   </div>
                 )}
-                {g.items.map(({ value, i }) => (
-                  <div key={`${nameOf(value)}-${i}`} className={`manage-row${editIndex === i ? ' editing' : ''}`}>
+                {g.items.map(({ value, i, cont }) => (
+                  <div
+                    key={`${nameOf(value)}-${i}`}
+                    className={`manage-row${editIndex === i ? ' editing' : ''}${cont ? ' variant-cont' : ''}`}
+                  >
                     {rowBody(value, i)}
                   </div>
                 ))}
