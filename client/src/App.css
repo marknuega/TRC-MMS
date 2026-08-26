@@ -2907,6 +2907,18 @@ button.sync-pill {
   font-size: 0.72rem;
   color: var(--muted);
 }
+/* The family the variants belong to — pushed to the far end so the number and
+   its count stay together on the left and the name reads as the answer to
+   them. Quieter than the code, louder than the count: it is the word somebody
+   scans the list for. */
+.manage-group-base {
+  margin-left: auto;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-h);
+  text-align: right;
+  overflow-wrap: anywhere;
+}
 /* Outside a group the wrapper must not exist as far as layout is concerned:
    the <li> is still the row, and the label and the actions are still its
    children. display:contents takes the wrapper out of the box tree entirely,

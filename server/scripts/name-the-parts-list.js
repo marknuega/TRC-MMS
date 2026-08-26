@@ -12,6 +12,8 @@
  *     21  "Dismantle"         ->  "Handset"      (21A Handset; dismantle is 70D now)
  *     31  "LCD Base"          ->  "Fault-symptoms (No Parts)"
  *     32   —                  ->  "Electronics Components"
+ *     10  "Fuse"              ->  "Fuses"        (a card head names a family)
+ *     41  "Rotary Knob"       ->  "Knobs"
  *     27  "Keymate"           ->  removed
  *     41B "Rotart Switch"     ->  "Rotary Switch"
  *
@@ -62,6 +64,10 @@ const COMPONENTS = [
   { code: '21', from: 'Dismantle', to: 'Handset' },
   { code: '31', from: 'LCD Base', to: 'Fault-symptoms (No Parts)' },
   { code: '32', from: undefined, to: 'Electronics Components' },
+  // Plurals, now that the name is read as the head of a card holding several
+  // variants: "10 · 7 variants · Fuses" reads as a family, "Fuse" as one thing.
+  { code: '10', from: 'Fuse', to: 'Fuses' },
+  { code: '41', from: 'Rotary Knob', to: 'Knobs' },
   { code: '27', from: 'Keymate', to: null }, // null = remove the name
 ]
 
