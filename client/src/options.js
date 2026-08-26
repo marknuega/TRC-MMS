@@ -81,7 +81,7 @@ export const DEFAULT_OPTIONS = {
     // five digits of the same thing on every entry, typed as two.
     { name: 'TH1N', prefixes: ['355', '06', '01'], standIn: ['01'], standInReal: '35506' },
     { name: 'THR9', prefixes: ['20106', '09'], standIn: ['09'], standInReal: '20106' },
-    { name: 'TMR 880i', prefixes: ['7506', '08'], standIn: ['08'], standInReal: '7506' },
+    { name: 'TMR880i', prefixes: ['7506', '08'], standIn: ['08'], standInReal: '7506' },
     { name: 'STP9000', prefixes: ['190'] },
     // 109 is the number really on all three SRG3900 builds, so no Tel number
     // says which one is on the bench and the auto-select leads with the car kit
@@ -259,7 +259,7 @@ export const ALL_REGIONS = 'All regions'
 export const MODEL_TYPE = {
   TH1N: 'AIRBUS',
   THR9: 'AIRBUS',
-  'TMR 880I': 'AIRBUS',
+  TMR880I: 'AIRBUS',
   STP9000: 'SEPURA',
   'SRG3900 CARKIT': 'SEPURA',
   'SRG3900 DESKTOP': 'SEPURA',
@@ -267,6 +267,23 @@ export const MODEL_TYPE = {
   PT580H: 'HYTERA',
   PT590: 'HYTERA',
   MT680: 'HYTERA',
+}
+
+/**
+ * The Type a model belongs to — the lookup MODEL_TYPE is FOR.
+ *
+ * Through modelKey, so an entry stored under an older spelling of the name
+ * ("TMR 880i", before the list settled on "TMR880i") still answers AIRBUS. A
+ * bare MODEL_TYPE[up(model)] would have quietly stopped naming a type the day
+ * the model was renamed, and the Type field would have gone blank on exactly
+ * the devices with the longest history.
+ */
+// Built on first use, not at module load: modelKey is declared further down
+// this file, and a map built up here would read it before it exists.
+let keyedTypes = null
+export const typeForModel = (model) => {
+  keyedTypes ??= new Map(Object.entries(MODEL_TYPE).map(([m, t]) => [modelKey(m), t]))
+  return keyedTypes.get(modelKey(model)) ?? ''
 }
 
 // ---------------------------------------------------------------------------
@@ -872,9 +889,18 @@ export const issueModels = (v) => {
  */
 export const issueNarrowed = (v) => Array.isArray(asObj(v)?.models)
 
-// Case and punctuation carry no meaning when comparing two model names —
-// "TMR 880i" and "TMR880I" are the one device.
-const modelKey = (v) => upTrim(v).replace(/[^A-Z0-9]/g, '')
+/**
+ * The key two model names are compared by. Case and punctuation carry no
+ * meaning between them — "TMR 880i", "TMR880I" and "tmr-880i" are the one
+ * device, and so are "TH1N Carkit" and "TH1N CAR KIT".
+ *
+ * Exported because a model name is written down in more places than this file:
+ * an entry saved last year holds the spelling of the day, the report engine
+ * carries a fixed column layout and a fixed sort order, and Manage Inputs can
+ * rename the model under all of them. Matching on this key is what lets the
+ * name be renamed without a single stored record going unrecognised.
+ */
+export const modelKey = (v) => upTrim(v).replace(/[^A-Z0-9]/g, '')
 
 /**
  * The per-device name overrides, as stored: { <model name>: <part name> }.
@@ -1069,8 +1095,14 @@ const REQUIRED_ISSUE_TYPES = [{ name: 'DEFECTIVE PCB', parts: '50', variant: 'F'
 // defaults above so there is only ever one place they are written down. The
 // accessor says which list is being read: Tel prefixes for the models, ISSI
 // ones for the agencies. Neither category has both.
+//
+// Keyed through modelKey, not the raw name: a stored list holds the spelling of
+// the day it was saved, and "TMR 880i" must still be seeded the 7506 and the 08
+// that the shipped "TMR880i" carries. Matching on the exact name meant renaming
+// a model in the defaults silently cut every install's stored copy off from its
+// own prefixes — the auto-select dying quietly on the oldest terminals.
 const seedPrefixesOf = (list, get = optionPrefixes) =>
-  Object.fromEntries(list.map((it) => [optionName(it).toUpperCase(), get(it)]).filter(([, p]) => p.length > 0))
+  Object.fromEntries(list.map((it) => [modelKey(optionName(it)), get(it)]).filter(([, p]) => p.length > 0))
 const SEED_MODEL_PREFIXES = seedPrefixesOf(DEFAULT_OPTIONS.models)
 const SEED_ISSI_PREFIXES = seedPrefixesOf(DEFAULT_OPTIONS.agencies, optionIssiPrefixes)
 
@@ -1078,7 +1110,7 @@ const SEED_ISSI_PREFIXES = seedPrefixesOf(DEFAULT_OPTIONS.agencies, optionIssiPr
 // shorthand is still written down in exactly one place.
 const SEED_STAND_INS = Object.fromEntries(
   DEFAULT_OPTIONS.models
-    .map((it) => [optionName(it).toUpperCase(), { standIn: optionStandIns(it), standInReal: optionStandInReal(it) }])
+    .map((it) => [modelKey(optionName(it)), { standIn: optionStandIns(it), standInReal: optionStandInReal(it) }])
     .filter(([, r]) => r.standIn.length > 0 && r.standInReal),
 )
 
@@ -1107,7 +1139,7 @@ function withSeededPrefixes(list, seeds, get = optionPrefixes, field = 'prefixes
   const claimed = new Set(list.flatMap(get))
   return list.map((it) => {
     if (get(it).length > 0) return it
-    const seed = (seeds[optionName(it).trim().toUpperCase()] ?? []).filter((p) => !claimed.has(p))
+    const seed = (seeds[modelKey(optionName(it))] ?? []).filter((p) => !claimed.has(p))
     if (!seed.length) return it
     return { ...(typeof it === 'string' ? {} : it), name: optionName(it), [field]: seed }
   })
@@ -1138,7 +1170,7 @@ function withSeededStandIns(list) {
   const declared = new Set(list.flatMap(optionStandIns))
   return list.map((it) => {
     if (optionStandIns(it).length > 0) return it
-    const seed = SEED_STAND_INS[optionName(it).trim().toUpperCase()]
+    const seed = SEED_STAND_INS[modelKey(optionName(it))]
     if (!seed) return it
     const claimed = optionPrefixes(it)
     const standIn = seed.standIn.filter((p) => claimed.includes(p) && !declared.has(p) && p !== seed.standInReal)

@@ -1,6 +1,6 @@
 // Extension-ful so `node --test` resolves it too, not just Vite. options.js is
 // pure (no React), so a pure module may read it.
-import { issueCode, issueName, isNoActivityModel, isNoActivityIssue } from './options.js'
+import { issueCode, issueName, isNoActivityModel, isNoActivityIssue, modelKey, optionName } from './options.js'
 
 // ---------------------------------------------------------------------------
 // Report engine — turns entries into the MOTECO-style TXT and PDF report data.
@@ -71,7 +71,7 @@ const MODEL_ORDER = [
   // AIRBUS
   'TH1N',
   'THR9',
-  'TMR 880I',
+  'TMR880I',
   // SEPURA
   'STP9000',
   'SRG3900 CARKIT',
@@ -82,7 +82,7 @@ const MODEL_ORDER = [
   'PT590',
   'MT680',
 ]
-const MODEL_RANK = new Map(MODEL_ORDER.map((m, i) => [m, i]))
+const MODEL_RANK = new Map(MODEL_ORDER.map((m, i) => [modelKey(m), i]))
 
 const DIVIDER = '------------------------------' // 30 dashes
 const INDENT = '       ' // 7 spaces — continuation / total lines
@@ -462,7 +462,36 @@ export function displayNumber(value, mode = 'full') {
   return `${MASK_PREFIX}${v.slice(-MASK_TAIL)}`
 }
 
-const modelDisplay = (m) => MODEL_DISPLAY[up(m)] ?? String(m ?? '').trim()
+/**
+ * Register the models list so a device is PRINTED by the name Manage Inputs
+ * gives it today.
+ *
+ * A stored entry holds the spelling that was current when it was saved, and
+ * that spelling can be edited — "TMR 880i" became "TMR880i". Without this, one
+ * day's report would print the old name and the next day's the new one, for the
+ * same terminal. Registered the same way the issue claims are, and for the same
+ * reason: the name is read in a dozen places and one missed call site would
+ * mean two screens calling one device two things.
+ *
+ * Null until something registers a list — the tests and the server never do,
+ * and fall through to the name the entry itself carries.
+ */
+let modelNames = null
+
+export function setModelNames(models) {
+  const byKey = new Map()
+  for (const m of models ?? []) {
+    const name = optionName(m).trim()
+    const key = modelKey(name)
+    if (key) byKey.set(key, name)
+  }
+  modelNames = byKey.size ? byKey : null
+}
+
+// MODEL_DISPLAY first: those are not other spellings of the name but the
+// SHORTER form this report prints a Sepura build under ("SRG CARKIT" for
+// "SRG3900 CARKIT"), and the sheet has always read that way.
+const modelDisplay = (m) => MODEL_DISPLAY[up(m)] ?? modelNames?.get(modelKey(m)) ?? String(m ?? '').trim()
 const lastWord = (s) =>
   String(s ?? '')
     .trim()
@@ -478,7 +507,7 @@ const descModel = (m) => modelDisplay(m).replace(/^SRG\s+/i, '')
 // the Device Summary sections both print it from here, so the two never end up
 // calling the same device by two different names.
 const blockHeader = (type, model) => `${type} (${descModel(model)})`
-const modelRank = (raw) => MODEL_RANK.get(up(raw)) ?? Number.MAX_SAFE_INTEGER // unknown models sort last
+const modelRank = (raw) => MODEL_RANK.get(modelKey(raw)) ?? Number.MAX_SAFE_INTEGER // unknown models sort last
 const companyDisplay = (c) => COMPANY_DISPLAY[up(c)] ?? String(c ?? '').trim()
 
 // " (MOT (P2))" style used in the Materials Summary.
@@ -1161,7 +1190,7 @@ export function groupReports(entries) {
   return [...byKey.values()].sort((a, b) => (a.key < b.key ? 1 : -1))
 }
 
-// The sheet's rows in fixed model order — TH1N, THR9, TMR 880I, STP9000, then
+// The sheet's rows in fixed model order — TH1N, THR9, TMR880I, STP9000, then
 // the SRG mounts, then Hytera. Entries are typed in the order the devices came
 // across the bench, which scatters each model down the MODEL column and leaves
 // the reader adding up the same device in three places.
@@ -1311,9 +1340,18 @@ const MONTHLY_GROUPS = [
   {
     group: 'Airbus Terminals (Repair& Programing)',
     cols: [
-      { key: 'th1n', label: 'TH1n', kind: 'model', models: ['TH1N'] },
+      // The TH1n car kit is repaired and programmed as a TH1n and counted as
+      // one: the sheet gives Airbus car kits columns for Installation and
+      // Dismantling only (the group below), so repair and programming work on
+      // one has no column of its own to fall into. Folding it here is what
+      // keeps it on the sheet at all — the alternative is that it is done, and
+      // written in the day's description, and counted nowhere.
+      { key: 'th1n', label: 'TH1n', kind: 'model', models: ['TH1N', 'TH1N CARKIT'] },
       { key: 'thr9', label: 'THR9', kind: 'model', models: ['THR9'] },
-      { key: 'tmr880i', label: 'TMR880i', kind: 'model', models: ['TMR 880I', 'TMR880I'] },
+      // One entry, both spellings: the column is matched through modelKey, so
+      // "TMR 880i" — every entry saved before the list settled on "TMR880i" —
+      // still lands here.
+      { key: 'tmr880i', label: 'TMR880i', kind: 'model', models: ['TMR880I'] },
     ],
   },
   {
@@ -1365,8 +1403,8 @@ export function buildMonthlyMatrix(savedReports, opts = {}) {
   for (const c of columns) {
     if (c.kind === 'model') {
       for (const m of c.models) {
-        modelToKey.set(up(m), c.key)
-        modelRankMap.set(up(m), modelRankIdx)
+        modelToKey.set(modelKey(m), c.key)
+        modelRankMap.set(modelKey(m), modelRankIdx)
       }
       modelRankIdx += 1
     }
@@ -1409,6 +1447,7 @@ export function buildMonthlyMatrix(savedReports, opts = {}) {
       const byDevice = new Map() // tag -> { items:[], rank }
       for (const e of rec.entries) {
         const mk = up(e.model)
+        const mCol = modelKey(e.model) // what the column layout knows it as
         const t = up(e.type)
         let maintSum = 0
         let program = 0
@@ -1427,7 +1466,7 @@ export function buildMonthlyMatrix(savedReports, opts = {}) {
         // level counts, so they use the quantity — the SAME "max per entry" rule
         // the Dashboard uses (dismantling 6 devices in one entry counts as 6).
         const c = entryCounts(e)
-        const mKey = modelToKey.get(mk)
+        const mKey = modelToKey.get(mCol)
         if (mKey && maintSum + program > 0) counts[mKey] += 1
         const iKey = installByType.get(t)
         if (iKey && c.install > 0) counts[iKey] += c.install
@@ -1443,7 +1482,8 @@ export function buildMonthlyMatrix(savedReports, opts = {}) {
         if (faultItems.length) {
           const tag = mk && mk !== '-' ? `${t}-${descModel(e.model)}` : t
           if (!byDevice.has(tag)) {
-            const rank = modelRankMap.get(mk) ?? modelRankMap.get(up(modelDisplay(e.model))) ?? Number.MAX_SAFE_INTEGER
+            const rank =
+              modelRankMap.get(mCol) ?? modelRankMap.get(modelKey(modelDisplay(e.model))) ?? Number.MAX_SAFE_INTEGER
             byDevice.set(tag, { merged: new Map(), rank })
           }
           // Same issue + same company within a device is one line with summed

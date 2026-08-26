@@ -39,7 +39,7 @@ import { advanceOnEnter, isAddFaultShortcut, isSaveShortcut } from './focusNav'
 import {
   DEFAULT_OPTIONS,
   mergeOptions,
-  MODEL_TYPE,
+  typeForModel,
   BRANCHES,
   ALL_BRANCHES,
   ALL_REGIONS,
@@ -95,6 +95,7 @@ import {
   buildYearMatrix,
   parseMonthlyPaste,
   setIssueClaims,
+  setModelNames,
   classify,
   shortDocId,
   shortIdOf,
@@ -1263,6 +1264,10 @@ function App({ user, onLogout }) {
   // the previous one, and nothing would re-render to correct it. A useMemo runs
   // before the summaries below and before any child reads them.
   useMemo(() => setIssueClaims(options.issueTypes), [options.issueTypes])
+  // The names the report engine prints devices by. Same registration, same
+  // reason: renaming a model in Manage Inputs must rename it everywhere it is
+  // read, including on entries saved under the older spelling.
+  useMemo(() => setModelNames(options.models), [options.models])
 
   // Live refresh: poll the working entries every 5s and, when a new one arrives (added,
   // edited or removed — e.g. from another device), refresh the view once. It
@@ -1486,7 +1491,7 @@ function App({ user, onLogout }) {
     setForm((f) => ({
       ...f,
       model,
-      type: MODEL_TYPE[model.toUpperCase()] ?? f.type,
+      type: typeForModel(model) || f.type,
     }))
   }
   // Picking the Type by hand counts too: someone who has just chosen OTHER does
@@ -1569,7 +1574,7 @@ function App({ user, onLogout }) {
     setForm((f) => ({
       ...f,
       telNumber,
-      ...(model && { model, type: MODEL_TYPE[model.toUpperCase()] ?? f.type }),
+      ...(model && { model, type: typeForModel(model) || f.type }),
     }))
   }
 
@@ -1715,7 +1720,7 @@ function App({ user, onLogout }) {
     }
     setForm((f) => ({
       ...f,
-      ...(named && { model: named.model, type: MODEL_TYPE[named.model.toUpperCase()] ?? f.type }),
+      ...(named && { model: named.model, type: typeForModel(named.model) || f.type }),
       faults: f.faults.map((fault, idx) => (idx === i ? nextFault(fault, field, e.target.value) : fault)),
     }))
   }
@@ -1866,7 +1871,7 @@ function App({ user, onLogout }) {
     setEditForm((f) => ({
       ...f,
       model,
-      type: MODEL_TYPE[model.toUpperCase()] ?? f.type,
+      type: typeForModel(model) || f.type,
     }))
   }
   const eSetType = (ev) => {
@@ -1887,7 +1892,7 @@ function App({ user, onLogout }) {
     setEditForm((f) => ({
       ...f,
       telNumber,
-      ...(model && { model, type: MODEL_TYPE[model.toUpperCase()] ?? f.type }),
+      ...(model && { model, type: typeForModel(model) || f.type }),
     }))
   }
 
