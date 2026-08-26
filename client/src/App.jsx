@@ -326,6 +326,29 @@ function searchInside(list, query) {
   return out.slice(0, 300)
 }
 
+// A tally that runs past the hint line stops being a summary and becomes a
+// second list. Twelve is what fits beside the sentence on a normal screen; the
+// rest are counted into a "+N more", which is honest because the badges are
+// ordered by quantity — what falls off the end is by definition the smallest.
+const TALLY_LIMIT = 12
+
+// The same line items the search hands back, counted per item. One row per
+// fault means a search for "sidegrip" answers "here are the lines" but never
+// "how many" — the number someone came for when they typed a part name is the
+// TOTAL QUANTITY, so quantities are summed rather than rows counted (a line for
+// 3 sidegrips is three sidegrips, not one hit). Grouped on the item label the
+// Item column already shows, model prefix and all: TH1N · Sidegrip and
+// TH1N · Sidegrip3D are two different parts and must never be pooled into one
+// badge. Biggest first, so the answer is the first thing read.
+function tallyItems(results) {
+  const totals = new Map()
+  for (const r of results ?? []) {
+    const name = r.item || '—'
+    totals.set(name, (totals.get(name) ?? 0) + (Number(r.qty) || 0))
+  }
+  return [...totals].map(([item, qty]) => ({ item, qty })).sort((a, b) => b.qty - a.qty || a.item.localeCompare(b.item))
+}
+
 // The region an ADMIN is looking at. Only an admin has a choice to remember: a
 // director runs one region and a plain user belongs to one branch, so for them
 // the region is derived from who they are, every render, and never stored.
@@ -2612,49 +2635,75 @@ function App({ user, onLogout }) {
     empty,
     placeholder,
     tx = false,
-  }) => (
-    <section className="saved">
-      <button type="button" className="manage-toggle" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-        <span>
-          {icon} {title} {list.length > 0 && <span className="hint">({list.length})</span>}
-        </span>
-        <span className="chev">{open ? '▲' : '▼'}</span>
-      </button>
-      {open && (
-        <div className="saved-body">
-          <p className="saved-hint">{hint}</p>
-          {list.length > 0 && (
-            <input
-              type="search"
-              className="saved-search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder={placeholder}
-            />
-          )}
-          {list.length === 0 ? (
-            <p className="empty">{empty}</p>
-          ) : search.trim() ? (
-            // An id query surfaces the DOCUMENT, in the same row the unfiltered
-            // list uses — so it arrives with Load / Mark reference / Delete on
-            // it, which is what someone who went looking for a specific report
-            // came to do. Reusing savedRow rather than inventing a one-off
-            // "report result" row also means the two can never describe the
-            // same report differently.
-            <>
-              {idHits.length > 0 && <ul className="saved-list">{idHits.map(savedRow)}</ul>}
-              {/* Line items are still shown when there are any — a query can
+  }) => {
+    // Only what the current query matched — with no query there are no results
+    // and so no badges, which is the wanted behaviour rather than a special case.
+    const tally = tallyItems(results)
+    return (
+      <section className="saved">
+        <button type="button" className="manage-toggle" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+          <span>
+            {icon} {title} {list.length > 0 && <span className="hint">({list.length})</span>}
+          </span>
+          <span className="chev">{open ? '▲' : '▼'}</span>
+        </button>
+        {open && (
+          <div className="saved-body">
+            {/* Hint and tally share one line: the sentence explains what the card
+              is, the badges answer what the query just asked. Side by side
+              because the tally is a caption on THESE results, not a heading of
+              its own — and the hint line is the one place with room for it that
+              is already above the results it counts. It appears only while a
+              search is live, so an unfiltered card looks exactly as it did. */}
+            <div className="saved-headline">
+              <p className="saved-hint">{hint}</p>
+              {tally.length > 0 && (
+                <ul className="item-tally" aria-label={`Quantity per item matching “${search.trim()}”`}>
+                  {tally.slice(0, TALLY_LIMIT).map((t) => (
+                    <li key={t.item} className="tally-chip" title={`${t.item} — ${t.qty} in total`}>
+                      <span className="tally-name">{t.item}</span>
+                      <b className="tally-qty">{t.qty}</b>
+                    </li>
+                  ))}
+                  {tally.length > TALLY_LIMIT && (
+                    <li className="tally-chip more">+{tally.length - TALLY_LIMIT} more</li>
+                  )}
+                </ul>
+              )}
+            </div>
+            {list.length > 0 && (
+              <input
+                type="search"
+                className="saved-search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={placeholder}
+              />
+            )}
+            {list.length === 0 ? (
+              <p className="empty">{empty}</p>
+            ) : search.trim() ? (
+              // An id query surfaces the DOCUMENT, in the same row the unfiltered
+              // list uses — so it arrives with Load / Mark reference / Delete on
+              // it, which is what someone who went looking for a specific report
+              // came to do. Reusing savedRow rather than inventing a one-off
+              // "report result" row also means the two can never describe the
+              // same report differently.
+              <>
+                {idHits.length > 0 && <ul className="saved-list">{idHits.map(savedRow)}</ul>}
+                {/* Line items are still shown when there are any — a query can
                   honestly be both. When it is only an id query they would be
                   noise, so the "No items match" line is suppressed. */}
-              {(results.length > 0 || idHits.length === 0) && searchList(results, search, tx)}
-            </>
-          ) : (
-            <ul className="saved-list">{list.map(savedRow)}</ul>
-          )}
-        </div>
-      )}
-    </section>
-  )
+                {(results.length > 0 || idHits.length === 0) && searchList(results, search, tx)}
+              </>
+            ) : (
+              <ul className="saved-list">{list.map(savedRow)}</ul>
+            )}
+          </div>
+        )}
+      </section>
+    )
+  }
 
   return (
     <>
