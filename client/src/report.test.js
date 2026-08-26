@@ -401,6 +401,32 @@ describe('the Materials Summary adds up one line per part', () => {
     })
   })
 
+  // A code claimed once PER DEVICE is not an identity on its own. 44A is
+  // Battery 1590 on a TH1n and Battery 1880 on an STP9000 — two different
+  // cells off two different shelves — so bucketing them together because they
+  // share three characters would report one line where two parts were used.
+  // The names carry it instead, which the list already keeps unique.
+  test('two parts sharing a code stay on their own lines', () => {
+    const contested = [
+      ...CLAIMS,
+      { name: 'BATTERY 1590', parts: '44', variant: 'A', models: ['TH1N'] },
+      { name: 'BATTERY 1880', parts: '44', variant: 'A', models: ['STP9000'] },
+    ]
+    claiming(contested, () => {
+      const e = entry([change('BATTERY 1590', 'MOI'), change('BATTERY 1880', 'MOI')])
+      assert.deepEqual(lines([e]), ['BATTERY 1590 (MOI) = 1', 'BATTERY 1880 (MOI) = 1'])
+    })
+  })
+
+  // …while a code only one row claims goes on being the identity it was: two
+  // spellings of it are still one part.
+  test('an uncontested code still merges its spellings', () => {
+    claiming(CLAIMS, () => {
+      const e = entry([change('Charger12', 'MOI'), change('CHARGER 12', 'MOI')])
+      assert.deepEqual(lines([e]), ['CHARGER12 (MOI) = 2'])
+    })
+  })
+
   // Hand-typed items, and every report saved before codes existed: no claim to
   // read, so the name carries the identity and must still merge.
   test('an unclaimed item merges on its name', () => {

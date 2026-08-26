@@ -995,6 +995,54 @@ export function issueFitsModel(v, model) {
 }
 
 /**
+ * Whether two rows could both be the answer for one and the same device.
+ *
+ * This is what decides whether two rows may share a fault code. A code is
+ * resolved by parts + variant AND the device letter in front of it, so 44A can
+ * be Battery 1590 on a TH1n and Battery 1880 on an STP9000 — two genuinely
+ * different batteries, two claims, one code. What it can NOT be is two things
+ * on the same radio: H44A must have exactly one answer.
+ *
+ * An un-narrowed row covers every device (that is what un-narrowed means), so
+ * it overlaps anything that covers at least one. A row narrowed to NO device
+ * covers nothing and so overlaps nothing — an empty list is a real state here
+ * (see issueNarrowed), usually a row on its way to being ticked.
+ */
+export function issueModelsOverlap(a, b) {
+  const an = issueNarrowed(a)
+  const bn = issueNarrowed(b)
+  if (!an && !bn) return true
+  if (!an) return issueModels(b).length > 0
+  if (!bn) return issueModels(a).length > 0
+  const set = new Set(issueModels(b).map(modelKey))
+  return issueModels(a).some((m) => set.has(modelKey(m)))
+}
+
+/**
+ * Every row claiming one fault code, in list order.
+ *
+ * More than one is legal now, and normal: the claims are kept apart by the
+ * devices they are narrowed to (issueModelsOverlap is what guarantees they do
+ * not collide). Callers that need ONE answer must say which device they are
+ * asking about.
+ */
+export const issueClaimants = (list, code) =>
+  code ? (list ?? []).filter((it) => issueCode(it) === code && issueName(it).trim()) : []
+
+/**
+ * What a fault code means ON A GIVEN MODEL — the row, or null.
+ *
+ * With no model named there is nothing to narrow against, so this answers only
+ * when the code is undisputed; a contested code genuinely has no device-free
+ * answer, and guessing one is how a TH1n battery gets filed against an STP9000.
+ */
+export function issueClaimFor(list, code, model) {
+  const claimants = issueClaimants(list, code)
+  if (!modelKey(model)) return claimants.length === 1 ? claimants[0] : null
+  return claimants.find((it) => issueFitsModel(it, model)) ?? null
+}
+
+/**
  * Whether a part is OFFERED in the ISSUE menu for the model in hand.
  *
  * Two things narrow the menu and they are not equal in authority.
@@ -1026,11 +1074,19 @@ export function issueOffered(v, model, elsewhere = false) {
 export const issueNames = (list) => (list ?? []).map(issueName).filter(Boolean)
 
 /**
- * Index of fault code (parts + variant) -> issue name, for the decoder's
- * exact-code path. Keyed WITHOUT the device letter, so one entry covers the
- * same part on every radio.
- * First claim wins, so a duplicated code can never flip meaning by list order.
- * A nameless row is skipped: there would be nothing to decode the code TO.
+ * Index of fault code (parts + variant) -> issue name: which codes are spoken
+ * for, and by what.
+ *
+ * Keyed WITHOUT the device letter, so it answers "is 44A claimed at all" — the
+ * question mergeOptions and the inventory form actually ask. It is NOT the
+ * decoder's index any more: a code may now be claimed once per device (44A is
+ * Battery 1590 on a TH1n and Battery 1880 on an STP9000), and a decode has a
+ * device letter to resolve with. That lives in claimIndex (pairCode.js), which
+ * is the only place a fault code is turned into a name.
+ *
+ * First claim wins here, so a contested code can never flip meaning by list
+ * order. A nameless row is skipped: there would be nothing to decode the code
+ * TO.
  */
 export function issueCodeIndex(list) {
   const index = {}

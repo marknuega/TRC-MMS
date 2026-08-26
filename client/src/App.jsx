@@ -48,6 +48,7 @@ import {
   issueName,
   issueCode,
   issueOffered,
+  issueModelsOverlap,
   issueNameForModel,
   issueAllNames,
   technicianName,
@@ -1007,10 +1008,14 @@ function App({ user, onLogout }) {
    * field rather than throwing, because this happens mid-entry and a thrown
    * error would take the half-typed entry with it.
    *
-   * A code already claimed by a different issue is refused, never reassigned:
-   * the code map is shared with the WhatsApp decoder, so a duplicate would make
-   * that code ambiguous for every reader of it — and the person who would find
-   * out is not the person typing here. Same rule Manage Inputs enforces.
+   * A code already claimed by a different issue FOR THE SAME DEVICE is refused,
+   * never reassigned: the code map is shared with the WhatsApp decoder, so a
+   * device with two answers for one code would be ambiguous for every reader of
+   * it — and the person who would find out is not the person typing here.
+   *
+   * Two rows on different devices are not that. 44A is Battery 1590 on a TH1n
+   * and Battery 1880 on an STP9000, and the letter in front (H44A, T44A) is
+   * what keeps them apart. Same rule Manage Inputs enforces.
    */
   const sameName = (a, b) =>
     String(a ?? '')
@@ -1028,10 +1033,14 @@ function App({ user, onLogout }) {
     // it is that row confirming what it already says — not a second row trying
     // to take the code, which is what refusing it would imply.
     const answers = (it) => issueAllNames(it).some((n) => sameName(n, name))
-    const clash = list.find((it) => issueCode(it) === code && !answers(it))
+    const at = list.findIndex(answers)
+    // Compared against the row as it will be SAVED — a part already narrowed
+    // to its devices only clashes with rows that share one, and a part nobody
+    // has narrowed still covers everything and so clashes with any claim.
+    const mine = at >= 0 ? list[at] : {}
+    const clash = list.find((it) => issueCode(it) === code && !answers(it) && issueModelsOverlap(it, mine))
     if (clash) return `${code} is already ${issueName(clash)}`
 
-    const at = list.findIndex(answers)
     // Spread the row rather than rebuilding it: a part narrowed to three
     // devices, or carrying a name of its own on one of them, keeps both when
     // its code is claimed from the entry form. Rebuilt from three fields, it

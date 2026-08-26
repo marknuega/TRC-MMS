@@ -10,7 +10,9 @@ import {
   TECH_INITIALS3_RE,
   issueCode,
   issueModels,
+  issueModelsOverlap,
   issueNarrowed,
+  modelKey,
   issueNameForModel,
   issueNameOverrides,
   withIssueName,
@@ -378,9 +380,27 @@ export default function ManageInputs({
     } selects nothing — add ${one ? 'it' : 'them'} above to have ${one ? 'it' : 'them'} select this model too.`
   }
 
+  // The devices a row covers, spelled out — its own list, or every device when
+  // nobody has narrowed it, which is what un-narrowed means.
+  const coveredModels = (v) => (issueNarrowed(v) ? issueModels(v) : deviceModels)
+
+  // The devices two rows would both answer for. Named rather than counted,
+  // because "already used on TH1N" is a message someone can act on and "these
+  // overlap" is not.
+  const overlapModels = (a, b) => {
+    const keys = new Set(coveredModels(b).map(modelKey))
+    return coveredModels(a).filter((m) => keys.has(modelKey(m)))
+  }
+
   // What is wrong with a parts + variant pair, or '' when it is usable. Both
   // halves or neither: half a code decodes to nothing, so storing one is a trap.
-  function codeProblem(parts, variant, exceptIndex = -1) {
+  //
+  // A code is NOT unique on its own any more — it is unique per device. 44A is
+  // Battery 1590 on a TH1n and Battery 1880 on an STP9000: one parts code, two
+  // real batteries, told apart by the letter the technician already writes
+  // (H44A, T44A). So two rows may share a code as long as no device is claimed
+  // twice; a device with two answers is the one thing no decode can resolve.
+  function codeProblem(parts, variant, models, exceptIndex = -1) {
     if (!isIssues) return ''
     const p = parts.trim()
     const v = variant.trim().toUpperCase()
@@ -390,8 +410,24 @@ export default function ManageInputs({
     if (!PARTS_RE.test(p)) return `"${p}" is not a parts code — it must be exactly 2 digits, e.g. 19.`
     if (!VARIANT_RE.test(v)) return `"${v}" is not a variant — it must be a single letter, e.g. B.`
     const code = p + v
-    const clash = list.findIndex((i, idx) => idx !== exceptIndex && issueCode(i) === code)
-    if (clash >= 0) return `${code} is already used by "${nameOf(list[clash])}".`
+    // The row as it would be SAVED — an absent list is "every device", which is
+    // what overlaps everything, so the two states must not be flattened here.
+    const mine = Array.isArray(models) ? { models } : {}
+    const clash = list.findIndex(
+      (i, idx) => idx !== exceptIndex && issueCode(i) === code && issueModelsOverlap(i, mine),
+    )
+    if (clash >= 0) {
+      const other = list[clash]
+      const shared = overlapModels(other, mine)
+      const held = `${code} is already used by "${nameOf(other)}"`
+      if (!issueNarrowed(other)) {
+        return `${held}, which covers every device. Tick the devices it is really on and ${code} is free for the rest.`
+      }
+      if (!Array.isArray(models)) {
+        return `${held} on ${shared.join(', ')}. Tick the devices THIS part is on — one that is on every device cannot share a code.`
+      }
+      return `${held} on ${shared.join(', ')}. Untick ${shared.length === 1 ? 'that device' : 'those devices'} on one row or the other — a device can only have one ${code}.`
+    }
     return ''
   }
 
@@ -419,7 +455,7 @@ export default function ManageInputs({
   // the field is derived from which check produced it rather than parsed back
   // out of the sentence.
   const problemFor = (f, exceptIndex = -1) => {
-    const code = codeProblem(f.parts, f.variant, exceptIndex)
+    const code = codeProblem(f.parts, f.variant, f.models, exceptIndex)
     if (code) return [code, 'code']
     const prefix = hasTelPrefixes ? prefixProblem(f.prefixes) : ''
     if (prefix) return [prefix, 'prefixes']
@@ -1460,10 +1496,20 @@ export default function ManageInputs({
             <p className="manage-hint">
               The <strong>Description</strong> is the issue type — it is what gets written on the entry. Give it a{' '}
               <strong>Parts Code</strong> (2 digits) and a <strong>Variant</strong> (1 letter) and the decoder resolves
-              that fault straight to it: <code>19</code> + <code>B</code> = <code>19B</code>. No device here — the
-              technician's code supplies that, so <code>H19B</code> and <code>T19B</code> both land on this one entry.
-              The variant is part of the part's identity, not just a build, so two variants of one parts number can be
-              two genuinely different items rather than two builds of one. Leave both blank for an issue with no code.
+              that fault straight to it: <code>19</code> + <code>B</code> = <code>19B</code>. The technician's code
+              supplies the device letter, so <code>H19B</code> and <code>T19B</code> both land on this one entry — a
+              part is normally the same part on every radio. The variant is part of the part's identity, not just a
+              build, so two variants of one parts number can be two genuinely different items rather than two builds of
+              one. Leave both blank for an issue with no code.
+            </p>
+          )}
+          {isIssues && (
+            <p className="manage-hint">
+              A code can be given to a <strong>second</strong> part as long as the two are on different devices. Tick{' '}
+              <em>Models that use this part</em> on each of them and <code>44A</code> can be Battery 1590 on the TH1N
+              and Battery 1880 on the STP9000 — the letter tells them apart, as <code>H44A</code> and <code>T44A</code>,
+              and each keeps its own stock. What is refused is one device with two answers: a row that is on every
+              device (nothing ticked) already answers for all of them, so narrow it first.
             </p>
           )}
           {hasTelPrefixes && (

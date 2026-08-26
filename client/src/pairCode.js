@@ -47,7 +47,15 @@
  * No React in this file: the server imports it too.
  */
 
-import { issueCode, issueAllNames } from './options.js'
+import {
+  issueCode,
+  issueAllNames,
+  issueClaimants,
+  issueModels,
+  issueName,
+  issueNameForModel,
+  issueNarrowed,
+} from './options.js'
 
 /** The four-character form: letter, two digits, variant letter. */
 export const REAL_PAIR_RE = /^[A-Z]\d{2}[A-Z]$/
@@ -205,6 +213,92 @@ export function claimedPartsCode(issue, issueTypes) {
   }
   return ''
 }
+
+/**
+ * The index every fault code is decoded through: code -> issue name.
+ *
+ * A code is claimed by an Issue type, and it may now be claimed ONCE PER
+ * DEVICE. H44A is Battery 1590 (the TH1n's) and T44A is Battery 1880 (the
+ * STP9000's): one parts code, one variant, two real and different batteries,
+ * kept apart by the letter the technician already writes. Manage inputs
+ * enforces the other half of that rule — two rows may share 44A only while no
+ * device is claimed twice (issueModelsOverlap) — so a letter never has two
+ * answers here.
+ *
+ * The index is keyed BOTH ways, and deliberately:
+ *
+ *   - a code only one row claims is keyed bare ('44A'), exactly as it always
+ *     was. Nothing about an uncontested code changes — not for the app, not
+ *     for the WhatsApp bot reading the published mirror, not for a code whose
+ *     row happens to be narrowed. Narrowing says which devices are OFFERED the
+ *     part in the entry form; it was never a reason to refuse a decode, and
+ *     making it one would reject codes technicians have been sending for
+ *     months.
+ *
+ *   - a CONTESTED code is keyed per device ('H44A', 'T44A') and NOT bare.
+ *     There is no honest device-free answer to "what is 44A" once two rows
+ *     claim it, so the bare key is left absent and a decode with no letter to
+ *     resolve by fails as an undefined code — which is exactly what it is.
+ *
+ * A contested row is published under the name that device calls it, so a
+ * per-device override (issueNameForModel) reaches the decoder rather than
+ * stopping at the entry form.
+ *
+ * First writer wins for any one key, so list order can never flip a meaning.
+ *
+ * @param issueTypes     Manage inputs -> Issue types
+ * @param equipmentCodes the code map's letter -> device label
+ */
+export function claimIndex(issueTypes, equipmentCodes) {
+  const list = issueTypes ?? []
+  const out = {}
+  const seen = new Set()
+  for (const it of list) {
+    const code = issueCode(it)
+    if (!code || seen.has(code)) continue
+    seen.add(code)
+    // A nameless row claims nothing — there would be nothing to decode the
+    // code TO — so a code only such rows carry has no claimant at all.
+    const claimants = issueClaimants(list, code)
+    if (!claimants.length) continue
+    if (claimants.length === 1) {
+      out[code] = issueName(claimants[0]).trim()
+      continue
+    }
+    let keyed = false
+    for (const row of claimants) {
+      for (const model of issueModels(row)) {
+        const letter = deviceLetterFor(model, equipmentCodes)
+        const key = letter && `${letter}${code}`
+        if (key && !out[key]) {
+          out[key] = issueNameForModel(row, model).trim()
+          keyed = true
+        }
+      }
+    }
+    // A claimant nobody narrowed covers every device, so it answers for the
+    // ones no narrowed claimant took — the bare key, which is where a decode
+    // falls back to. Manage inputs refuses to CREATE that state (an un-narrowed
+    // row overlaps everything), so this is here for rows stored before the rule
+    // existed: they go on meaning what they meant, rather than one of them
+    // going dark the day a second row was added beside it.
+    const shared = claimants.find((row) => !issueNarrowed(row))
+    // And if nothing could be keyed at all — every claimant narrowed to models
+    // the code map names no letter for — the code must not vanish. First claim
+    // wins, exactly as it did when a code could only ever have one.
+    if (shared || !keyed) out[code] = issueName(shared ?? claimants[0]).trim()
+  }
+  return out
+}
+
+/**
+ * Look one fault code up for the device it was written on.
+ *
+ * The device-specific claim first, the shared one after it — the same order
+ * the two are written in by claimIndex, and the reason an uncontested code
+ * goes on resolving for every radio.
+ */
+export const resolveClaim = (index, letter, code) => (index ?? {})[`${up(letter)}${code}`] ?? (index ?? {})[code]
 
 /**
  * Whether a part is stocked, but for other devices than this one.
