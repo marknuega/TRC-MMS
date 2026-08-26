@@ -1089,6 +1089,75 @@ h2 {
 }
 
 /* ---- Saved reports list ---- */
+/* Hint left, tally right, on one line. The hint is allowed to shrink but keeps
+   a floor so it never collapses to a column of single words; the badges never
+   shrink, because a truncated quantity is worse than a wrapped one, and below
+   that floor the two simply stack. Baseline alignment, not centre: the chips
+   sit on the same reading line as the sentence beside them. */
+.saved-headline {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem 1.25rem;
+  flex-wrap: wrap;
+}
+.saved-headline > .saved-hint {
+  flex: 1 1 20rem;
+  min-width: 0;
+}
+.item-tally {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.35rem 0.4rem;
+}
+.tally-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  max-width: 100%;
+  padding: 0.2rem 0.3rem 0.2rem 0.6rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface-3);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+.tally-name {
+  font-weight: 600;
+  color: var(--text-h);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+/* The number is the point of the chip, so it is the part that carries the
+   colour — the name reads as a label on it rather than the other way round. */
+.tally-qty {
+  flex: none;
+  min-width: 1.35rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: var(--primary);
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.78rem;
+  text-align: center;
+}
+.tally-chip.more {
+  padding-right: 0.6rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+@media (max-width: 620px) {
+  /* Stacked, and then left-aligned: right-aligned badges under a left-aligned
+     sentence read as belonging to something else. */
+  .item-tally {
+    justify-content: flex-start;
+  }
+}
+
 .saved-search {
   width: 100%;
   box-sizing: border-box;
