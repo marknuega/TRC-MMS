@@ -9,6 +9,9 @@
  *     15  "DV15"              ->  "Connector"    (antenna, BNC, DV15, GPS, battery)
  *     25  "Keypad"            ->  "Keymate"      (25A Keymate)
  *     70   —                  ->  "Programming"  (70D/70I/70P)
+ *     21  "Dismantle"         ->  "Handset"      (21A Handset; dismantle is 70D now)
+ *     31  "LCD Base"          ->  "Fault-symptoms (No Parts)"
+ *     32   —                  ->  "Electronics Components"
  *     27  "Keymate"           ->  removed
  *     41B "Rotart Switch"     ->  "Rotary Switch"
  *
@@ -16,6 +19,12 @@
  * what gives a code its meaning (see ReferenceCard.jsx). So everything above is
  * about what the Code Reference card and the /codemap the WhatsApp bot reads
  * SAY about a number, and none of it changes what a single code decodes to.
+ *
+ * 31 NAMES A SYMPTOM, NOT A PART. No Power, No Signal, No Backlight and No
+ * Vibrate say what the radio is doing, not what came off the shelf for it —
+ * they belong to a Repair or an RTO, where nothing is consumed. The name says
+ * so out loud, because a technician reading the card decides from it whether
+ * there is a part to draw.
  *
  * 27 IS CLEARED ON INSTRUCTION, and it is the one entry here that leaves a
  * number in use without a name: 27A Deskmic still claims it, so 27 will show
@@ -50,6 +59,9 @@ const COMPONENTS = [
   { code: '15', from: 'DV15', to: 'Connector' },
   { code: '25', from: 'Keypad', to: 'Keymate' },
   { code: '70', from: undefined, to: 'Programming' },
+  { code: '21', from: 'Dismantle', to: 'Handset' },
+  { code: '31', from: 'LCD Base', to: 'Fault-symptoms (No Parts)' },
+  { code: '32', from: undefined, to: 'Electronics Components' },
   { code: '27', from: 'Keymate', to: null }, // null = remove the name
 ]
 
