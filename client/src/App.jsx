@@ -106,7 +106,7 @@ import {
   displayNumber,
   TYPE_ORDER,
 } from './report'
-import { searchInside, tallyItems, TALLY_LIMIT } from './search.js'
+import { searchInside, tallyByModel, TALLY_LIMIT } from './search.js'
 import { PeriodPicker, makePeriod, periodLabel } from './period'
 import './App.css'
 
@@ -2578,7 +2578,7 @@ function App({ user, onLogout }) {
   }) => {
     // Only what the current query matched — with no query there are no results
     // and so no badges, which is the wanted behaviour rather than a special case.
-    const tally = tallyItems(results)
+    const tally = tallyByModel(results)
     return (
       <section className="saved">
         <button type="button" className="manage-toggle" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
@@ -2597,18 +2597,33 @@ function App({ user, onLogout }) {
               search is live, so an unfiltered card looks exactly as it did. */}
             <div className="saved-headline">
               <p className="saved-hint">{hint}</p>
+              {/* One column per device, its parts under it. Reading a day off a
+                  single wrapping row meant picking one model out of the line on
+                  every badge — the device is said once, as the heading, and the
+                  counts then line up in a column of their own to be read down.
+                  The limit is per column, so no device is ever quietly shown a
+                  partial total because another had a long list. */}
               {tally.length > 0 && (
-                <ul className="item-tally" aria-label={`Quantity per item matching “${search.trim()}”`}>
-                  {tally.slice(0, TALLY_LIMIT).map((t) => (
-                    <li key={t.item} className="tally-chip" title={`${t.item} — ${t.qty} in total`}>
-                      <span className="tally-name">{t.item}</span>
-                      <b className="tally-qty">{t.qty}</b>
-                    </li>
+                <div className="item-tally" aria-label={`Quantity per item matching “${search.trim()}”`}>
+                  {tally.map((g) => (
+                    <div className="tally-col" key={g.model || '—'}>
+                      <span className="tally-model" title={g.model || 'No model'}>
+                        {g.model || '—'}
+                      </span>
+                      <ul>
+                        {g.items.slice(0, TALLY_LIMIT).map((t) => (
+                          <li key={t.item} className="tally-chip" title={`${t.item} — ${t.qty} in total`}>
+                            <span className="tally-name">{t.name}</span>
+                            <b className="tally-qty">{t.qty}</b>
+                          </li>
+                        ))}
+                        {g.items.length > TALLY_LIMIT && (
+                          <li className="tally-chip more">+{g.items.length - TALLY_LIMIT} more</li>
+                        )}
+                      </ul>
+                    </div>
                   ))}
-                  {tally.length > TALLY_LIMIT && (
-                    <li className="tally-chip more">+{tally.length - TALLY_LIMIT} more</li>
-                  )}
-                </ul>
+                </div>
               )}
             </div>
             {list.length > 0 && (

@@ -5,7 +5,7 @@
 
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
-import { searchInside, tallyItems } from './search.js'
+import { searchInside, tallyItems, tallyByModel } from './search.js'
 
 // One saved snapshot, shaped the way the app stores them.
 const rep = (entries, extra = {}) => ({
@@ -190,5 +190,77 @@ describe('the tally counts parts, whatever shape the rows are', () => {
     )
     assert.equal(rows.length, 1)
     assert.deepEqual(tallyItems(rows), [])
+  })
+})
+
+// The badges are read down a column, one device at a time: a car kit's fistmic
+// beside a handheld's antenna beside another car kit's dismantle is a line
+// nobody can evaluate.
+describe('the tally gathers each device into its own column', () => {
+  const visit = (model, faults) => ({ model, type: 'AIRBUS', comment: 'the 25th', faults })
+  const change = (issue, quantity) => ({ issue, quantity, action: 'CHANGE', company: 'MOT' })
+
+  test('one group per device, its parts under it', () => {
+    const rows = searchInside(
+      [
+        rep([
+          visit('SRG3900 CARKIT', [change('Fistmic', 1), change('Antenna With Cable', 1)]),
+          visit('TH1N Carkit', [change('Antenna', 1)]),
+        ]),
+      ],
+      'the 25th',
+    )
+    assert.deepEqual(tallyByModel(rows), [
+      {
+        model: 'SRG3900 CARKIT',
+        total: 2,
+        items: [
+          { name: 'Antenna With Cable', item: 'SRG3900 CARKIT · Antenna With Cable', qty: 1 },
+          { name: 'Fistmic', item: 'SRG3900 CARKIT · Fistmic', qty: 1 },
+        ],
+      },
+      { model: 'TH1N Carkit', total: 1, items: [{ name: 'Antenna', item: 'TH1N Carkit · Antenna', qty: 1 }] },
+    ])
+  })
+
+  test('the busiest device leads, and its busiest part leads it', () => {
+    const rows = searchInside(
+      [
+        rep([
+          visit('TH1N', [change('Sidegrip', 1)]),
+          visit('SRG3900 CARKIT', [change('Fistmic', 2), change('Speaker Loud', 5)]),
+        ]),
+      ],
+      'the 25th',
+    )
+    assert.deepEqual(
+      tallyByModel(rows).map((g) => [g.model, g.total, g.items.map((i) => i.name)]),
+      [
+        ['SRG3900 CARKIT', 7, ['Speaker Loud', 'Fistmic']],
+        ['TH1N', 1, ['Sidegrip']],
+      ],
+    )
+  })
+
+  test('the same part on two devices is counted under each of them', () => {
+    const rows = searchInside(
+      [rep([visit('TH1N', [change('Antenna', 1)]), visit('SRG3900 CARKIT', [change('Antenna', 3)])])],
+      'the 25th',
+    )
+    const by = Object.fromEntries(tallyByModel(rows).map((g) => [g.model, g.total]))
+    assert.deepEqual(by, { 'SRG3900 CARKIT': 3, TH1N: 1 })
+  })
+
+  test('a part off an entry with no model still has somewhere to go', () => {
+    const rows = searchInside(
+      [rep([{ model: '-', type: 'OTHER', comment: 'the 25th', faults: [change('BNC', 2)] }])],
+      'the 25th',
+    )
+    assert.deepEqual(tallyByModel(rows), [{ model: '', total: 2, items: [{ name: 'BNC', item: 'BNC', qty: 2 }] }])
+  })
+
+  test('the flat tally still answers, for anything that wants one list', () => {
+    const rows = searchInside([rep([visit('TH1N', [change('Sidegrip', 2)])])], 'the 25th')
+    assert.deepEqual(tallyItems(rows), [{ item: 'TH1N · Sidegrip', qty: 2 }])
   })
 })
