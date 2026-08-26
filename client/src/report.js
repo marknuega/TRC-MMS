@@ -108,6 +108,30 @@ const isSparePartAction = (action) => {
   return MAINTENANCE_ACTIONS.has(a) && a !== 'REPAIR'
 }
 
+/**
+ * A fault that took nothing off a shelf, AND is counted somewhere else.
+ *
+ * A Repair reuses the part it fixes, so "NO POWER = 1" under a heading reading
+ * Materials says a part called No Power was fitted, which is not a thing. The
+ * work is real and it is already counted: classify() calls a Repair
+ * maintenance, so the Device Summary carries it — alone, now.
+ *
+ * ONLY the Repair. The others that consume nothing each have a reason to stay:
+ *
+ *   - an RTO is counted NOWHERE else. It is not a service category, so the
+ *     Device Summary has nothing to say about it, and dropping its line here
+ *     would leave a report that mentions the device it handed back nowhere at
+ *     all.
+ *   - install, dismantle and programming lines are what the block is read for
+ *     — "INSTALLATION = 2" is a sentence somebody wants — and they have always
+ *     been there.
+ *   - an action nobody here has heard of is not assumed to consume nothing.
+ *     Actions are admin-managed; a custom one prints as it always did.
+ *
+ * The no-activity row is never dropped: being printed is its whole purpose.
+ */
+const consumesNoPart = (f) => !isNoActivityIssue(f.issue) && up(f.action) === 'REPAIR'
+
 export function classify(action) {
   const a = up(action)
   if (RTO_ACTIONS.has(a)) return 'rto'
@@ -551,6 +575,7 @@ export function materialBlocksByType(entries) {
       }
       const bucket = byModel.get(md)
       for (const f of e.faults) {
+        if (consumesNoPart(f)) continue // the Device Summary carries it alone
         const isProgram = classify(f.action) === 'programming'
         const label = isProgram ? 'PROGRAMMING' : up(f.issue)
         const company = isProgram ? '' : summaryCompanyText(f.company)

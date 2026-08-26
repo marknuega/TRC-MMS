@@ -989,9 +989,11 @@ describe('a PCB, a programming and an installation on one day', () => {
     })
 
     test('the code is the action that was performed, whichever it was', () => {
+      // Repair is absent from this list on purpose: it reuses the part it
+      // fixes, so it never reaches the materials block at all — see the rule
+      // below about what the Device Summary carries alone.
       for (const [action, code] of [
         ['CHANGE', 'C'],
-        ['REPAIR', 'R'],
         ['NEW', 'N'],
         ['PCB', 'PCB'],
       ]) {
@@ -1026,7 +1028,9 @@ describe('a PCB, a programming and an installation on one day', () => {
     // its code. Two boards changed is two boards on one line, and the code is
     // read off the first fault seen, exactly as the company already is.
     test('the code does not split the part into two lines', () => {
-      assert.deepEqual(one([did('PCB', 'CHANGE', 'MOI'), did('PCB', 'REPAIR', 'MOTECO')]), ['PCB (C) (MOI) = 2'])
+      assert.deepEqual(one([did('PCB', 'CHANGE', 'MOI'), did('PCB', 'CHANGE', 'MOTECO')]), ['PCB (C) (MOI) = 2'])
+      // …and the repaired board adds no unit to it, having consumed none.
+      assert.deepEqual(one([did('PCB', 'CHANGE', 'MOI'), did('PCB', 'REPAIR', 'MOTECO')]), ['PCB (C) (MOI) = 1'])
     })
 
     // A custom action has no entry in the code table, so it prints its own name
@@ -1036,6 +1040,53 @@ describe('a PCB, a programming and an installation on one day', () => {
     test('an action outside the code table prints itself, an ordinary part nothing', () => {
       assert.deepEqual(one([did('RTO', 'RTO')]), ['RTO (RTO) (MOI) = 1'])
       assert.deepEqual(one([did('ANTENNA', 'SOMETHING CUSTOM')]), ['ANTENNA (MOI) = 1'])
+    })
+  })
+
+  // -- A repair consumed nothing, so it is not a material --
+  //
+  // "NO POWER = 1" printed under a heading reading Materials says a part called
+  // No Power was fitted. The work happened and is counted: a Repair classifies
+  // as maintenance, so the Device Summary carries it — and now carries it
+  // alone.
+  describe('a repair leaves the materials block to the parts', () => {
+    const did = (issue, action, company = 'MOI', quantity = 1) => ({ issue, quantity, action, company })
+    const entry = (faults) => [{ agency: 'PSD', type: 'AIRBUS', model: 'TH1N', faults }]
+    const lines = (faults) => (materialBlocksByType(entry(faults))['AIRBUS'] ?? []).flatMap((b) => b.lines)
+
+    test('a repaired symptom is no material at all', () => {
+      assert.deepEqual(lines([did('NO POWER', 'REPAIR')]), [])
+    })
+
+    test('…but the device summary still counts the work', () => {
+      assert.deepEqual(entryCounts(entry([did('NO POWER', 'REPAIR')])[0]), {
+        maintenance: 1,
+        programming: 0,
+        install: 0,
+        dismantle: 0,
+      })
+    })
+
+    test('the parts changed alongside it are listed as they always were', () => {
+      assert.deepEqual(lines([did('NO POWER', 'REPAIR'), did('ANTENNA', 'CHANGE')]), ['1. ANTENNA (MOI) = 1'])
+    })
+
+    // An RTO is counted in no category at all, so its line here is the only
+    // place the report mentions it. It stays.
+    test('an RTO keeps its line, having nowhere else to be counted', () => {
+      assert.deepEqual(lines([did('RTO', 'RTO')]), ['1. RTO (RTO) (MOI) = 1'])
+    })
+
+    // Actions are admin-managed. One this module has never heard of is not
+    // assumed to consume nothing.
+    test('an action nobody here knows is left exactly as it was', () => {
+      assert.deepEqual(lines([did('ANTENNA', 'SOMETHING CUSTOM')]), ['1. ANTENNA (MOI) = 1'])
+    })
+
+    test('a no-activity row is printed whatever else is true of it', () => {
+      const rows = lines([{ issue: 'No Activity', quantity: 0, action: '', company: '' }])
+      assert.equal(rows.length, 1)
+      assert.match(rows[0], /NO ACTIVITY/i)
     })
   })
 

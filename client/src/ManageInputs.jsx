@@ -401,7 +401,7 @@ export default function ManageInputs({
   function codeInUseHint(parts) {
     const p = parts.trim()
     if (!PARTS_RE.test(p)) return ''
-    const part = (map?.components ?? FALLBACK.components)[p]
+    const part = partsName(p)
     if (!part) return `${p} is free — nothing uses it yet.`
     return `${p} is already in use for ${part} — defining it here replaces that.`
   }
@@ -486,6 +486,11 @@ export default function ManageInputs({
   // on it. Same lookup deviceModels filtered on, so every model listed there
   // has one.
   const letterOf = (model) => deviceLetterFor(model, map?.equipmentCodes ?? FALLBACK.equipmentCodes) || ''
+
+  // What the parts list calls a number — "Fuses" over 10, "Knobs" over 41. The
+  // card is headed by the number and its variants; this is the word for the
+  // family they are variants OF, which is the one thing the head could not say.
+  const partsName = (parts) => (map?.components ?? FALLBACK.components)[String(parts ?? '').trim()] ?? ''
 
   // The code one device gives this part+variant — H + 99 + A = H99A. Shown on
   // the device's own row, because a code read off the row beats one assembled
@@ -1554,6 +1559,12 @@ export default function ManageInputs({
                     <span className="manage-group-count">
                       {g.items.length} {g.items.length === 1 ? 'variant' : 'variants'}
                     </span>
+                    {/* The family name, from the parts list. Silent when the
+                        number has none rather than printing a placeholder: an
+                        unnamed number is a real state (see the Code Reference
+                        card, which shows the same gap), and a head reading
+                        "— unnamed —" would be louder than the name itself. */}
+                    {partsName(g.parts) && <span className="manage-group-base">{partsName(g.parts)}</span>}
                   </div>
                 )}
                 {g.items.map(({ value, i }) => (
