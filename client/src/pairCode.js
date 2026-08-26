@@ -119,10 +119,11 @@ const modelHalf = (label) => {
  *
  * Matched through matchOption rather than by equality, because the model on an
  * entry may have come from either vocabulary: the Manage-inputs list writes
- * "SRG3900 CARKIT" and "TMR 880i", the WhatsApp decoder writes the code map's
- * own "SRG Carkit" and "TMR880i" (see saveGroup in whatsapp/routes.js). Both
- * must land on the same letter or the same fault would draw from two shelves
- * depending on where it was typed.
+ * "SRG3900 CARKIT", the WhatsApp decoder writes the code map's own "SRG Carkit"
+ * (see saveGroup in whatsapp/routes.js). Both must land on the same letter or
+ * the same fault would draw from two shelves depending on where it was typed.
+ * The same goes for an entry saved under an older spelling of a name the list
+ * has since settled — "TMR 880i" before it became "TMR880i".
  *
  * '' rather than a guess for anything unmatched — "For Record Purpose Only."
  * is a real Model on a real entry and it owns no stock at all.

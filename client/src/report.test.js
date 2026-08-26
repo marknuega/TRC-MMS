@@ -31,6 +31,7 @@ import {
   seriesOf,
   docIdMatches,
   displayNumber,
+  setModelNames,
 } from './report.js'
 import { DEFAULT_OPTIONS } from './options.js'
 
@@ -1407,5 +1408,86 @@ describe('a TH1n car kit counts in the TH1n column', () => {
     assert.equal(day.totals.th1n, 1)
     const year = buildYearMatrix(rep, { year: 2026, branch: 'Makkah' })
     assert.equal(year.totals.th1n, 1)
+  })
+})
+
+// What a device is CALLED is Manage Inputs' answer, not this module's. An entry
+// holds the spelling that was current when it was saved, so without registering
+// the list one day's report would print "TMR 880i" and the next "TMR880i", for
+// the one terminal.
+describe('a device is printed by the name Manage Inputs gives it', () => {
+  const entry = (model, type = 'AIRBUS') => ({
+    reportDate: '2026-08-25',
+    agency: 'PSD',
+    technician: 'AMIR',
+    type,
+    model,
+    faults: [{ issue: 'ANTENNA', quantity: 1, action: 'CHANGE', company: 'MOTECO' }],
+  })
+  const txtFor = (model, type) =>
+    buildTxt(buildDateReport('25/08/2026', 'MAKKAH-REP-0021', [entry(model, type)], { branch: 'Makkah' }))
+
+  test('with no list registered, the entry keeps its own spelling', () => {
+    setModelNames(null)
+    assert.match(txtFor('TMR 880i'), /TMR 880i/)
+  })
+
+  test('a registered list renames it, however it was stored', () => {
+    setModelNames(DEFAULT_OPTIONS.models)
+    try {
+      assert.match(txtFor('TMR 880i'), /TMR880i/)
+      assert.ok(!txtFor('TMR 880i').includes('TMR 880i'))
+      assert.match(txtFor('tmr-880i'), /TMR880i/)
+    } finally {
+      setModelNames(null)
+    }
+  })
+
+  // A name the report shortens on purpose — "SRG3900 CARKIT" prints as
+  // "SRG CARKIT" — is not a spelling the list gets to overrule.
+  test('the sheet keeps its own short form for the SRG builds', () => {
+    setModelNames(DEFAULT_OPTIONS.models)
+    try {
+      assert.match(txtFor('SRG3900 CARKIT', 'SEPURA'), /SEPURA \(CARKIT\)/)
+    } finally {
+      setModelNames(null)
+    }
+  })
+
+  test('a model no list names is printed as the entry holds it', () => {
+    setModelNames(DEFAULT_OPTIONS.models)
+    try {
+      assert.match(txtFor('SOMETHING NEW'), /SOMETHING NEW/)
+    } finally {
+      setModelNames(null)
+    }
+  })
+})
+
+// The fixed sort order and the sheet's columns are written in one spelling; an
+// entry saved in another is the same terminal and must land in the same place.
+describe('the old spelling still sorts and counts as the same terminal', () => {
+  const at = (model) => ({
+    reportDate: '2026-08-25',
+    agency: 'PSD',
+    type: 'AIRBUS',
+    model,
+    faults: [{ issue: 'ANTENNA', quantity: 1, action: 'CHANGE', company: 'MOTECO' }],
+  })
+
+  test('it sorts to the TMR880i place, not last', () => {
+    assert.deepEqual(
+      entriesByModel([at('MT680'), at('TMR 880i'), at('TH1N')]).map((e) => e.model),
+      ['TH1N', 'TMR 880i', 'MT680'],
+    )
+  })
+
+  test('it counts in the TMR880i column', () => {
+    const m = buildMonthlyMatrix(
+      [{ mode: 'report', branch: 'Makkah', dateLabel: '25/08/2026', entries: [at('TMR 880i')] }],
+      { year: 2026, month: 7, branch: 'Makkah' },
+    )
+    assert.equal(m.rows.find((r) => r.day === 25).counts.tmr880i, 1)
+    assert.equal(m.totals.tmr880i, 1)
   })
 })

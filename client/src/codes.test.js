@@ -276,7 +276,8 @@ test('matchOption bridges the two vocabularies without guessing', () => {
   // exactly as parseCodeReport does before it gets here.
   const models = optionNames(OPTS.models)
   assert.equal(matchOption('SRG Carkit', models), 'SRG3900 CARKIT')
-  assert.equal(matchOption('TMR880i', models), 'TMR 880i')
+  assert.equal(matchOption('TMR880i', models), 'TMR880i')
+  assert.equal(matchOption('TMR 880i', models), 'TMR880i') // the spelling entries saved before the rename
   assert.equal(matchOption('TH1n', models), 'TH1N')
   assert.equal(matchOption('Nothing Like This', models), null)
 })

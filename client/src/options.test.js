@@ -34,6 +34,8 @@ import {
   issiWireOffer,
   withIssiPrefix,
   optionIssiPrefixes as issiPrefixesOf,
+  typeForModel,
+  modelKey,
 } from './options.js'
 
 describe('mergeOptions', () => {
@@ -1005,5 +1007,43 @@ describe('issueOffered', () => {
   test('a shared part is offered to everything, as it always was', () => {
     assert.equal(issueOffered(sidegrip, 'TH1N'), true)
     assert.equal(issueOffered('ANTENNA', 'TH1N'), true)
+  })
+})
+
+// A model can be renamed in Manage Inputs, and the shipped list itself was
+// renamed once — "TMR 880i" settled on "TMR880i". Every stored entry still
+// holds the older spelling, so nothing may be matched on the name as typed.
+describe('a model is recognised past its spelling', () => {
+  test('modelKey flattens case, spacing and punctuation', () => {
+    for (const name of ['TMR880I', 'TMR 880i', 'tmr-880i', ' TMR 880 I ']) {
+      assert.equal(modelKey(name), 'TMR880I', name)
+    }
+    assert.notEqual(modelKey('TH1N'), modelKey('TH1N CARKIT'))
+  })
+
+  test('the Type still follows from an older spelling of the name', () => {
+    assert.equal(typeForModel('TMR880i'), 'AIRBUS')
+    assert.equal(typeForModel('TMR 880i'), 'AIRBUS')
+    assert.equal(typeForModel('SRG3900 CARKIT'), 'SEPURA')
+  })
+
+  test('a model nothing names has no type to give, and says so', () => {
+    assert.equal(typeForModel('SOMETHING NEW'), '')
+    assert.equal(typeForModel(''), '')
+  })
+
+  // The live installs all hold a saved models list written before the rename.
+  test('a stored list under the old spelling is still seeded its prefixes', () => {
+    const out = mergeOptions({ models: ['TMR 880i'] })
+    assert.deepEqual(optionPrefixes(out.models[0]), ['7506', '08'])
+    assert.deepEqual(optionStandIns(out.models[0]), ['08'])
+    assert.equal(optionStandInReal(out.models[0]), '7506')
+    // …and the shorthand still swaps for the number really on the radio.
+    assert.equal(telForModel('08332645500', 'TMR 880i', out.models), '7506332645500')
+  })
+
+  test('the shipped list settles on the one spelling', () => {
+    assert.ok(optionNames(DEFAULT_OPTIONS.models).includes('TMR880i'))
+    assert.ok(!optionNames(DEFAULT_OPTIONS.models).includes('TMR 880i'))
   })
 })
