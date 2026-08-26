@@ -62,6 +62,23 @@ const partOf = (model, f) => ({
 })
 
 /**
+ * Is this entry inside the period being asked about?
+ *
+ * The period arrives as the prefix its granularity truncates to — 2026, or
+ * 2026-08, or 2026-08-25 (periodValue in period.jsx) — so one comparison
+ * answers for a day, a month and a year alike. Read off the ENTRY's own service
+ * date, never the report's label: a snapshot can span more than one day, and
+ * the day a part went out is the day it was worked on.
+ */
+const inPeriod = (e, want) => !want || String(e?.reportDate ?? '').slice(0, want.length) === want
+
+/** The saved documents holding at least one entry in the period. */
+export const reportsIn = (list, period) =>
+  !period
+    ? (list ?? [])
+    : (list ?? []).filter((r) => (Array.isArray(r.entries) ? r.entries : []).some((e) => inPeriod(e, period)))
+
+/**
  * Deep search inside a set of saved snapshots -> matching rows.
  *
  * A query matches at one of two levels, and the level decides how many rows
@@ -85,12 +102,18 @@ const partOf = (model, f) => ({
  * the individual items behind it, so a day's search still answers "how many
  * sidegrips went out on the 6th" one part at a time. A badge reading
  * "TH1N · Battery 3180 + Sidegrip + PTT — 1" counts nothing anybody can use.
+ *
+ * A `period` narrows every one of those readings to a day, a month or a year.
+ * On its own — with no text typed at all — it IS the query: every entry in that
+ * period is an answer, which is how "what went out in August" gets asked. Typed
+ * text then narrows it further rather than replacing it.
  */
-export function searchInside(list, query) {
+export function searchInside(list, query, period = '') {
   const q = String(query ?? '')
     .trim()
     .toLowerCase()
-  if (!q) return []
+  const want = String(period ?? '')
+  if (!q && !want) return []
   const out = []
   for (const r of list ?? []) {
     const entries = Array.isArray(r.entries) ? r.entries : []
@@ -109,6 +132,21 @@ export function searchInside(list, query) {
         reportId: label,
         rep: r,
       })
+      if (!inPeriod(e, want)) continue
+      const entryRow = () =>
+        row(
+          itemLabel(model, faults.map(faultLabel).join(' + ')),
+          entryQty(e),
+          faults.map((f) => partOf(model, f)),
+        )
+      // A period with nothing typed asks about the period itself, so every
+      // entry in it answers — the same one-row-per-visit shape an entry-level
+      // match produces, because it is the same kind of match: the entry as a
+      // whole is what was asked about.
+      if (!q) {
+        if (faults.length > 0) out.push(entryRow())
+        continue
+      }
       const hits = faults.filter((f) => faultHay(f).includes(q))
       if (hits.length > 0) {
         // Only the lines that matched are counted: someone searching a part is
@@ -117,13 +155,7 @@ export function searchInside(list, query) {
       } else if (entryHay(r, e).includes(q) && faults.length > 0) {
         // Named together, in the order they were entered — the entry is one
         // visit to one device, and its faults are what was done during it.
-        out.push(
-          row(
-            itemLabel(model, faults.map(faultLabel).join(' + ')),
-            entryQty(e),
-            faults.map((f) => partOf(model, f)),
-          ),
-        )
+        out.push(entryRow())
       }
     }
   }

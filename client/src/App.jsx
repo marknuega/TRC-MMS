@@ -106,8 +106,8 @@ import {
   displayNumber,
   TYPE_ORDER,
 } from './report'
-import { searchInside, tallyByModel } from './search.js'
-import { PeriodPicker, makePeriod, periodLabel } from './period'
+import { searchInside, tallyByModel, reportsIn } from './search.js'
+import { PeriodPicker, makePeriod, periodLabel, periodValue } from './period'
 import './App.css'
 
 // Actions whose "fault" is the whole device — no component issue needed.
@@ -478,10 +478,15 @@ function App({ user, onLogout }) {
   const [savedAll, setSavedAll] = useState([]) // as fetched; read through `saved` below
   const [savedOpen, setSavedOpen] = useState(false)
   const [savedSearch, setSavedSearch] = useState('')
+  // null = any date. Off until someone asks for a period, because a card that
+  // silently opened on this month would be hiding reports it says it holds.
+  const [savedPeriod, setSavedPeriod] = useState(null)
   const [savedRefOpen, setSavedRefOpen] = useState(false)
   const [savedRefSearch, setSavedRefSearch] = useState('')
+  const [savedRefPeriod, setSavedRefPeriod] = useState(null)
   const [savedTxOpen, setSavedTxOpen] = useState(false)
   const [savedTxSearch, setSavedTxSearch] = useState('')
+  const [savedTxPeriod, setSavedTxPeriod] = useState(null)
   const [page, setPage] = useState('report')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(loadSidebar)
   const [monthExpanded, setMonthExpanded] = useState(false) // false = show 7 days only
@@ -2440,9 +2445,22 @@ function App({ user, onLogout }) {
     () => saved.filter((r) => isTx(r) && inBranch(r)).sort(byDocId),
     [saved, branch, isAllBranches],
   )
-  const reportResults = useMemo(() => searchInside(dailySaved, savedSearch), [dailySaved, savedSearch])
-  const refResults = useMemo(() => searchInside(refSaved, savedRefSearch), [refSaved, savedRefSearch])
-  const txResults = useMemo(() => searchInside(txSaved, savedTxSearch), [txSaved, savedTxSearch])
+  // The prefix each card's period truncates to — '' when it is on Any date.
+  const reportPeriodKey = savedPeriod ? periodValue(savedPeriod) : ''
+  const refPeriodKey = savedRefPeriod ? periodValue(savedRefPeriod) : ''
+  const txPeriodKey = savedTxPeriod ? periodValue(savedTxPeriod) : ''
+  const reportResults = useMemo(
+    () => searchInside(dailySaved, savedSearch, reportPeriodKey),
+    [dailySaved, savedSearch, reportPeriodKey],
+  )
+  const refResults = useMemo(
+    () => searchInside(refSaved, savedRefSearch, refPeriodKey),
+    [refSaved, savedRefSearch, refPeriodKey],
+  )
+  const txResults = useMemo(
+    () => searchInside(txSaved, savedTxSearch, txPeriodKey),
+    [txSaved, savedTxSearch, txPeriodKey],
+  )
   // Each list is searchable by its OWN short form — RTO-A001 finds the
   // reference-only record, TRA-A001 the transmittal — because each one asks
   // about the ids of the reports it actually holds.
@@ -2574,14 +2592,21 @@ function App({ user, onLogout }) {
     hint,
     empty,
     placeholder,
+    period = null,
+    setPeriod = () => {},
     tx = false,
   }) => {
-    // Only what the current query matched — with no query there are no results
-    // and so no badges, which is the wanted behaviour rather than a special case.
+    // Only what the current query matched — with no query and no period there
+    // are no results and so no badges, which is the wanted behaviour rather
+    // than a special case.
     const tally = tallyByModel(results)
+    const typed = Boolean(search.trim())
+    // The documents left once the period has had its say. With no period this
+    // is the whole list, which is what every card showed before there was one.
+    const inRange = period ? reportsIn(list, periodValue(period)) : list
     // The sentence describes the card, so it is worth the room only while
     // nobody is using the card to look for something.
-    const showHint = Boolean(hint) && !search.trim()
+    const showHint = Boolean(hint) && !typed && !period
     return (
       <section className="saved">
         <button type="button" className="manage-toggle" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
@@ -2633,18 +2658,27 @@ function App({ user, onLogout }) {
                 )}
               </div>
             )}
+            {/* Text and period are one filter in two halves, so they sit on one
+                row: the words narrow WHAT, the period narrows WHEN, and either
+                alone is a whole question — "sidegrip" over everything saved,
+                or August over every part in it. */}
             {list.length > 0 && (
-              <input
-                type="search"
-                className="saved-search"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder={placeholder}
-              />
+              <div className="saved-filters">
+                <input
+                  type="search"
+                  className="saved-search"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder={placeholder}
+                />
+                <div className="saved-period">
+                  <PeriodPicker period={period} onChange={setPeriod} label="Date" anyLabel="Any date" />
+                </div>
+              </div>
             )}
             {list.length === 0 ? (
               <p className="empty">{empty}</p>
-            ) : search.trim() ? (
+            ) : typed ? (
               // An id query surfaces the DOCUMENT, in the same row the unfiltered
               // list uses — so it arrives with Load / Mark reference / Delete on
               // it, which is what someone who went looking for a specific report
@@ -2658,8 +2692,18 @@ function App({ user, onLogout }) {
                   noise, so the "No items match" line is suppressed. */}
                 {(results.length > 0 || idHits.length === 0) && searchList(results, search, tx)}
               </>
+            ) : inRange.length === 0 ? (
+              // A period that nothing falls in is an answer, not an empty card:
+              // it says the month was quiet, which is different from having no
+              // saved reports at all.
+              <p className="empty">Nothing saved in {periodLabel(period)}.</p>
             ) : (
-              <ul className="saved-list">{list.map(savedRow)}</ul>
+              // A period narrows the DOCUMENTS, and leaves them as documents —
+              // Load, Mark reference and Delete are what someone opening a
+              // month came for. The parts that went out during it are already
+              // counted in the columns above, so nothing is lost by not
+              // breaking the month into line items nobody asked for.
+              <ul className="saved-list">{inRange.map(savedRow)}</ul>
             )}
           </div>
         )}
@@ -3680,6 +3724,8 @@ function App({ user, onLogout }) {
                   open: savedOpen,
                   setOpen: setSavedOpen,
                   search: savedSearch,
+                  period: savedPeriod,
+                  setPeriod: setSavedPeriod,
                   setSearch: setSavedSearch,
                   results: reportResults,
                   idHits: reportIdHits,
@@ -3698,6 +3744,8 @@ function App({ user, onLogout }) {
                   open: savedRefOpen,
                   setOpen: setSavedRefOpen,
                   search: savedRefSearch,
+                  period: savedRefPeriod,
+                  setPeriod: setSavedRefPeriod,
                   setSearch: setSavedRefSearch,
                   results: refResults,
                   idHits: refIdHits,
@@ -3715,6 +3763,8 @@ function App({ user, onLogout }) {
                   open: savedTxOpen,
                   setOpen: setSavedTxOpen,
                   search: savedTxSearch,
+                  period: savedTxPeriod,
+                  setPeriod: setSavedTxPeriod,
                   setSearch: setSavedTxSearch,
                   results: txResults,
                   idHits: txIdHits,

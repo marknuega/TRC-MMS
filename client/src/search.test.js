@@ -5,7 +5,7 @@
 
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
-import { searchInside, tallyItems, tallyByModel } from './search.js'
+import { searchInside, tallyItems, tallyByModel, reportsIn } from './search.js'
 
 // One saved snapshot, shaped the way the app stores them.
 const rep = (entries, extra = {}) => ({
@@ -262,5 +262,65 @@ describe('the tally gathers each device into its own column', () => {
   test('the flat tally still answers, for anything that wants one list', () => {
     const rows = searchInside([rep([visit('TH1N', [change('Sidegrip', 2)])])], 'the 25th')
     assert.deepEqual(tallyItems(rows), [{ item: 'TH1N · Sidegrip', qty: 2 }])
+  })
+})
+
+// Day, month and year are one question at three widths, and a period is the
+// prefix each truncates to — so one comparison answers all three.
+describe('a period narrows the search to a day, a month or a year', () => {
+  const on = (date, model, faults) => ({ reportDate: date, model, type: 'AIRBUS', telNumber: '355', faults })
+  const change = (issue, quantity) => ({ issue, quantity, action: 'CHANGE', company: 'MOT' })
+  const august = rep([
+    on('2026-08-06', 'TH1N', [change('Sidegrip', 2)]),
+    on('2026-08-25', 'TH1N', [change('Sidegrip', 1), change('Antenna', 1)]),
+  ])
+  const july = rep([on('2026-07-31', 'TH1N', [change('Sidegrip', 9)])])
+  const list = [august, july]
+
+  test('a period alone is the whole question — every entry in it answers', () => {
+    assert.equal(searchInside(list, '', '2026-08').length, 2)
+    assert.equal(searchInside(list, '', '2026-08-06').length, 1)
+    assert.equal(searchInside(list, '', '2026').length, 3)
+  })
+
+  test('and the parts are counted across it', () => {
+    assert.deepEqual(tallyItems(searchInside(list, '', '2026-08')), [
+      { item: 'TH1N · Sidegrip', qty: 3 },
+      { item: 'TH1N · Antenna', qty: 1 },
+    ])
+    // July's nine sidegrips are a different month and stay out of it.
+    assert.deepEqual(tallyItems(searchInside(list, '', '2026-07')), [{ item: 'TH1N · Sidegrip', qty: 9 }])
+  })
+
+  test('typed text narrows the period further rather than replacing it', () => {
+    const out = searchInside(list, 'antenna', '2026-08')
+    assert.equal(out.length, 1)
+    assert.equal(out[0].item, 'TH1N · Antenna')
+    assert.equal(searchInside(list, 'antenna', '2026-07').length, 0)
+  })
+
+  test('a period nothing falls in answers with nothing', () => {
+    assert.deepEqual(searchInside(list, '', '2025'), [])
+  })
+
+  test('no period and no text is still no question at all', () => {
+    assert.deepEqual(searchInside(list, '', ''), [])
+    assert.deepEqual(searchInside(list, '  '), [])
+  })
+
+  // The entry's OWN service date decides, not the report's label: a snapshot
+  // can span days, and the day a part went out is the day it was worked on.
+  test('an entry is judged by its own date', () => {
+    const spanning = rep([on('2026-08-31', 'TH1N', [change('PTT', 1)]), on('2026-09-01', 'TH1N', [change('PTT', 1)])])
+    assert.equal(searchInside([spanning], '', '2026-08').length, 1)
+    assert.equal(searchInside([spanning], '', '2026-09').length, 1)
+  })
+
+  test('reportsIn keeps a document with any entry in the period', () => {
+    assert.deepEqual(reportsIn(list, '2026-08'), [august])
+    assert.deepEqual(reportsIn(list, '2026-07'), [july])
+    assert.deepEqual(reportsIn(list, '2026'), list)
+    assert.deepEqual(reportsIn(list, ''), list) // no period, no narrowing
+    assert.deepEqual(reportsIn(list, '2025'), [])
   })
 })

@@ -1182,10 +1182,38 @@ h2 {
   }
 }
 
+/* The two halves of one filter, on one row: the words take the room that is
+   left, the period keeps what it needs. Below that width they stack, because a
+   search box squeezed to nothing is worse than a taller card. */
+.saved-filters {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 0.6rem 0.75rem;
+  margin: 0 0 0.9rem;
+}
 .saved-search {
+  flex: 1 1 16rem;
   width: 100%;
   box-sizing: border-box;
-  margin: 0 0 0.9rem;
+  margin: 0;
+}
+/* Laid out like the monthly toolbar's fields — caption over control — so the
+   period reads as the same control it is there. */
+.saved-period {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.6rem;
+  flex: 0 1 auto;
+}
+.saved-period label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--muted);
+  min-width: 8rem;
 }
 
 /* ---- Monthly matrix ---- */

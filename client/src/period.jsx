@@ -68,21 +68,42 @@ function anchorOf(year, month1, day) {
   return `${year}-${pad(month1)}-${pad(Math.min(day, lastDay))}`
 }
 
-/** Two form controls: the granularity, then the date/month/year for it. */
-export function PeriodPicker({ period, onChange, label = 'View by' }) {
+/**
+ * Two form controls: the granularity, then the date/month/year for it.
+ *
+ * `anyLabel` adds a fourth granularity — no period at all — for the callers
+ * where narrowing is optional rather than the point. Choosing it reports null,
+ * and a null period draws the granularity control alone: there is no date to
+ * pick for "any date", and an input sitting there disabled would only invite
+ * someone to try. The monthly views pass no anyLabel and always hold a period,
+ * so nothing about them changes.
+ */
+export function PeriodPicker({ period, onChange, label = 'View by', anyLabel = '' }) {
+  const kindField = (
+    <label>
+      {label}
+      <SearchSelect
+        value={period?.kind ?? ''}
+        onChange={(e) => {
+          const kind = e.target.value
+          if (!kind) return onChange(null) // only reachable when anyLabel is set
+          onChange(period ? { ...period, kind } : makePeriod(kind))
+        }}
+        options={[
+          ...(anyLabel ? [{ value: '', label: anyLabel }] : []),
+          ...KINDS.map((k) => ({ value: k.kind, label: k.label })),
+        ]}
+      />
+    </label>
+  )
+  if (!period) return kindField
+
   const [y, m, d] = String(period.anchor).split('-').map(Number)
   const set = (anchor) => onChange({ ...period, anchor })
 
   return (
     <>
-      <label>
-        {label}
-        <SearchSelect
-          value={period.kind}
-          onChange={(e) => onChange({ ...period, kind: e.target.value })}
-          options={KINDS.map((k) => ({ value: k.kind, label: k.label }))}
-        />
-      </label>
+      {kindField}
       <label>
         {period.kind === 'day' ? 'Date' : period.kind === 'month' ? 'Month' : 'Year'}
         {period.kind === 'day' && (
