@@ -6,8 +6,9 @@
  * written down: the code map, the option lists, the saved reports, and the
  * entries still on the working set.
  *
- *     Fistmic     ->  Fist Mic
- *     Fistmic 3D  ->  Fist Mic 3D
+ *     Fistmic                ->  Fist Mic
+ *     Fistmic 3D             ->  Fist Mic 3D
+ *     Hand-MicroLoudSpeaker  ->  Fist Mic     (the same part, another name)
  *
  * The part has been renamed in Manage inputs, and that settles what every fault
  * written from now on says. It settles nothing about what is already written:
@@ -30,6 +31,13 @@
  * a key of its own and lands on "Fist Mic 3D". A name folding to neither is a
  * different part: it is reported and left exactly as it is.
  *
+ * "Hand-MicroLoudSpeaker" is the exception, and it is listed as one. No folding
+ * brings it to "Fist Mic" — it describes the part instead of spelling its name
+ * — so it is written down as an ALIAS, and an alias moves records only. The
+ * option lists and the code map keep answering with their own names, because
+ * "which part is this name" and "what is this code called" are two questions
+ * and only the first one has an alias as an answer.
+ *
  * STOCK IS NOT AFFECTED. The inventory ledger recorded what was actually
  * deducted at the time and is never rewritten. This changes what the records
  * SAY, which is the part that is out of date.
@@ -40,7 +48,7 @@
  *   cd server && node --env-file=.env scripts/rename-fist-mic.js --apply
  */
 import { prisma } from '../src/db.js'
-import { norm } from '../../client/src/pairCode.js'
+import { norm, claimedPartsCode } from '../../client/src/pairCode.js'
 import { issueAllNames } from '../../client/src/options.js'
 
 const APPLY = process.argv.includes('--apply')
@@ -49,8 +57,29 @@ const APPLY = process.argv.includes('--apply')
 const RENAMES = ['Fist Mic', 'Fist Mic 3D']
 const TARGETS = new Map(RENAMES.map((to) => [norm(to), to]))
 
-// The spelling this name should end on, or null when it names something else.
-const targetFor = (v) => TARGETS.get(norm(v)) ?? null
+// Other NAMES for the same part — not other spellings of this one. 19A is the
+// fist mic, and "Hand-MicroLoudSpeaker" is what somebody called it before the
+// list did: a description of the thing rather than a variant of the word, so no
+// amount of folding brings the two together and it has to be said outright.
+//
+// Matched on the whole folded name, never on part of it. Component 28 is the
+// "Micro-Loud Speaker", a different part with a similar description, and a
+// substring rule would have swallowed it.
+const ALIASES = [{ from: 'Hand-MicroLoudSpeaker', to: 'Fist Mic' }]
+const ALIAS_KEYS = new Map(ALIASES.map((a) => [norm(a.from), a.to]))
+
+// The spelling a RECORD should end on: its own name respelled, or the name of
+// the part it turns out to be.
+const targetFor = (v) => TARGETS.get(norm(v)) ?? ALIAS_KEYS.get(norm(v)) ?? null
+
+// What an OPTION ROW should end on, which is only ever a respelling of itself.
+// An alias must not touch the lists: renaming a row called
+// "HAND MICRO LOUD SPEAKER" to "Fist Mic" would leave two rows of that name,
+// one coded and one not, and a fault could then be written by either. The row
+// is dead once nothing is written by it, and deleting it is one visible edit in
+// Manage inputs rather than something a migration does behind the admin.
+const canonFor = (v) => TARGETS.get(norm(v)) ?? null
+
 // Near enough to be worth mentioning, far enough to leave alone: a name that
 // contains one of the keys without folding to it, like "FISTMIC CABLE".
 const near = (v) => !targetFor(v) && [...TARGETS.keys()].some((k) => norm(v).includes(k))
@@ -73,19 +102,47 @@ async function main() {
     if (!named.length) console.log(`"${to}": no issue type names it — the records carry it as text and claim no code.`)
     else console.log(`"${to}": ${named.length} issue-type name(s) — ${[...new Set(named)].join(', ')}`)
   }
+  // An alias moves a record onto a DIFFERENT name, so it can move it onto a
+  // different code as well. Losing a claim is the direction that costs a shelf,
+  // and it refuses; gaining one is the repair the alias exists to make.
+  const issueTypes = options.issueTypes ?? []
+  let refuse = false
+  for (const a of ALIASES) {
+    const was = claimedPartsCode(a.from, issueTypes)
+    const now = claimedPartsCode(a.to, issueTypes)
+    const line = `"${a.from}" -> "${a.to}"`
+    if (was && was !== now) {
+      console.log(`REFUSING ${line} — "${a.from}" claims ${was}, "${a.to}" claims ${now || 'nothing'}.`)
+      refuse = true
+    } else if (!was && now) {
+      console.log(`${line} — puts these faults onto ${now}, which they never reached under the old name.`)
+    } else {
+      console.log(`${line} — ${was ? `both names claim ${was}` : 'neither name claims a code'}; only the text changes.`)
+    }
+  }
+  if (refuse) {
+    console.log('\nNothing written. Settle the codes in Manage inputs first, then run this again.')
+    process.exitCode = 1
+    return
+  }
 
   // 2. The code map — what the Reference card and the WhatsApp bot say.
+  //
+  // Respellings only, like the option rows: the map answers "what is code 19
+  // called", and an alias answers "which part is this name" — a different
+  // question, and applying it here could rename a code that legitimately holds
+  // a similar name. 28 is the Micro-Loud Speaker; it is not the fist mic.
   const map = (await prisma.codeMap.findUnique({ where: { id: 1 } }))?.data ?? null
   const mapEdits = []
   const nextMap = map ? { ...map } : null
   for (const [category, entries] of Object.entries(map ?? {})) {
     if (!entries || typeof entries !== 'object' || Array.isArray(entries)) continue
-    const hits = Object.entries(entries).filter(([, n]) => typeof n === 'string' && targetFor(n) && targetFor(n) !== n)
+    const hits = Object.entries(entries).filter(([, n]) => typeof n === 'string' && canonFor(n) && canonFor(n) !== n)
     if (!hits.length) continue
     nextMap[category] = { ...entries }
     for (const [code, was] of hits) {
-      nextMap[category][code] = targetFor(was)
-      mapEdits.push(`${category} ${code}: "${was}" -> "${targetFor(was)}"`)
+      nextMap[category][code] = canonFor(was)
+      mapEdits.push(`${category} ${code}: "${was}" -> "${canonFor(was)}"`)
     }
   }
 
@@ -94,7 +151,7 @@ async function main() {
   //    so a fault never sits on a name its issue type has stopped carrying.
   const optionEdits = []
   const rename = (n) => {
-    const to = typeof n === 'string' ? targetFor(n) : null
+    const to = typeof n === 'string' ? canonFor(n) : null
     if (!to || to === n) return n
     optionEdits.push(`"${n}" -> "${to}"`)
     return to
@@ -117,7 +174,7 @@ async function main() {
   // vocabulary no longer carries and lose their code.
   const survivors = []
   for (const t of nextIssueTypes)
-    for (const n of issueAllNames(t)) if (targetFor(n) && targetFor(n) !== n) survivors.push(n)
+    for (const n of issueAllNames(t)) if (canonFor(n) && canonFor(n) !== n) survivors.push(n)
   if (survivors.length) {
     console.log(
       `\nRefusing: these issue-type names would still read differently: ${[...new Set(survivors)].join(', ')}`,
