@@ -3,7 +3,7 @@
  * © 2026 Muhammad Amir. All rights reserved.
  */
 
-import { test } from 'node:test'
+import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 import { searchInside, tallyItems } from './search.js'
 
@@ -128,4 +128,67 @@ test('the tally keeps two models of one part apart', () => {
     { item: 'SRG3900 · Sidegrip', qty: 1 },
   ])
   assert.equal(out.length, 2)
+})
+
+// The badges answer "how many of each part went out", so they count PARTS, not
+// rows. A row can be a whole visit to a device, and a badge reading
+// "TH1N · Battery 3180 + Sidegrip + PTT — 1" counts nothing anybody can use.
+describe('the tally counts parts, whatever shape the rows are', () => {
+  const visit = (model, faults, comment = 'seen on the 6th') => ({
+    model,
+    type: 'AIRBUS',
+    telNumber: '355060581010',
+    comment,
+    faults,
+  })
+  const change = (issue, quantity) => ({ issue, quantity, action: 'CHANGE', company: 'MOT' })
+
+  test('an entry matched as a whole is still counted part by part', () => {
+    const rows = searchInside(
+      [rep([visit('TH1N', [change('Battery 3180', 1), change('Sidegrip', 2), change('PTT', 1)])])],
+      'seen on the 6th',
+    )
+    // One row for the visit…
+    assert.equal(rows.length, 1)
+    assert.equal(rows[0].item, 'TH1N · Battery 3180 + Sidegrip + PTT')
+    // …and one badge per part, each with its own quantity.
+    assert.deepEqual(tallyItems(rows), [
+      { item: 'TH1N · Sidegrip', qty: 2 },
+      { item: 'TH1N · Battery 3180', qty: 1 },
+      { item: 'TH1N · PTT', qty: 1 },
+    ])
+  })
+
+  test('the same part on two devices adds up across them', () => {
+    const rows = searchInside(
+      [rep([visit('TH1N', [change('Sidegrip', 1)]), visit('TH1N', [change('Sidegrip', 3), change('B Cover', 1)])])],
+      'seen on the 6th',
+    )
+    assert.deepEqual(tallyItems(rows), [
+      { item: 'TH1N · Sidegrip', qty: 4 },
+      { item: 'TH1N · B Cover', qty: 1 },
+    ])
+  })
+
+  test('searching a part counts that part alone, not its neighbours', () => {
+    const rows = searchInside([rep([visit('TH1N', [change('Sidegrip', 2), change('PTT', 1)])])], 'sidegrip')
+    assert.deepEqual(tallyItems(rows), [{ item: 'TH1N · Sidegrip', qty: 2 }])
+  })
+
+  test('a device-level action is counted by its action name', () => {
+    const rows = searchInside(
+      [rep([visit('SRG3900 CARKIT', [{ issue: '', quantity: 6, action: 'DISMANTLE', company: '' }])])],
+      'seen on the 6th',
+    )
+    assert.deepEqual(tallyItems(rows), [{ item: 'SRG3900 CARKIT · DISMANTLE', qty: 6 }])
+  })
+
+  test('a day nothing was done on has no part to count', () => {
+    const rows = searchInside(
+      [rep([visit('TH1N', [{ issue: 'No Activity', quantity: 0, action: '', company: '' }])])],
+      'seen on the 6th',
+    )
+    assert.equal(rows.length, 1)
+    assert.deepEqual(tallyItems(rows), [])
+  })
 })
