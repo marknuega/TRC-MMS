@@ -1336,3 +1336,76 @@ describe('the sheet lists its entries in fixed model order', () => {
     )
   })
 })
+
+// The sheet has no column for an Airbus car kit's repair and programming — its
+// group carries Installation and Dismantling only — so that work is counted as
+// the TH1n it is done on. Without this it was written into the day's
+// description and counted in no column at all.
+describe('a TH1n car kit counts in the TH1n column', () => {
+  const on = (model, date = '2026-08-25', faults = null) => ({
+    reportDate: date,
+    technician: 'AMIR',
+    agency: 'PSD',
+    type: 'AIRBUS',
+    model,
+    faults: faults ?? [{ issue: 'ANTENNA', quantity: 1, action: 'CHANGE', company: 'MOTECO' }],
+  })
+  const sheet = (entries) =>
+    buildMonthlyMatrix([{ mode: 'report', branch: 'Makkah', dateLabel: '25/08/2026', entries }], {
+      year: 2026,
+      month: 7,
+      branch: 'Makkah',
+    })
+  const day25 = (m) => m.rows.find((r) => r.day === 25)
+
+  test('a car kit repaired on its own counts once, as a TH1n', () => {
+    const m = sheet([on('TH1N Carkit')])
+    assert.equal(day25(m).counts.th1n, 1)
+    assert.equal(m.totals.th1n, 1)
+  })
+
+  test('however the name is spaced or cased', () => {
+    for (const name of ['TH1N CARKIT', 'th1n carkit', 'TH1N CAR KIT', 'TH1n-Carkit']) {
+      assert.equal(day25(sheet([on(name)])).counts.th1n, 1, name)
+    }
+  })
+
+  test('a car kit and a handset are two devices, counted twice', () => {
+    assert.equal(day25(sheet([on('TH1N'), on('TH1N Carkit')])).counts.th1n, 2)
+  })
+
+  // The count folds; the description does not. What was worked on is still
+  // named device by device, so the sheet still says which one it was.
+  test('the description still names the car kit as itself', () => {
+    const desc = day25(sheet([on('TH1N Carkit')])).description
+    assert.match(desc, /\(AIRBUS-TH1N Carkit\) ANTENNA \(1\)/)
+  })
+
+  // Installation and Dismantling are counted off the TYPE, and Airbus car kits
+  // have columns of their own for both. Folding the model must not divert them.
+  test('installing one still counts under Airbus Car Kit, not TH1n', () => {
+    const m = sheet([on('TH1N Carkit', '2026-08-25', [{ issue: '', quantity: 1, action: 'INSTALL', company: 'MOT' }])])
+    assert.equal(day25(m).counts.ack_i, 1)
+    assert.equal(day25(m).counts.th1n, 0)
+  })
+
+  // A device with several faults is still one device — the fold must not turn
+  // a car kit into the exception that counts per fault.
+  test('several faults on one car kit still count it once', () => {
+    const m = sheet([
+      on('TH1N Carkit', '2026-08-25', [
+        { issue: 'ANTENNA', quantity: 1, action: 'CHANGE', company: 'MOT' },
+        { issue: 'FISTMIC', quantity: 2, action: 'CHANGE', company: 'MOT' },
+      ]),
+    ])
+    assert.equal(day25(m).counts.th1n, 1)
+  })
+
+  test('the day and year views inherit the fold', () => {
+    const rep = [{ mode: 'report', branch: 'Makkah', dateLabel: '25/08/2026', entries: [on('TH1N Carkit')] }]
+    const day = buildDayMatrix(rep, { year: 2026, month: 7, day: 25, branch: 'Makkah' })
+    assert.equal(day.totals.th1n, 1)
+    const year = buildYearMatrix(rep, { year: 2026, branch: 'Makkah' })
+    assert.equal(year.totals.th1n, 1)
+  })
+})

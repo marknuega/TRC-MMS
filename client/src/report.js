@@ -1307,11 +1307,24 @@ const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frid
 // Fixed column layout that matches the MOTECO monthly activity sheet exactly.
 // Each model column lists the entry-model values that feed it; install/dismantle
 // columns list the entry types that feed them.
+// The name a model column is matched by, flattened. Case, spacing and
+// punctuation are how a name happens to be TYPED, not what it names: "TMR 880i"
+// and "TMR880I" are one terminal, and so are "TH1N Carkit" and "TH1N CAR KIT".
+// Every list below is read through this, so a column never misses a device over
+// a space someone did or did not type.
+const colModelKey = (m) => up(m).replace(/[^A-Z0-9]/g, '')
+
 const MONTHLY_GROUPS = [
   {
     group: 'Airbus Terminals (Repair& Programing)',
     cols: [
-      { key: 'th1n', label: 'TH1n', kind: 'model', models: ['TH1N'] },
+      // The TH1n car kit is repaired and programmed as a TH1n and counted as
+      // one: the sheet gives Airbus car kits columns for Installation and
+      // Dismantling only (the group below), so repair and programming work on
+      // one has no column of its own to fall into. Folding it here is what
+      // keeps it on the sheet at all — the alternative is that it is done, and
+      // written in the day's description, and counted nowhere.
+      { key: 'th1n', label: 'TH1n', kind: 'model', models: ['TH1N', 'TH1N CARKIT'] },
       { key: 'thr9', label: 'THR9', kind: 'model', models: ['THR9'] },
       { key: 'tmr880i', label: 'TMR880i', kind: 'model', models: ['TMR 880I', 'TMR880I'] },
     ],
@@ -1365,8 +1378,8 @@ export function buildMonthlyMatrix(savedReports, opts = {}) {
   for (const c of columns) {
     if (c.kind === 'model') {
       for (const m of c.models) {
-        modelToKey.set(up(m), c.key)
-        modelRankMap.set(up(m), modelRankIdx)
+        modelToKey.set(colModelKey(m), c.key)
+        modelRankMap.set(colModelKey(m), modelRankIdx)
       }
       modelRankIdx += 1
     }
@@ -1409,6 +1422,7 @@ export function buildMonthlyMatrix(savedReports, opts = {}) {
       const byDevice = new Map() // tag -> { items:[], rank }
       for (const e of rec.entries) {
         const mk = up(e.model)
+        const mCol = colModelKey(e.model) // what the column layout knows it as
         const t = up(e.type)
         let maintSum = 0
         let program = 0
@@ -1427,7 +1441,7 @@ export function buildMonthlyMatrix(savedReports, opts = {}) {
         // level counts, so they use the quantity — the SAME "max per entry" rule
         // the Dashboard uses (dismantling 6 devices in one entry counts as 6).
         const c = entryCounts(e)
-        const mKey = modelToKey.get(mk)
+        const mKey = modelToKey.get(mCol)
         if (mKey && maintSum + program > 0) counts[mKey] += 1
         const iKey = installByType.get(t)
         if (iKey && c.install > 0) counts[iKey] += c.install
@@ -1443,7 +1457,8 @@ export function buildMonthlyMatrix(savedReports, opts = {}) {
         if (faultItems.length) {
           const tag = mk && mk !== '-' ? `${t}-${descModel(e.model)}` : t
           if (!byDevice.has(tag)) {
-            const rank = modelRankMap.get(mk) ?? modelRankMap.get(up(modelDisplay(e.model))) ?? Number.MAX_SAFE_INTEGER
+            const rank =
+              modelRankMap.get(mCol) ?? modelRankMap.get(colModelKey(modelDisplay(e.model))) ?? Number.MAX_SAFE_INTEGER
             byDevice.set(tag, { merged: new Map(), rank })
           }
           // Same issue + same company within a device is one line with summed
