@@ -105,6 +105,7 @@ import {
   displayNumber,
   TYPE_ORDER,
 } from './report'
+import { searchInside, tallyItems, TALLY_LIMIT } from './search.js'
 import { PeriodPicker, makePeriod, periodLabel } from './period'
 import './App.css'
 
@@ -282,72 +283,6 @@ const docIdsOf = (r) => [repLabel(r.reportId, r.branch, r.mode), shortLabel(r)]
 // text, say) is not resolved in favour of one: the caller shows the report AND
 // the line items, because both readings are true.
 const searchById = (list, query) => (list ?? []).filter((r) => docIdMatches(query, docIdsOf(r)))
-
-// Deep search INSIDE a set of saved snapshots -> matching line items.
-function searchInside(list, query) {
-  const q = String(query ?? '')
-    .trim()
-    .toLowerCase()
-  if (!q) return []
-  const out = []
-  for (const r of list) {
-    const entries = Array.isArray(r.entries) ? r.entries : []
-    const label = shortLabel(r) // e.g. "MAK-REP-A004"
-    for (const e of entries) {
-      const model = e.model && e.model !== '-' ? e.model : ''
-      for (const f of e.faults ?? []) {
-        // The ids are NOT in this haystack. searchById above owns them now, and
-        // leaving them here too was the whole flood: an id sits on every one of
-        // a report's fault lines, so typing one matched all of them and handed
-        // back a three-fault report as three near-identical rows next to the
-        // report itself. A line item matches on what is on the LINE.
-        //
-        // Tel/ISSI are here IN FULL, whatever an export is set to show. Masking
-        // is about what leaves the app; this is a signed-in technician looking
-        // for the reports a radio appears in, and searching the masked form
-        // would mean the only number they have — the whole one, off the handset
-        // — is the one number that finds nothing.
-        const hay = `${r.branch} ${r.dateLabel} ${e.technician ?? ''} ${r.receivedBy ?? ''} ${e.telNumber ?? ''} ${e.issiNumber ?? ''} ${e.type} ${e.model} ${f.issue} ${f.company} ${f.status} ${e.comment ?? ''}`
-        if (hay.toLowerCase().includes(q)) {
-          out.push({
-            date: r.dateLabel,
-            branch: r.branch,
-            qty: f.quantity,
-            technician: e.technician ?? '',
-            receivedBy: r.receivedBy ?? '',
-            item: `${model ? `${model} · ` : ''}${f.issue}`,
-            reportId: label,
-            rep: r,
-          })
-        }
-      }
-    }
-  }
-  return out.slice(0, 300)
-}
-
-// A tally that runs past the hint line stops being a summary and becomes a
-// second list. Twelve is what fits beside the sentence on a normal screen; the
-// rest are counted into a "+N more", which is honest because the badges are
-// ordered by quantity — what falls off the end is by definition the smallest.
-const TALLY_LIMIT = 12
-
-// The same line items the search hands back, counted per item. One row per
-// fault means a search for "sidegrip" answers "here are the lines" but never
-// "how many" — the number someone came for when they typed a part name is the
-// TOTAL QUANTITY, so quantities are summed rather than rows counted (a line for
-// 3 sidegrips is three sidegrips, not one hit). Grouped on the item label the
-// Item column already shows, model prefix and all: TH1N · Sidegrip and
-// TH1N · Sidegrip3D are two different parts and must never be pooled into one
-// badge. Biggest first, so the answer is the first thing read.
-function tallyItems(results) {
-  const totals = new Map()
-  for (const r of results ?? []) {
-    const name = r.item || '—'
-    totals.set(name, (totals.get(name) ?? 0) + (Number(r.qty) || 0))
-  }
-  return [...totals].map(([item, qty]) => ({ item, qty })).sort((a, b) => b.qty - a.qty || a.item.localeCompare(b.item))
-}
 
 // The region an ADMIN is looking at. Only an admin has a choice to remember: a
 // director runs one region and a plain user belongs to one branch, so for them
