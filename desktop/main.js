@@ -30,6 +30,19 @@ import { randomBytes } from 'node:crypto'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import {
+  DESKTOP_SKIP,
+  applyExport,
+  canStoreSecret,
+  describeResult,
+  fetchLiveExport,
+  normalizeUrl,
+  reachable,
+  readSync,
+  recallPassword,
+  rememberPassword,
+  writeSync,
+} from './sync.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 
@@ -412,12 +425,229 @@ async function resetAdminPassword(win) {
   }
 }
 
+// ── Pulling the live server down onto this machine ───────────────
+// One direction only, and every entry point says so before it does anything —
+// see the header of sync.js for why the two databases cannot be merged.
+
+/** The server modules the import writes through, loaded once DATABASE_URL is set. */
+async function backupDeps() {
+  const serverSrc = join(here, 'app/server/src')
+  const { prisma } = await import(pathToFileURL(join(serverSrc, 'db.js')).href)
+  const { importAll, validateExport, resyncSequences } = await import(pathToFileURL(join(serverSrc, 'backup.js')).href)
+  return { prisma, importAll, validateExport, resyncSequences }
+}
+
+/**
+ * Ask for whatever is still missing, then pull.
+ *
+ * `silent` is the automatic path: it runs only when everything needed is
+ * already stored, and it never opens a dialog to ask for more. An auto-sync
+ * that popped a password box on reconnect would be a machine interrupting
+ * somebody rather than a machine keeping itself current.
+ */
+async function syncFromLive(win, { silent = false } = {}) {
+  const stored = readSync(CONFIG_PATH)
+  const url = normalizeUrl(stored.url)
+  const password = recallPassword(CONFIG_PATH)
+
+  if (!url || !stored.username || !password) {
+    if (silent) return { ok: false, reason: 'not configured' }
+    const ready = await configureSync(win)
+    if (!ready) return { ok: false, reason: 'cancelled' }
+    return syncFromLive(win, { silent: false })
+  }
+
+  if (!silent) {
+    const { response, checkboxChecked } = await dialog.showMessageBox(win, {
+      type: 'warning',
+      title: 'Sync from the live server',
+      message: `Replace this machine's data with ${url}?`,
+      detail:
+        'Everything on this computer is replaced by a copy of the live server: reports, ' +
+        'saved reports, inventory, the ledger, the option lists and the code map.\n\n' +
+        'ANYTHING TYPED ON THIS MACHINE AND NOT ON THE LIVE SERVER IS LOST.\n\n' +
+        'Your login here is kept — accounts are not copied.',
+      checkboxLabel: 'Keep this machine up to date automatically when the internet is available',
+      checkboxChecked: stored.auto === true,
+      buttons: ['Cancel', 'Replace with live data'],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+    })
+    writeSync(CONFIG_PATH, { auto: checkboxChecked })
+    if (response !== 1) return { ok: false, reason: 'cancelled' }
+  }
+
+  try {
+    const doc = await fetchLiveExport({ url, username: stored.username, password })
+    const result = await applyExport(doc, await backupDeps(), { skip: DESKTOP_SKIP })
+    writeSync(CONFIG_PATH, { lastSyncAt: new Date().toISOString(), lastSyncFrom: url })
+    if (!silent) {
+      await dialog.showMessageBox(win, {
+        type: 'info',
+        title: 'Sync complete',
+        message: `Copied from ${url}`,
+        detail: `${describeResult(result)}\n\nTaken from the live server at ${new Date(doc.exportedAt).toLocaleString()}.`,
+        buttons: ['Close'],
+        noLink: true,
+      })
+    }
+    // The page is showing the database as it was a moment ago.
+    win?.webContents?.reload()
+    return { ok: true, result }
+  } catch (err) {
+    if (!silent) dialog.showErrorBox('Sync failed', `${err.message}\n\nNothing on this machine was changed.`)
+    return { ok: false, reason: err.message }
+  }
+}
+
+/** Where the live server is and who to sign in as. Returns whether it is now usable. */
+async function configureSync(win) {
+  const stored = readSync(CONFIG_PATH)
+  const url = await promptLine(win, {
+    title: 'Live server',
+    message: 'Address of the live TRC-MMS server',
+    detail: 'For example:  https://trc-mms.up.railway.app',
+    value: stored.url ?? '',
+  })
+  if (url === null) return false
+  if (!normalizeUrl(url)) {
+    dialog.showErrorBox('Sync', 'That is not a valid address.')
+    return false
+  }
+  const username = await promptLine(win, {
+    title: 'Live server',
+    message: 'Admin username on the live server',
+    detail: 'Only an admin account can export the database.',
+    value: stored.username ?? '',
+  })
+  if (username === null || !username.trim()) return false
+  const password = await promptLine(win, {
+    title: 'Live server',
+    message: `Password for "${username.trim()}"`,
+    detail: canStoreSecret()
+      ? 'Stored encrypted by Windows, so it is not readable from a copied profile.'
+      : 'This computer offers no secure store, so the password is NOT saved and automatic sync is unavailable — you will be asked for it each time.',
+    value: '',
+    password: true,
+  })
+  if (password === null || !password) return false
+
+  writeSync(CONFIG_PATH, { url: normalizeUrl(url), username: username.trim() })
+  rememberPassword(CONFIG_PATH, password)
+  return true
+}
+
+/**
+ * A one-line input, which Electron has no dialog for.
+ *
+ * A small modal BrowserWindow holding an inline document. Nothing is loaded
+ * from disk or the network, so this stays true to the build's promise that it
+ * contacts nothing — and a password typed here never reaches the app's own
+ * page or its localStorage.
+ */
+function promptLine(win, { title, message, detail, value = '', password = false }) {
+  return new Promise((resolve) => {
+    const child = new BrowserWindow({
+      parent: win,
+      modal: true,
+      show: false,
+      width: 540,
+      height: 280,
+      resizable: false,
+      minimizable: false,
+      maximizable: false,
+      title,
+      webPreferences: { preload: join(here, 'preload.cjs'), contextIsolation: true, nodeIntegration: false },
+    })
+    const esc = (t) =>
+      String(t ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
+    const channel = `prompt-done-${child.id}`
+    const html = [
+      '<!doctype html><meta charset="utf-8"><style>',
+      'body{font:14px system-ui,Segoe UI,sans-serif;margin:0;padding:18px;background:#fff;color:#111}',
+      'h1{font-size:15px;margin:0 0 6px}p{margin:0 0 12px;color:#555;font-size:12.5px}',
+      'input{width:100%;box-sizing:border-box;font:14px inherit;padding:8px 10px;border:1px solid #bbb;border-radius:6px}',
+      '.row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}',
+      'button{font:14px inherit;padding:7px 16px;border-radius:6px;border:1px solid #bbb;background:#f4f4f4}',
+      'button.p{background:#1f57d6;border-color:#1f57d6;color:#fff}',
+      '@media (prefers-color-scheme:dark){body{background:#1e1e1e;color:#eee}p{color:#aaa}',
+      'input{background:#2b2b2b;color:#eee;border-color:#444}button{background:#333;color:#eee;border-color:#555}}',
+      '</style>',
+      `<h1>${esc(message)}</h1><p>${esc(detail)}</p>`,
+      `<input id="v" type="${password ? 'password' : 'text'}" value="${esc(value)}">`,
+      '<div class="row"><button id="c">Cancel</button><button id="o" class="p">OK</button></div>',
+      '<script>',
+      `const CH=${JSON.stringify(channel)};`,
+      "const v=document.getElementById('v');v.focus();v.select();",
+      'const done=(ok)=>window.desktop.promptDone(CH, ok?v.value:null);',
+      "document.getElementById('o').onclick=()=>done(true);",
+      "document.getElementById('c').onclick=()=>done(false);",
+      "v.addEventListener('keydown',e=>{if(e.key==='Enter')done(true);if(e.key==='Escape')done(false)});",
+      '</script>',
+    ].join('')
+
+    let settled = false
+    const finish = (result) => {
+      if (settled) return
+      settled = true
+      resolve(result)
+      if (!child.isDestroyed()) child.destroy()
+    }
+    ipcMain.once(channel, (_e, result) => finish(result))
+    child.webContents.once('did-finish-load', () => child.show())
+    child.on('closed', () => finish(null))
+    child.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`)
+  })
+}
+
+/**
+ * Keep the copy current on its own, when it has been asked to.
+ *
+ * Polls rather than listening for an online event: on a PC with no adapter at
+ * all navigator.onLine is false even when a tether is carrying traffic, and
+ * Electron's own net.isOnline has the same blind spot. Asking the live server
+ * whether it answers is the only question whose answer is the one that matters.
+ * Slow on purpose — this is a mirror, not a feed.
+ */
+function startAutoSync(win) {
+  let reachableBefore = null
+  let running = false
+  const tick = async () => {
+    if (running) return
+    const { auto, url } = readSync(CONFIG_PATH)
+    if (!auto || !url) return
+    running = true
+    try {
+      const now = await reachable(url)
+      // Only on the EDGE from unreachable to reachable, plus once at startup.
+      // A machine left online must not re-pull every ten minutes and throw away
+      // what somebody is in the middle of reading.
+      if (now && reachableBefore !== true) await syncFromLive(win, { silent: true })
+      reachableBefore = now
+    } finally {
+      running = false
+    }
+  }
+  setTimeout(tick, 15_000).unref?.()
+  const timer = setInterval(tick, 10 * 60_000)
+  timer.unref?.()
+  return timer
+}
+
 function buildMenu(win, config) {
   Menu.setApplicationMenu(
     Menu.buildFromTemplate([
       {
         label: 'File',
         submenu: [
+          {
+            label: 'Sync from the live server…',
+            // The live server is the authority and this machine is a copy of
+            // it; see the header of sync.js for why it can only go this way.
+            click: () => syncFromLive(win),
+          },
+          { type: 'separator' },
           {
             label: 'Open data folder',
             // Where the database lives — this is the folder to back up, and the
@@ -500,6 +730,8 @@ if (!app.requestSingleInstanceLock()) {
       serverUrl = await startServer(config)
       mainWindow = createWindow()
       buildMenu(mainWindow, config)
+      // Only does anything once somebody has ticked the box in the sync dialog.
+      startAutoSync(mainWindow)
     } catch (err) {
       dialog.showErrorBox(
         'TRC-MMS could not start',

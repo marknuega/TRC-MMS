@@ -178,3 +178,48 @@ export const deleteCredentialRequest = (id) => request(`/api/admin/requests/${id
 
 export const importInventory = (items, branch) =>
   request('/api/inventory/import', { method: 'POST', body: JSON.stringify({ items, branch }) })
+
+// ---- Whole-database backup (admin only) ----
+//
+// These deliberately bypass `request`: it caches GETs and queues failed writes
+// for replay, both of which are wrong here. A stale cached export would restore
+// yesterday's database believing it was today's, and a whole-database replace
+// replayed later from an offline queue — against whatever the server holds by
+// then — is the single most destructive thing this app could do unattended.
+//
+// The export arrives as a file rather than JSON, because the point of taking one
+// is keeping it: a blob rendered into a tab is a backup nobody saved.
+export async function downloadBackup() {
+  const res = await fetch(`${BASE}/api/backup/export`, { cache: 'no-store', credentials: 'include' })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new Error(body.error || `Export failed: ${res.status}`)
+  }
+  const blob = await res.blob()
+  const name = /filename="([^"]+)"/.exec(res.headers.get('content-disposition') ?? '')?.[1] ?? 'trc-mms-backup.json'
+  const url = URL.createObjectURL(blob)
+  const a = Object.assign(document.createElement('a'), { href: url, download: name })
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+  return name
+}
+
+/** What each table currently holds, so a screen can say what is about to be replaced. */
+export const getBackupCounts = () => netRequest('/api/backup/counts')
+
+/** Replace every table in the document. `skip` names tables to leave alone. */
+export async function restoreBackup(doc, skip = []) {
+  const qs = new URLSearchParams({ confirm: 'replace' })
+  if (skip.length) qs.set('skip', skip.join(','))
+  const res = await fetch(`${BASE}/api/backup/import?${qs}`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(doc),
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(body.error || `Restore failed: ${res.status}`)
+  return body
+}
