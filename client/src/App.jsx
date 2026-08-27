@@ -25,6 +25,7 @@ import {
   syncNow,
 } from './api'
 import { onSyncChange } from './offline'
+import { formatDate, formatDateTime } from './dates'
 import { FALLBACK, useCodeMap } from './codes.js'
 import {
   claimedPartsCode,
@@ -69,6 +70,7 @@ import AgencyTotals from './AgencyTotals'
 import SparePartsReport from './SparePartsReport'
 import Dashboard from './Dashboard'
 import AdminUsers from './AdminUsers'
+import BackupPanel from './BackupPanel'
 import ReferenceCard from './ReferenceCard'
 import Toast from './Toast'
 import CodeEntry from './CodeEntry'
@@ -177,7 +179,7 @@ const loadSidebar = () => {
   }
   return typeof window !== 'undefined' && window.innerWidth < 1100 // auto-collapse on smaller screens
 }
-const dmyOf = (isoDate) => new Date(isoDate).toLocaleDateString('en-GB') // YYYY-MM-DD -> dd/mm/yyyy
+const dmyOf = (isoDate) => formatDate(isoDate) // YYYY-MM-DD -> '27 August 2026'
 
 // Render a matrix description: device tags like "(AIRBUS-TH1N)" in red, the
 // issue/fault text (and quantities like "(6)") in normal colour.
@@ -2482,7 +2484,7 @@ function App({ user, onLogout }) {
         )}{' '}
         <span className="muted small">
           · {r.dateLabel} · {r.entryCount} {r.entryCount === 1 ? 'entry' : 'entries'} · saved{' '}
-          {new Date(r.savedAt).toLocaleString('en-GB')}
+          {formatDateTime(r.savedAt)}
         </span>
       </div>
       <div className="saved-actions">
@@ -2557,7 +2559,7 @@ function App({ user, onLogout }) {
           <li key={idx}>
             <span className="res-item">{res.item}</span>
             <span className="muted small">{(tx ? res.receivedBy : res.technician) || '—'}</span>
-            <span className="muted small">{res.date}</span>
+            <span className="muted small">{formatDate(res.date) || res.date}</span>
             <span className="muted small">{res.branch || '—'}</span>
             <span className="muted small">{res.qty}</span>
             <span className="muted small">{res.reportId}</span>
@@ -3982,6 +3984,13 @@ function App({ user, onLogout }) {
             />
           )}
 
+          {/* Admin only, never a director: an export is every branch's reports
+              and every account's hash in one file, and a director runs one
+              region rather than the installation. The server says the same
+              (adminRequired on the router) — this only keeps a control a
+              director could not use off their screen. */}
+          {page === 'admin' && isAdmin && <BackupPanel edition={sync.standalone ? 'desktop' : 'server'} />}
+
           <footer className="app-footer">
             <Credit />
             {/* Which bundle this is. Dull until the day a total looks wrong —
@@ -4019,14 +4028,11 @@ function PrintDate({ report, descByMaterial, handoverByBranch }) {
 }
 
 // Transaction date like "Aug. 5, 2026" from an ISO / yyyy-mm-dd value.
-const MON_ABBR = ['Jan.', 'Feb.', 'Mar.', 'Apr.', 'May', 'Jun.', 'Jul.', 'Aug.', 'Sep.', 'Oct.', 'Nov.', 'Dec.']
-function fmtLongDate(v) {
-  const s = String(v ?? '')
-  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/)
-  if (m) return `${MON_ABBR[+m[2] - 1]} ${+m[3]}, ${m[1]}`
-  const d = new Date(s)
-  return isNaN(d) ? '' : `${MON_ABBR[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}`
-}
+// Kept as a name because the printed report reads better for it, but the format
+// is now the one every other date in the app uses — day, month spelled out,
+// year. "Aug. 27, 2026" put the month first, which is the one order this app
+// does not write dates in.
+const fmtLongDate = (v) => formatDate(v)
 
 // Bare person name: drop any branch label already baked in (e.g. "Gabriel - Jeddah TRC" -> "Gabriel").
 const bareName = (n) =>

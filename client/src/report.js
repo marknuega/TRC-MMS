@@ -1,6 +1,7 @@
 // Extension-ful so `node --test` resolves it too, not just Vite. options.js is
 // pure (no React), so a pure module may read it.
 import { issueCode, issueName, isNoActivityModel, isNoActivityIssue, modelKey, optionName } from './options.js'
+import { formatDate, monthKeyOf } from './dates.js'
 
 // ---------------------------------------------------------------------------
 // Report engine — turns entries into the MOTECO-style TXT and PDF report data.
@@ -1154,8 +1155,12 @@ export function monthlyTrend(savedReports, branch = '') {
     // report is reference-only would otherwise plot a row of zeroes.
     if (!isCountable(r)) continue
     if (wantBranch && up(r.branch) !== wantBranch) continue
-    const m = String(r.dateLabel || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
-    if (m) months.add(`${m[3]}-${m[2].padStart(2, '0')}`)
+    // Through monthKeyOf rather than a regex of its own: dateLabel is STORED as
+    // dd/mm/yyyy and every saved row holds that, but the same field is rendered
+    // long ("27 August 2026") and a label that ever reached storage that way
+    // would silently drop its month out of the dashboard. monthKeyOf reads both.
+    const key = monthKeyOf(r.dateLabel)
+    if (key) months.add(key)
   }
   return [...months].sort().map((mk) => ({ monthKey: mk, ...dashboardSummary(monthEntries(savedReports, mk, branch)) }))
 }
@@ -1216,7 +1221,7 @@ export function groupReports(entries) {
     if (!byKey.has(key)) {
       byKey.set(key, {
         key,
-        dateLabel: new Date(e.reportDate).toLocaleDateString('en-GB'),
+        dateLabel: formatDate(e.reportDate),
         reportId: e.reportId ?? null,
         entries: [],
       })

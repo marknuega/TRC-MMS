@@ -4,6 +4,7 @@
  */
 
 import { useMemo, useState } from 'react'
+import { formatDateTime } from './dates'
 import { periodEntries, buildSparePartsReport } from './report'
 import { Pie } from './Pie'
 import { COPYRIGHT_HTML } from './copyright'
@@ -270,7 +271,7 @@ export default function SparePartsReport({
         `th{background:#dfe3ee}td.c,th.c{text-align:center}td.sec{background:#2563eb;color:#fff;font-weight:bold}` +
         `td.sub{background:#eef;font-weight:bold}td.tot{background:#fff3bf;font-weight:bold}tfoot{color:#777}` +
         `@media print{h2{page-break-after:avoid}tr{page-break-inside:avoid}}</style></head><body>` +
-        `<h1>${e(title)}</h1><p class="meta">${e(rangeLabel)} · consolidated · printed ${e(new Date().toLocaleString('en-GB'))}</p>` +
+        `<h1>${e(title)}</h1><p class="meta">${e(rangeLabel)} · consolidated · printed ${e(formatDateTime(new Date()))}</p>` +
         (b ? `<h2>Parts by brand</h2><table><tbody>${b}</tbody></table>` : '') +
         companyTbl +
         (actRows
