@@ -53,12 +53,16 @@ export const TABLES = [
   { key: 'inventoryItems', model: 'inventoryItem' },
   { key: 'inventoryTxns', model: 'inventoryTxn', parent: 'inventoryItems' },
   { key: 'processedMessages', model: 'processedMessage' },
+  { key: 'entryTombstones', model: 'entryTombstone' },
 ]
 
 export const FORMAT = 'trc-mms-export'
 export const VERSION = 1
 
 /** Tables a caller may leave behind, and what leaving them behind means. */
+// Keyed by a string, so they have no id to order by and no sequence to reset.
+const NO_INT_ID = new Set(['processedMessage', 'entryTombstone'])
+
 export const SKIPPABLE = {
   // The one skip with a real use. Importing live data into a desktop machine
   // replaces its accounts with the server's, and the admin doing the importing
@@ -86,7 +90,10 @@ export async function exportAll(prisma) {
   const data = {}
   for (const { key, model } of TABLES) {
     data[key] = await prisma[model].findMany(
-      model === 'processedMessage' ? { orderBy: { messageId: 'asc' } } : { orderBy: { id: 'asc' } },
+      // Two tables are keyed by a string rather than an id.
+      NO_INT_ID.has(model)
+        ? { orderBy: { [model === 'processedMessage' ? 'messageId' : 'syncId']: 'asc' } }
+        : { orderBy: { id: 'asc' } },
     )
   }
   return {
@@ -189,7 +196,7 @@ export async function resyncSequences(prisma, { skip = [] } = {}) {
   if (isSqlite()) return []
   const done = []
   for (const { key, model } of TABLES) {
-    if (skip.includes(key) || model === 'processedMessage') continue // no integer id
+    if (skip.includes(key) || NO_INT_ID.has(model)) continue // no integer id, no sequence
     const table = TABLE_NAMES[key]
     await prisma.$executeRawUnsafe(
       `SELECT setval(pg_get_serial_sequence('"${table}"', 'id'), COALESCE((SELECT MAX(id) FROM "${table}"), 1))`,

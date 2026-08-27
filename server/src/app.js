@@ -20,6 +20,7 @@ import savedReportsRouter from './routes/savedReports.js'
 import monthlyRouter from './routes/monthly.js'
 import inventoryRouter from './routes/inventory.js'
 import backupRouter from './routes/backup.js'
+import entrySyncRouter from './routes/entrySync.js'
 import codemapRouter, { publicCodeMap } from './routes/codemap.js'
 import whatsappRouter from './whatsapp/routes.js'
 
@@ -175,6 +176,10 @@ app.use('/api/codemap', authRequired, codemapRouter)
 // Whole-database export/import — how the offline desktop build is loaded from
 // the live server, and how a backup is taken. Admin-only inside the router.
 app.use('/api/backup', authRequired, backupRouter)
+// Two-way sync of working entries. NOT admin-only: it moves the same rows
+// /api/reports does and is scoped to the caller's branches the same way, so
+// anyone who may edit an entry may sync it.
+app.use('/api/sync', authRequired, entrySyncRouter)
 
 // In production the same service also serves the built React app, so the
 // browser sees one origin (no CORS). In dev, Vite serves the client instead.

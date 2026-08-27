@@ -212,6 +212,20 @@ model Report {
 // One entry = one device on a given report date, with up to 6 faults.
 model ReportEntry {
   id         Int      @id @default(autoincrement())
+  // The identity two machines agree on. `id` cannot be: it is an autoincrement,
+  // so the desktop's entry 5 and the live server's entry 5 are different
+  // entries and matching on it would merge two people's work into one row.
+  // A uuid is minted where the entry is CREATED and never changes, so the same
+  // entry is the same entry whichever database it is sitting in.
+  syncId     String   @unique @default(uuid()) @map("sync_id")
+  // When the owning machine last changed this entry, in ITS clock. The winner
+  // of a two-way sync is the later of these — see server/src/entrySync.js, and
+  // read the clock-skew note there before trusting it.
+  //
+  // Separate from updatedAt, which Prisma stamps with the LOCAL clock on every
+  // write: a synced-in entry would have its origin time overwritten the instant
+  // it landed, and the next sync back would think it was newer than it is.
+  syncRev    DateTime @default(now()) @map("sync_rev")
   reportDate DateTime @map("report_date") @db.Date
   mode       String   @default("report") // report | transmittal — separate working sets
   branch     String   @default("") // owning branch; non-admins are scoped to their own
@@ -230,6 +244,31 @@ model ReportEntry {
   @@index([mode])
   @@index([branch])
   @@map("report_entries")
+}
+
+/**
+ * An entry that was DELETED, so the deletion can travel.
+ * Without this a two-way sync cannot express a removal. The desktop pulls, sees
+ * no row for an entry it still holds, and has no way to tell "deleted on the
+ * server" from "never sent" — so it pushes its copy back and the entry someone
+ * deleted returns, every sync, forever.
+ * Keyed by syncId rather than by a foreign key, precisely because the row it
+ * refers to is gone. Written wherever an entry is removed, including the bulk
+ * clear that SAVING a report performs: those entries really are out of the
+ * working set, and a machine that has not caught up must be told so rather than
+ * pushing them back in.
+ * Pruned by age like ProcessedMessage — a tombstone only has to outlive the
+ * longest a machine might go without syncing, and this table would otherwise
+ * grow for the life of the installation.
+ */
+model EntryTombstone {
+  syncId    String   @id @map("sync_id")
+  branch    String   @default("")
+  mode      String   @default("report")
+  deletedAt DateTime @default(now()) @map("deleted_at")
+
+  @@index([deletedAt])
+  @@map("entry_tombstones")
 }
 
 // A single fault on a device. Max 6 per entry is enforced in the API.

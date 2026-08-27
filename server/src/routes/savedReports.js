@@ -19,6 +19,8 @@ import { shelfCompanyFor } from '../../../client/src/company.js'
 import { mergeOptions } from '../../../client/src/options.js'
 import { CODEMAP_SEED } from '../codemapSeed.js'
 
+import { buryEntries } from '../entryTombstones.js'
+
 const router = Router()
 
 // Human id per document type. Three series, each numbering itself per branch:
@@ -556,6 +558,10 @@ router.post('/', async (req, res, next) => {
       // Auto-clear the working set for this mode+branch so the next report starts
       // fresh — every saved report stays a disjoint snapshot (no cross-report
       // double-counting in the monthly/spare-parts/agency aggregations).
+      // Tombstoned first: these entries really are out of the working set now,
+      // and a copy that has not caught up must be told so rather than pushing
+      // them back in on its next sync.
+      await buryEntries(tx, { mode, branch })
       await tx.reportEntry.deleteMany({ where: { mode, branch } })
       return created
     })
@@ -592,6 +598,10 @@ router.post('/:id/load', async (req, res, next) => {
     await prisma.$transaction(async (tx) => {
       // Replace only this document type's working set for this branch, leaving
       // the other mode and other branches intact.
+      // Tombstoned first: these entries really are out of the working set now,
+      // and a copy that has not caught up must be told so rather than pushing
+      // them back in on its next sync.
+      await buryEntries(tx, { mode, branch })
       await tx.reportEntry.deleteMany({ where: { mode, branch } })
       for (const e of snapshot) {
         await tx.reportEntry.create({

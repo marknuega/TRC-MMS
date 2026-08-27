@@ -38,6 +38,7 @@
     "files": [
       "main.js",
       "sync.js",
+      "schemaUpgrade.js",
       "preload.cjs",
       "app/**/*",
       "prisma/schema.prisma",
