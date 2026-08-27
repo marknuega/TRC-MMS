@@ -4,6 +4,7 @@
  */
 
 import { useMemo, useState } from 'react'
+import { formatDate } from './dates'
 import { agencyBlocks, foldMaintenance } from './report'
 import { ALL_BRANCHES } from './options'
 import SearchSelect from './SearchSelect'
@@ -38,7 +39,7 @@ function periodRange(refDate, period) {
   return [start, end]
 }
 
-const fmt = (d) => d.toLocaleDateString('en-GB')
+const fmt = (d) => formatDate(d)
 
 export default function AgencyTotals({
   saved,

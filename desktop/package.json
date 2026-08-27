@@ -37,6 +37,7 @@
     },
     "files": [
       "main.js",
+      "sync.js",
       "preload.cjs",
       "app/**/*",
       "prisma/schema.prisma",

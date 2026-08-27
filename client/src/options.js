@@ -79,22 +79,42 @@ export const DEFAULT_OPTIONS = {
   models: [
     // 01 is the shorthand for the 35506 range, 09 for 20106, 08 for 7506 —
     // five digits of the same thing on every entry, typed as two.
-    { name: 'TH1N', prefixes: ['355', '06', '01'], standIn: ['01'], standInReal: '35506' },
-    { name: 'THR9', prefixes: ['20106', '09'], standIn: ['09'], standInReal: '20106' },
-    { name: 'TMR880i', prefixes: ['7506', '08'], standIn: ['08'], standInReal: '7506' },
-    { name: 'STP9000', prefixes: ['190'] },
+    //
+    // `letter` is the device letter this model is written by, and it works as a
+    // stand-in of its own: H is TH1N and stands for 35506 exactly as 01 does.
+    // It is the shorthand a technician already knows, because it is the letter
+    // in front of every CDS code they send — so H, R, M, T are one keystroke
+    // each and need nothing memorised that is not memorised already.
+    //
+    // The code map's equipmentCodes is the authority on what a letter means in
+    // a CODE; this is the same letter offered in the Tel field, stored on the
+    // row so the server's save-time swap reads it from the option list like
+    // every other prefix rule rather than needing the map threaded in.
+    { name: 'TH1N', letter: 'H', prefixes: ['355', '06', '01'], standIn: ['01'], standInReal: '35506' },
+    { name: 'THR9', letter: 'R', prefixes: ['20106', '09'], standIn: ['09'], standInReal: '20106' },
+    { name: 'TMR880i', letter: 'M', prefixes: ['7506', '08'], standIn: ['08'], standInReal: '7506' },
+    { name: 'STP9000', letter: 'T', prefixes: ['190'] },
     // 109 is the number really on all three SRG3900 builds, so no Tel number
     // says which one is on the bench and the auto-select leads with the car kit
     // — first in this list, and list order is where that is decided. Each build
     // takes shorthand of its own to be picked by instead: 102 or 02 the bike,
     // 103 or 03 the car kit, 104 or 04 the desktop, each swapped back for the
     // 109 when the entry is saved.
-    { name: 'SRG3900 CARKIT', prefixes: ['109', '103', '03'], standIn: ['103', '03'], standInReal: '109' },
-    { name: 'SRG3900 DESKTOP', prefixes: ['109', '104', '04'], standIn: ['104', '04'], standInReal: '109' },
-    { name: 'SRG3900 BIKE', prefixes: ['109', '102', '02'], standIn: ['102', '02'], standInReal: '109' },
-    'PT580H',
-    'PT590',
-    'MT680',
+    { name: 'SRG3900 CARKIT', letter: 'C', prefixes: ['109', '103', '03'], standIn: ['103', '03'], standInReal: '109' },
+    {
+      name: 'SRG3900 DESKTOP',
+      letter: 'D',
+      prefixes: ['109', '104', '04'],
+      standIn: ['104', '04'],
+      standInReal: '109',
+    },
+    { name: 'SRG3900 BIKE', letter: 'B', prefixes: ['109', '102', '02'], standIn: ['102', '02'], standInReal: '109' },
+    // Letter only: these carry no shipped Tel range, and the ones an install has
+    // are its admin's own. The letter is not a range — it is the same character
+    // already written in front of every CDS code — so it ships for every model.
+    { name: 'PT580H', letter: 'E' },
+    { name: 'PT590', letter: 'N' },
+    { name: 'MT680', letter: 'S' },
     // Not a device: the Model a "no activity today" entry carries, so the day
     // is on the record without claiming a radio was worked on.
     'For Record Purpose Only.',
@@ -324,9 +344,79 @@ export const typeForModel = (model) => {
 
 // 2-6 digits. One digit would claim a tenth of every number in existence.
 export const PREFIX_RE = /^\d{2,6}$/
+/**
+ * A device letter used as a Tel prefix — H for a TH1N, T for an STP9000.
+ *
+ * One character, and only ever the FIRST: it is the letter the technician
+ * already writes in front of a CDS code, offered in the Tel field so the
+ * device can be selected with a single keystroke. A letter anywhere else in a
+ * Tel number is not a prefix, it is a typo.
+ */
+export const LETTER_PREFIX_RE = /^[A-Z]$/
 export const optionName = (v) => (typeof v === 'string' ? v : String(v?.name ?? ''))
+
+/**
+ * The device letter a model is written by, or ''.
+ *
+ * Mirrors equipmentCodes in the code map, which stays the authority on what a
+ * letter means inside a CODE. It is repeated on the model row because the Tel
+ * rules are read from the option list alone — by the entry form AND by the
+ * server at save time (reportEntry.js) — and threading the map through both
+ * for one character would put a second argument on every one of them.
+ */
+export const optionLetter = (v) => {
+  const l =
+    typeof v === 'string'
+      ? ''
+      : String(v?.letter ?? '')
+          .trim()
+          .toUpperCase()
+  return LETTER_PREFIX_RE.test(l) ? l : ''
+}
+
 const digitPrefixes = (v) => (Array.isArray(v) ? v : []).map((p) => String(p).replace(/\D/g, '')).filter(Boolean)
+
+/**
+ * A Tel number reduced to what a prefix is matched against: an optional leading
+ * device LETTER, then digits.
+ *
+ * telDigits drops everything that is not a digit, which is right for a stored
+ * number and wrong here — it would throw away the one character that says which
+ * device this is. Only a leading letter survives, and only one: "H3326" is a
+ * TH1N, while a letter in the middle of a number is a mistake and is dropped as
+ * it always was.
+ */
+export const telKey = (tel) => {
+  const s = String(tel ?? '')
+    .trim()
+    .toUpperCase()
+  const lead = /^([A-Z])/.exec(s)
+  return lead ? lead[1] + s.slice(1).replace(/\D/g, '') : s.replace(/\D/g, '')
+}
+
+/** The Tel ranges an admin listed for this entry. Digits, and only digits —
+ *  the device letter is a separate thing with a separate source, and it is
+ *  added by modelTelPrefixes below, where it is actually matched. */
 export const optionPrefixes = (v) => (typeof v === 'string' ? [] : digitPrefixes(v?.prefixes))
+
+/**
+ * What the TEL FIELD matches a model on: its listed ranges, and its device
+ * letter in front of them.
+ *
+ * Separate from optionPrefixes because they answer different questions.
+ * optionPrefixes is the admin's mapping — what the Manage inputs row says, what
+ * prefixShareHint warns about, what the seeding pass writes. This is the wider
+ * set the entry form selects against, and the letter belongs only here: it is
+ * not a range anybody assigned, it cannot clash with another range, and it must
+ * not appear in a row's prefix list as though it had been typed there.
+ *
+ * Not used for agencies. An ISSI names whose radio it is rather than which
+ * device, so a device letter has nothing to say about one.
+ */
+export const modelTelPrefixes = (v) => {
+  const letter = optionLetter(v)
+  return letter ? [letter, ...optionPrefixes(v)] : optionPrefixes(v)
+}
 
 // ---------------------------------------------------------------------------
 // ISSI prefixes — the agency's own list, read off the OTHER number
@@ -380,15 +470,17 @@ export const telDigits = (tel) => String(tel ?? '').replace(/\D/g, '')
  * @returns {{ prefix: string, names: string[] } | null}
  */
 export function prefixOwners(tel, list, getPrefixes = optionPrefixes) {
-  const digits = telDigits(tel)
-  if (!digits) return null
+  // telKey rather than telDigits: a leading device letter IS a prefix now, and
+  // stripping it would throw away the character being matched on.
+  const key = telKey(tel)
+  if (!key) return null
   let best = ''
   let hits = []
   for (const it of list ?? []) {
     const name = optionName(it).trim()
     if (!name) continue
     for (const prefix of getPrefixes(it)) {
-      if (!PREFIX_RE.test(prefix) || !digits.startsWith(prefix)) continue
+      if (!(PREFIX_RE.test(prefix) || LETTER_PREFIX_RE.test(prefix)) || !key.startsWith(prefix)) continue
       if (prefix.length > best.length) {
         best = prefix
         hits = []
@@ -410,7 +502,7 @@ export function prefixOwners(tel, list, getPrefixes = optionPrefixes) {
  * two dropdowns disagree.
  */
 export function telPick(tel, list) {
-  return prefixOwners(tel, list)?.names[0] ?? ''
+  return prefixOwners(tel, list, modelTelPrefixes)?.names[0] ?? ''
 }
 
 /**
@@ -428,9 +520,16 @@ export function telPick(tel, list) {
  */
 export function replaceTelPrefix(tel, from, to) {
   const raw = String(tel ?? '')
-  const at = raw.search(/\d/)
-  if (at < 0 || !from || !raw.slice(at).startsWith(from)) return raw
-  return raw.slice(0, at) + to + raw.slice(at + from.length)
+  // The first digit OR letter: a stand-in may be the device letter now, and
+  // looking only for a digit would skip straight past the H in "H332645500"
+  // and try to match the prefix against the number behind it.
+  const at = raw.search(/[0-9A-Za-z]/)
+  if (at < 0 || !from) return raw
+  const rest = raw.slice(at)
+  // Case-insensitively, because the letter is typed by a person and "h" is the
+  // same device as "H" — the digits either side are unaffected either way.
+  if (!rest.toUpperCase().startsWith(from.toUpperCase())) return raw
+  return raw.slice(0, at) + to + rest.slice(from.length)
 }
 
 // ---------------------------------------------------------------------------
@@ -488,9 +587,23 @@ export const optionStandInReal = (v) => (typeof v === 'string' ? '' : String(v?.
  * real prefix would rewrite a number to itself, and goes the same way.
  */
 export function optionStandInRules(v) {
-  const real = optionStandInReal(v)
+  // A model may hold a letter without ever having been given a "stored as"
+  // prefix — STP9000 has one Tel prefix, 190, and needed no shorthand before
+  // the letter existed. Its single prefix is then unambiguously what T stands
+  // for. This fallback is used ONLY for that case: where an admin has written a
+  // standInReal, that is the answer, and where a model holds several prefixes
+  // there is no non-arbitrary choice to make and the letter swaps nothing.
+  const declared = optionStandInReal(v)
+  const prefixes = optionPrefixes(v)
+  const real = declared || (prefixes.length === 1 ? prefixes[0] : '')
   if (!real) return []
-  return optionStandIns(v)
+  // The device letter stands in for the same real prefix the digits do: H is
+  // typed and 35506 is stored, exactly as 01 is. It is added here rather than
+  // to optionStandIns because that reader is the row AS STORED — what an admin
+  // typed and what the seeding pass writes — and the letter was never typed.
+  const letter = optionLetter(v)
+  const all = letter ? [letter, ...optionStandIns(v)] : optionStandIns(v)
+  return all
     .filter((standIn) => standIn !== real)
     .sort((a, b) => b.length - a.length)
     .map((standIn) => ({ standIn, real }))
@@ -525,6 +638,20 @@ export function telForModel(tel, model, models) {
   for (const { standIn, real } of optionStandInRules(it)) {
     const swapped = replaceTelPrefix(raw, standIn, real)
     if (swapped !== raw) return swapped
+  }
+  // A device letter must never reach storage. It is a way of SELECTING the
+  // model, not part of anybody's number, and a model may hold a letter with no
+  // Tel range for it to stand for — one added by hand, before its prefixes are
+  // known. Without this the entry would store "Q332645500", a letter sitting in
+  // a phone number, and every report and export downstream would carry it.
+  //
+  // Only this model's OWN letter, and only at the front: an H in front of a
+  // number filed against an STP9000 is somebody's real text, and is left alone
+  // exactly as the digit shorthands are on a model that does not claim them.
+  const letter = optionLetter(it)
+  if (letter) {
+    const at = raw.search(/[0-9A-Za-z]/)
+    if (at >= 0 && raw[at].toUpperCase() === letter) return raw.slice(0, at) + raw.slice(at + 1)
   }
   return raw
 }
@@ -1170,6 +1297,32 @@ const SEED_STAND_INS = Object.fromEntries(
     .filter(([, r]) => r.standIn.length > 0 && r.standInReal),
 )
 
+// The device letter each shipped model is written by, for the seeding pass —
+// every install already has a saved models list, and a saved category fully
+// replaces its default, so without this the letters above would reach nobody.
+const SEED_MODEL_LETTERS = Object.fromEntries(
+  DEFAULT_OPTIONS.models.map((it) => [modelKey(optionName(it)), optionLetter(it)]).filter(([, l]) => l),
+)
+
+/**
+ * Give a stored models list the device letters it predates.
+ *
+ * Gap-filling like the prefixes beside it: a model that already declares a
+ * letter keeps it, and a letter another stored model has already claimed is
+ * skipped rather than handed to two devices — H selects one model, and which
+ * one is a decision an admin has already made if they made it at all.
+ */
+function withSeededLetters(list) {
+  const claimed = new Set(list.map(optionLetter).filter(Boolean))
+  return list.map((it) => {
+    if (optionLetter(it)) return it
+    const letter = SEED_MODEL_LETTERS[modelKey(optionName(it))]
+    if (!letter || claimed.has(letter)) return it
+    claimed.add(letter)
+    return { ...(typeof it === 'string' ? {} : it), name: optionName(it), letter }
+  })
+}
+
 /**
  * Give a stored list the shipped prefixes it predates.
  *
@@ -1223,6 +1376,9 @@ function withSeededPrefixes(list, seeds, get = optionPrefixes, field = 'prefixes
  * read as claiming them.
  */
 function withSeededStandIns(list) {
+  // Digits throughout: the letter is not a shorthand anybody declared, it is
+  // attached to every model, so counting it here would make every row look as
+  // though it already had a stand-in and no shipped rule would ever be seeded.
   const declared = new Set(list.flatMap(optionStandIns))
   return list.map((it) => {
     if (optionStandIns(it).length > 0) return it
@@ -1250,6 +1406,7 @@ export function mergeOptions(stored) {
   for (const it of REQUIRED_ISSUE_TYPES) {
     if (!claimedCodes[issueCode(it)]) out.issueTypes.push({ ...it })
   }
+  out.models = withSeededLetters(out.models)
   out.models = withSeededPrefixes(out.models, SEED_MODEL_PREFIXES)
   // Then the swap that makes the shorthand among them mean anything.
   out.models = withSeededStandIns(out.models)

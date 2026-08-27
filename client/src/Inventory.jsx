@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { formatDateTime } from './dates'
 import {
   getInventory,
   createInventory,
@@ -23,7 +24,7 @@ const esc = (v) =>
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
 const signed = (n) => (n > 0 ? `+${n}` : String(n))
-const stamp = (d) => new Date(d).toLocaleString('en-GB')
+const stamp = (d) => formatDateTime(d)
 
 const BLANK = {
   sku: '',

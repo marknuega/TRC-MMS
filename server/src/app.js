@@ -19,6 +19,7 @@ import optionsRouter from './routes/options.js'
 import savedReportsRouter from './routes/savedReports.js'
 import monthlyRouter from './routes/monthly.js'
 import inventoryRouter from './routes/inventory.js'
+import backupRouter from './routes/backup.js'
 import codemapRouter, { publicCodeMap } from './routes/codemap.js'
 import whatsappRouter from './whatsapp/routes.js'
 
@@ -64,6 +65,12 @@ app.use(
   }),
 )
 
+// A whole-database import is the one body that is legitimately large — it is
+// every report, every ledger line and every account at once. Mounted BEFORE the
+// general parser so it wins the path: express.json skips a request another
+// parser already read, so whichever is mounted first sets the cap. Admin-only
+// (see routes/backup.js), so the wider limit is not reachable by a user.
+app.use('/api/backup', express.json({ limit: '256mb' }))
 // Bulk imports (inventory, saved reports) send sizeable JSON, so the cap is
 // higher than the 10kb default — still bounded against abuse.
 app.use(express.json({ limit: '2mb' }))
@@ -165,6 +172,9 @@ app.use('/api/monthly', authRequired, monthlyRouter)
 app.use('/api/inventory', authRequired, inventoryRouter)
 // Reading the map needs a session; editing it is admin-gated inside the router.
 app.use('/api/codemap', authRequired, codemapRouter)
+// Whole-database export/import — how the offline desktop build is loaded from
+// the live server, and how a backup is taken. Admin-only inside the router.
+app.use('/api/backup', authRequired, backupRouter)
 
 // In production the same service also serves the built React app, so the
 // browser sees one origin (no CORS). In dev, Vite serves the client instead.

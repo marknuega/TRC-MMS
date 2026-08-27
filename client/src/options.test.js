@@ -4,6 +4,8 @@ import {
   mergeOptions,
   DEFAULT_OPTIONS,
   issueCodeIndex,
+  modelTelPrefixes,
+  optionLetter,
   issueFitsModel,
   issueModelsOverlap,
   issueClaimFor,
@@ -100,8 +102,12 @@ describe('mergeOptions', () => {
     // this model's prefixes, not a separate thing bolted on afterwards.
     assert.deepEqual(optionPrefixes(out.models[0]), ['355', '06', '01'])
     assert.deepEqual(optionPrefixes(out.models[1]), ['190'])
-    assert.deepEqual(optionPrefixes(out.models[2]), [], 'a model with no shipped prefix stays a plain string')
-    assert.equal(out.models[2], 'PT590')
+    assert.deepEqual(optionPrefixes(out.models[2]), [], 'a model with no shipped Tel range gets none')
+    // It no longer stays a plain STRING, though: every model is seeded its
+    // device letter, which is a shipped fact about it even when its Tel ranges
+    // are the admin's own. PT590 is an N whether or not anyone listed a range.
+    assert.equal(optionName(out.models[2]), 'PT590')
+    assert.equal(optionLetter(out.models[2]), 'N')
   })
 
   // 109 is really on all three, so each is seeded that plus the shorthand it
@@ -659,9 +665,13 @@ describe('shorthand picks the SRG3900 build, 109 is what gets stored', () => {
     assert.equal(telPick('109332645500', models), 'SRG3900 CARKIT')
   })
 
-  test('every shipped stand-in is a Tel prefix too, or it would select nothing', () => {
+  // Through modelTelPrefixes, which is what the Tel field actually selects on:
+  // the ranges an admin listed PLUS the device letter. The invariant is the one
+  // it always was — a shorthand nothing selects is a shorthand that does
+  // nothing — it is just that the letter is not one of the admin's ranges.
+  test('every shipped stand-in is selectable, or it would select nothing', () => {
     for (const m of models) {
-      const claimed = optionPrefixes(m)
+      const claimed = modelTelPrefixes(m)
       for (const { standIn } of optionStandInRules(m)) {
         assert.ok(claimed.includes(standIn), `${optionName(m)} does not claim its stand-in ${standIn}`)
       }
@@ -1114,5 +1124,146 @@ describe('two rows may share a code only where no device is claimed twice', () =
 
   test('a nameless row claims nothing — there is nothing to decode to', () => {
     assert.deepEqual(issueClaimants([{ name: '  ', parts: '44', variant: 'A' }], '44A'), [])
+  })
+})
+
+/*
+ * The device letter as a Tel prefix.
+ *
+ * H is a TH1N and T is an STP9000 — the same letter already written in front of
+ * every CDS code, so it is one keystroke and nothing new to remember. Typing it
+ * selects the model, and the number is STORED under the real prefix, exactly as
+ * the digit shorthands 01 and 103 already were.
+ */
+describe('a model is selected by its device letter, and stored under the real prefix', () => {
+  const models = mergeOptions(undefined).models
+
+  test('the letter picks the model', () => {
+    for (const [tel, model] of [
+      ['H332645500', 'TH1N'],
+      ['R332645500', 'THR9'],
+      ['M332645500', 'TMR880i'],
+      ['T332645500', 'STP9000'],
+      ['C332645500', 'SRG3900 CARKIT'],
+      ['D332645500', 'SRG3900 DESKTOP'],
+      ['B332645500', 'SRG3900 BIKE'],
+    ]) {
+      assert.equal(telPick(tel, models), model, tel)
+    }
+  })
+
+  test('typed in lower case, as somebody in a hurry would', () => {
+    assert.equal(telPick('h332645500', models), 'TH1N')
+    assert.equal(telForModel('h332645500', 'TH1N', models), '35506332645500')
+  })
+
+  // The four the request spelled out, and the whole point of the feature: the
+  // letter is a fiction of the entry form and the record holds the real number.
+  test('the letter is swapped for the number really on the radio', () => {
+    assert.equal(telForModel('H332645500', 'TH1N', models), '35506332645500')
+    assert.equal(telForModel('R332645500', 'THR9', models), '20106332645500')
+    assert.equal(telForModel('M332645500', 'TMR880i', models), '7506332645500')
+    assert.equal(telForModel('B332645500', 'SRG3900 BIKE', models), '109332645500')
+    assert.equal(telForModel('C332645500', 'SRG3900 CARKIT', models), '109332645500')
+    assert.equal(telForModel('D332645500', 'SRG3900 DESKTOP', models), '109332645500')
+  })
+
+  // STP9000 declares no stand-in at all — it never needed one — so the letter
+  // has to find its real prefix from the single Tel range it holds.
+  test('a model with one range and no shorthand still swaps its letter', () => {
+    assert.equal(telForModel('T332645500', 'STP9000', models), '190332645500')
+  })
+
+  test('the digit shorthands still work exactly as they did', () => {
+    assert.equal(telForModel('01332645500', 'TH1N', models), '35506332645500')
+    assert.equal(telForModel('103332645500', 'SRG3900 CARKIT', models), '109332645500')
+    assert.equal(telPick('103332645500', models), 'SRG3900 CARKIT')
+  })
+
+  // A stand-in is gated on the model that declares it — the same rule the digit
+  // shorthands follow. H against an STP9000 is somebody's real number.
+  test('a letter is not swapped on a model that does not own it', () => {
+    assert.equal(telForModel('H332645500', 'STP9000', models), 'H332645500')
+  })
+
+  // The letter is a selection shorthand and never part of a number. Whether it
+  // swaps to a real prefix or there is none to swap to, what gets stored is
+  // digits — a letter in a phone field would follow the entry into every
+  // report and export made from it.
+  test('no device letter ever reaches storage', () => {
+    for (const [tel, model] of [
+      ['H332645500', 'TH1N'],
+      ['T332645500', 'STP9000'],
+      ['C332645500', 'SRG3900 CARKIT'],
+    ]) {
+      assert.match(telForModel(tel, model, models), /^\d+$/, `${tel} on ${model}`)
+    }
+  })
+
+  test('a number with no letter is untouched, as every stored number is', () => {
+    assert.equal(telForModel('35506332645500', 'TH1N', models), '35506332645500')
+    assert.equal(telPick('190332645500', models), 'STP9000')
+  })
+
+  // A letter is a prefix only at the FRONT. In the middle of a number it is a
+  // typo, and telKey drops it exactly as telDigits always did.
+  test('a letter inside a number is not a prefix', () => {
+    assert.equal(telPick('3355H26455', models), '')
+    assert.equal(telForModel('190H32645', 'STP9000', models), '190H32645')
+  })
+
+  test('the letter does not leak into the row an admin reads', () => {
+    const th1n = models.find((m) => optionName(m) === 'TH1N')
+    // The Manage inputs row shows the ranges somebody assigned. The letter is
+    // not one of them and must not appear there as though it had been typed.
+    assert.deepEqual(optionPrefixes(th1n), ['355', '06', '01'])
+    assert.deepEqual(optionStandIns(th1n), ['01'])
+    // But it IS matched, and it IS swapped.
+    assert.ok(modelTelPrefixes(th1n).includes('H'))
+    assert.ok(optionStandInRules(th1n).some((r) => r.standIn === 'H' && r.real === '35506'))
+  })
+
+  // An ISSI says whose radio it is, not which device — a device letter has
+  // nothing to say about one, and agencies must not start matching letters.
+  test('agencies are unaffected', () => {
+    const agencies = mergeOptions(undefined).agencies
+    assert.equal(issiPick('H1802010', agencies), '')
+  })
+
+  test('a stored list that predates the letters is seeded them', () => {
+    const out = mergeOptions({ models: ['TH1N', 'STP9000'] })
+    assert.equal(optionLetter(out.models[0]), 'H')
+    assert.equal(telPick('T332645500', out.models), 'STP9000')
+  })
+
+  // The gap this closes: a model nobody shipped had no way to get a letter,
+  // because the seeding pass only knows the models it ships. Manage inputs has
+  // a Letter field now, and a letter typed there behaves like any other.
+  test('a model added by hand answers to the letter typed for it', () => {
+    const out = mergeOptions({
+      models: [{ name: 'TETRA HANDHELD X', letter: 'X', prefixes: ['771'] }, 'TH1N'],
+    })
+    assert.equal(telPick('X332645500', out.models), 'TETRA HANDHELD X')
+    // One Tel range and no shorthand, so the letter swaps to that range — the
+    // same answer STP9000 gets, and for the same reason.
+    assert.equal(telForModel('X332645500', 'TETRA HANDHELD X', out.models), '771332645500')
+    // And it has not disturbed the shipped models around it.
+    assert.equal(telPick('H332645500', out.models), 'TH1N')
+  })
+
+  test('a hand-added model with a letter but no range swaps nothing, and still selects', () => {
+    const out = mergeOptions({ models: [{ name: 'SOMETHING NEW', letter: 'Q' }] })
+    assert.equal(telPick('Q332645500', out.models), 'SOMETHING NEW')
+    // Nothing to swap TO — but the letter must not be STORED either. It is a
+    // way of selecting the model, not part of anybody's number, so it is
+    // dropped and the digits are kept as typed.
+    assert.equal(telForModel('Q332645500', 'SOMETHING NEW', out.models), '332645500')
+  })
+
+  test('a letter another model already claims is not handed to a second', () => {
+    // An admin who has moved H onto their own model keeps it there.
+    const out = mergeOptions({ models: [{ name: 'TH1N Carkit', letter: 'H' }, 'TH1N'] })
+    assert.equal(optionLetter(out.models[0]), 'H')
+    assert.equal(optionLetter(out.models[1]), '', 'TH1N must not be handed an H that is already taken')
   })
 })
