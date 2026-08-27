@@ -30,6 +30,7 @@ import {
   optionPrefixes,
   optionIssiPrefixes,
   optionStandIns,
+  optionLetter,
   optionStandInRules,
   optionStandInReal,
   optionFullForm,
@@ -83,6 +84,7 @@ export default function ManageInputs({
   const [newDesc, setNewDesc] = useState('')
   const [newParts, setNewParts] = useState('')
   const [newVariant, setNewVariant] = useState('')
+  const [newDeviceLetter, setNewDeviceLetter] = useState('')
   const [newPrefixes, setNewPrefixes] = useState('')
   const [newIssiPrefixes, setNewIssiPrefixes] = useState('')
   const [newStandIn, setNewStandIn] = useState('')
@@ -97,6 +99,7 @@ export default function ManageInputs({
   const [editDesc, setEditDesc] = useState('')
   const [editParts, setEditParts] = useState('')
   const [editVariant, setEditVariant] = useState('')
+  const [editDeviceLetter, setEditDeviceLetter] = useState('')
   // The device this part is stocked for. Not part of the option row being
   // edited — it belongs to the inventory item — so it is held apart from the
   // editFields the rest of this form is built from, and `Was` is what lets
@@ -154,6 +157,9 @@ export default function ManageInputs({
   // the Tel prefixes and only the Models list has one. An agency is picked by
   // its own ISSI and has nothing to stand in for.
   const hasStandIn = isModels
+  // Only a model has one. An agency is named by an ISSI, which says whose radio
+  // it is rather than which device, so a device letter means nothing there.
+  const hasLetter = isModels
   // Carries prefixes of SOME kind — the two behave identically here (same
   // rules, same validation, same stored shape), so everything that does not
   // care which number it is asks this rather than naming either one.
@@ -262,13 +268,18 @@ export default function ManageInputs({
       const standIn = hasStandIn ? parsePrefixes(f.standIn) : []
       const standInReal = hasStandIn ? f.standInReal.replace(/\D/g, '') : ''
       const pair = standIn.length && standInReal ? { standIn, standInReal } : {}
+      // The device letter this model is written by. One character, upper-cased
+      // — it is the same letter that fronts a CDS code, and a lower-case h is
+      // the same device as an H to everyone who types it.
+      const letter = hasLetter ? f.letter.trim().toUpperCase() : ''
       // A model with no prefixes stays a plain string, exactly as it was
       // before this field existed — nothing to store, so nothing stored. An
       // agency given only some of its three optional fields stores only those,
       // for the same reason.
-      if (!prefixes.length && !issiPrefixes.length && !fullForm && !pair.standIn?.length) return name
+      if (!prefixes.length && !issiPrefixes.length && !fullForm && !pair.standIn?.length && !letter) return name
       return {
         name,
+        ...(letter && { letter }),
         ...(prefixes.length && { prefixes }),
         ...(issiPrefixes.length && { issiPrefixes }),
         ...pair,
@@ -443,6 +454,38 @@ export default function ManageInputs({
     return `${p} is already in use for ${part} — defining it here replaces that.`
   }
 
+  /**
+   * What is wrong with a device letter, or '' when it is usable (blank
+   * included — a model that no letter names is a real and common state).
+   *
+   * A letter another model already claims is allowed, and only hinted at. It is
+   * the same rule the Tel prefixes follow: two models may share one and the one
+   * higher up the list is the one selected, which is exactly how TH1N and the
+   * TH1N Carkit both answer to H today. Refusing it here would make this field
+   * stricter than the field beside it for no reason a user could see.
+   */
+  function letterProblem(letter) {
+    if (!hasLetter) return ''
+    const l = letter.trim().toUpperCase()
+    if (!l) return ''
+    if (!/^[A-Z]$/.test(l)) return `"${letter.trim()}" is not a device letter — it must be a single letter, e.g. H.`
+    return ''
+  }
+
+  /** Who else answers to this letter, so sharing one is a visible choice. */
+  function letterShareHint(letter, exceptIndex = -1) {
+    const l = letter.trim().toUpperCase()
+    if (!/^[A-Z]$/.test(l)) return ''
+    const others = list
+      .filter((v, i) => i !== exceptIndex && optionLetter(v) === l)
+      .map((v) => nameOf(v))
+      .filter(Boolean)
+    if (!others.length) return `${l} is free — no other model answers to it.`
+    return `${others.join(' and ')} already ${others.length === 1 ? 'answers' : 'answer'} to ${l}, and ${
+      others.length === 1 ? 'is' : 'the first is'
+    } higher up this list — so typing ${l} would select ${others[0]}, not this one.`
+  }
+
   function flash(msg, field = '') {
     setNotice(msg)
     setNoticeField(field)
@@ -458,6 +501,8 @@ export default function ManageInputs({
   const problemFor = (f, exceptIndex = -1) => {
     const code = codeProblem(f.parts, f.variant, f.models, exceptIndex)
     if (code) return [code, 'code']
+    const letter = letterProblem(f.letter ?? '')
+    if (letter) return [letter, 'letter']
     const prefix = hasTelPrefixes ? prefixProblem(f.prefixes) : ''
     if (prefix) return [prefix, 'prefixes']
     const issi = hasIssiPrefixes ? prefixProblem(f.issiPrefixes, 'ISSI') : ''
@@ -481,6 +526,7 @@ export default function ManageInputs({
     models: newModels,
     names: {},
     variant: newVariant,
+    letter: newDeviceLetter,
     prefixes: newPrefixes,
     issiPrefixes: newIssiPrefixes,
     standIn: newStandIn,
@@ -497,6 +543,7 @@ export default function ManageInputs({
     models: editModels,
     names: editNames,
     variant: editVariant,
+    letter: editDeviceLetter,
     prefixes: editPrefixes,
     issiPrefixes: editIssiPrefixes,
     standIn: editStandIn,
@@ -675,6 +722,29 @@ export default function ManageInputs({
             )}
             {hasPrefixes && (
               <div className="edit-code-row">
+                {hasLetter && (
+                  <label className="field-code field-letter">
+                    Letter
+                    <input
+                      className="edit-input"
+                      value={editDeviceLetter}
+                      // One character, upper-cased as it is typed: it is the
+                      // same letter that fronts a CDS code, and nobody should
+                      // have to hold shift to agree with the code map.
+                      onChange={(e) =>
+                        setEditDeviceLetter(
+                          e.target.value
+                            .replace(/[^A-Za-z]/g, '')
+                            .slice(0, 1)
+                            .toUpperCase(),
+                        )
+                      }
+                      onKeyDown={cancelOnEscape}
+                      placeholder="H"
+                      maxLength={1}
+                    />
+                  </label>
+                )}
                 {hasTelPrefixes && (
                   <label className="field-code field-prefix">
                     Tel prefixes
@@ -1078,6 +1148,7 @@ export default function ManageInputs({
     setNewDesc('')
     setNewParts('')
     setNewVariant('')
+    setNewDeviceLetter('')
     setNewModels(null)
     setNewPrefixes('')
     setNewIssiPrefixes('')
@@ -1147,6 +1218,7 @@ export default function ManageInputs({
     setEditDesc(descOf(list[i]))
     setEditParts(isIssues ? issueParts(list[i]) : '')
     setEditVariant(isIssues ? issueVariant(list[i]) : '')
+    setEditDeviceLetter(hasLetter ? optionLetter(list[i]) : '')
     setEditPrefixes(hasTelPrefixes ? optionPrefixes(list[i]).join(', ') : '')
     setEditIssiPrefixes(hasIssiPrefixes ? optionIssiPrefixes(list[i]).join(', ') : '')
     setEditStandIn(hasStandIn ? optionStandIns(list[i]).join(', ') : '')
@@ -1211,6 +1283,7 @@ export default function ManageInputs({
     setEditDesc('')
     setEditParts('')
     setEditVariant('')
+    setEditDeviceLetter('')
     setEditModels(null)
     setEditNames({})
     setEditLetter('')
@@ -1329,6 +1402,27 @@ export default function ManageInputs({
                   />
                 </label>
               </>
+            )}
+            {hasLetter && (
+              <label className="field-code field-letter">
+                Letter
+                <input
+                  value={newDeviceLetter}
+                  onChange={(e) =>
+                    setNewDeviceLetter(
+                      e.target.value
+                        .replace(/[^A-Za-z]/g, '')
+                        .slice(0, 1)
+                        .toUpperCase(),
+                    )
+                  }
+                  placeholder="H"
+                  maxLength={1}
+                  aria-invalid={noticeField === 'letter' || undefined}
+                  className={noticeField === 'letter' ? 'invalid' : undefined}
+                  title="The device letter this model is written by — the one in front of its CDS codes. Typing it in the Tel field selects this model and stores the real prefix. Optional."
+                />
+              </label>
             )}
             {hasTelPrefixes && (
               <label className="field-code field-prefix">
@@ -1547,6 +1641,7 @@ export default function ManageInputs({
               TH1N and <code>T</code> an STP9000, and typing it stores the real prefix just as a digit shorthand does. A
               Tel number names the <strong>device and nothing else</strong>: whose radio it is comes off the ISSI, on
               the Agencies list. This is where a new device is taught to the auto-select — nothing else needs changing.
+              {newDeviceLetter.trim() && <span className="manage-code-hint"> {letterShareHint(newDeviceLetter)}</span>}
               {newPrefixes.trim() && <span className="manage-code-hint"> {prefixShareHint(newPrefixes)}</span>}
             </p>
           )}

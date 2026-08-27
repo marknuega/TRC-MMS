@@ -1186,6 +1186,20 @@ describe('a model is selected by its device letter, and stored under the real pr
     assert.equal(telForModel('H332645500', 'STP9000', models), 'H332645500')
   })
 
+  // The letter is a selection shorthand and never part of a number. Whether it
+  // swaps to a real prefix or there is none to swap to, what gets stored is
+  // digits — a letter in a phone field would follow the entry into every
+  // report and export made from it.
+  test('no device letter ever reaches storage', () => {
+    for (const [tel, model] of [
+      ['H332645500', 'TH1N'],
+      ['T332645500', 'STP9000'],
+      ['C332645500', 'SRG3900 CARKIT'],
+    ]) {
+      assert.match(telForModel(tel, model, models), /^\d+$/, `${tel} on ${model}`)
+    }
+  })
+
   test('a number with no letter is untouched, as every stored number is', () => {
     assert.equal(telForModel('35506332645500', 'TH1N', models), '35506332645500')
     assert.equal(telPick('190332645500', models), 'STP9000')
@@ -1220,6 +1234,30 @@ describe('a model is selected by its device letter, and stored under the real pr
     const out = mergeOptions({ models: ['TH1N', 'STP9000'] })
     assert.equal(optionLetter(out.models[0]), 'H')
     assert.equal(telPick('T332645500', out.models), 'STP9000')
+  })
+
+  // The gap this closes: a model nobody shipped had no way to get a letter,
+  // because the seeding pass only knows the models it ships. Manage inputs has
+  // a Letter field now, and a letter typed there behaves like any other.
+  test('a model added by hand answers to the letter typed for it', () => {
+    const out = mergeOptions({
+      models: [{ name: 'TETRA HANDHELD X', letter: 'X', prefixes: ['771'] }, 'TH1N'],
+    })
+    assert.equal(telPick('X332645500', out.models), 'TETRA HANDHELD X')
+    // One Tel range and no shorthand, so the letter swaps to that range — the
+    // same answer STP9000 gets, and for the same reason.
+    assert.equal(telForModel('X332645500', 'TETRA HANDHELD X', out.models), '771332645500')
+    // And it has not disturbed the shipped models around it.
+    assert.equal(telPick('H332645500', out.models), 'TH1N')
+  })
+
+  test('a hand-added model with a letter but no range swaps nothing, and still selects', () => {
+    const out = mergeOptions({ models: [{ name: 'SOMETHING NEW', letter: 'Q' }] })
+    assert.equal(telPick('Q332645500', out.models), 'SOMETHING NEW')
+    // Nothing to swap TO — but the letter must not be STORED either. It is a
+    // way of selecting the model, not part of anybody's number, so it is
+    // dropped and the digits are kept as typed.
+    assert.equal(telForModel('Q332645500', 'SOMETHING NEW', out.models), '332645500')
   })
 
   test('a letter another model already claims is not handed to a second', () => {

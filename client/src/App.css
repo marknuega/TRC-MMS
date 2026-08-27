@@ -4849,3 +4849,13 @@ button.sync-pill {
 .backup-bad {
   color: var(--danger, #c0392b);
 }
+
+/* One character wide, beside the Tel prefixes it works alongside. Narrow on
+   purpose: a box sized for a range invites a range to be typed into it, and a
+   device letter is exactly one character. */
+.field-code.field-letter input {
+  width: 3.2rem;
+  text-align: center;
+  font-weight: 700;
+  text-transform: uppercase;
+}

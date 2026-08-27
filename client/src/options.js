@@ -639,6 +639,20 @@ export function telForModel(tel, model, models) {
     const swapped = replaceTelPrefix(raw, standIn, real)
     if (swapped !== raw) return swapped
   }
+  // A device letter must never reach storage. It is a way of SELECTING the
+  // model, not part of anybody's number, and a model may hold a letter with no
+  // Tel range for it to stand for — one added by hand, before its prefixes are
+  // known. Without this the entry would store "Q332645500", a letter sitting in
+  // a phone number, and every report and export downstream would carry it.
+  //
+  // Only this model's OWN letter, and only at the front: an H in front of a
+  // number filed against an STP9000 is somebody's real text, and is left alone
+  // exactly as the digit shorthands are on a model that does not claim them.
+  const letter = optionLetter(it)
+  if (letter) {
+    const at = raw.search(/[0-9A-Za-z]/)
+    if (at >= 0 && raw[at].toUpperCase() === letter) return raw.slice(0, at) + raw.slice(at + 1)
+  }
   return raw
 }
 
