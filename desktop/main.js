@@ -34,6 +34,7 @@ import {
   DESKTOP_SKIP,
   applyExport,
   canStoreSecret,
+  describeExchange,
   describeResult,
   fetchLiveExport,
   normalizeUrl,
@@ -41,8 +42,10 @@ import {
   readSync,
   recallPassword,
   rememberPassword,
+  syncEntries,
   writeSync,
 } from './sync.js'
+import { upgradeSchema } from './schemaUpgrade.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 
@@ -170,6 +173,16 @@ async function startServer(config) {
   // Imported dynamically because db.js throws unless DATABASE_URL is already
   // set, and a static import would be hoisted above the assignments above.
   const serverSrc = join(here, 'app/server/src')
+
+  // BEFORE the Express app, which starts querying the moment it is reached: an
+  // install carried forward from an older version has a database this build's
+  // schema does not match, and the first query against a missing column is a
+  // crash on a machine whose reports are in that file. A fresh database copied
+  // from template.db already matches and this changes nothing.
+  const { prisma } = await import(pathToFileURL(join(serverSrc, 'db.js')).href)
+  const upgraded = await upgradeSchema(prisma)
+  if (upgraded.length) console.log(`schema upgraded: ${upgraded.join(', ')}`)
+
   const { app: expressApp } = await import(pathToFileURL(join(serverSrc, 'app.js')).href)
   const { seedAdmin } = await import(pathToFileURL(join(serverSrc, 'auth.js')).href)
 
@@ -438,6 +451,65 @@ async function backupDeps() {
 }
 
 /**
+ * The LOCAL database plus the same two functions the server's sync route uses.
+ *
+ * Deliberately the same module on both sides: a conflict has one rule, not two
+ * implementations that agree today. Whichever end applies a batch resolves it
+ * identically, which is what makes the outcome of a sync predictable from
+ * either machine.
+ */
+async function entrySyncDeps() {
+  const serverSrc = join(here, 'app/server/src')
+  const { prisma } = await import(pathToFileURL(join(serverSrc, 'db.js')).href)
+  const { applyChanges, pullChanges } = await import(pathToFileURL(join(serverSrc, 'entrySync.js')).href)
+  return { prisma, applyChanges, pullChanges }
+}
+
+/**
+ * Exchange working entries with live, both directions.
+ *
+ * Separate from "Replace everything from the live server" below, and not a
+ * replacement for it. That one REPLACES this machine wholesale — history,
+ * stock, vocabulary — and is how a copy is first set up. This moves only the
+ * entries and moves them both ways, which is what a machine that gets typed
+ * into wants: nothing on it is lost by running this.
+ */
+async function syncEntriesWithLive(win, { silent = false } = {}) {
+  const stored = readSync(CONFIG_PATH)
+  const url = normalizeUrl(stored.url)
+  const password = recallPassword(CONFIG_PATH)
+  if (!url || !stored.username || !password) {
+    if (silent) return { ok: false, reason: 'not configured' }
+    if (!(await configureSync(win))) return { ok: false, reason: 'cancelled' }
+    return syncEntriesWithLive(win, { silent: false })
+  }
+
+  try {
+    const result = await syncEntries({ url, username: stored.username, password }, await entrySyncDeps(), {
+      since: stored.entriesSyncedAt ?? null,
+    })
+    writeSync(CONFIG_PATH, { entriesSyncedAt: result.mark })
+    if (!silent) {
+      await dialog.showMessageBox(win, {
+        type: 'info',
+        title: 'Entries synced',
+        message: `Exchanged with ${result.origin}`,
+        detail: `${describeExchange(result)}
+
+Where the same entry was changed in both places, the later edit won.`,
+        buttons: ['Close'],
+        noLink: true,
+      })
+    }
+    win?.webContents?.reload()
+    return { ok: true, result }
+  } catch (err) {
+    if (!silent) dialog.showErrorBox('Could not sync entries', err.message)
+    return { ok: false, reason: err.message }
+  }
+}
+
+/**
  * Ask for whatever is still missing, then pull.
  *
  * `silent` is the automatic path: it runs only when everything needed is
@@ -642,7 +714,15 @@ function buildMenu(win, config) {
         label: 'File',
         submenu: [
           {
-            label: 'Sync from the live server…',
+            label: 'Sync entries with the live server…',
+            // Both directions, entries only. Nothing on this machine is lost by
+            // running it — see the header of sync.js for why entries can go both
+            // ways and saved reports and stock cannot.
+            click: () => syncEntriesWithLive(win),
+          },
+          { type: 'separator' },
+          {
+            label: 'Replace everything from the live server…',
             // The live server is the authority and this machine is a copy of
             // it; see the header of sync.js for why it can only go this way.
             click: () => syncFromLive(win),

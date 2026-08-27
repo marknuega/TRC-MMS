@@ -211,9 +211,11 @@ describe('resyncSequences', () => {
     const sql = []
     try {
       const done = await resyncSequences({ $executeRawUnsafe: async (q) => sql.push(q) })
-      // processedMessages is keyed by a string and has no sequence to reset.
+      // processedMessages and entryTombstones are keyed by a string: no id, and
+      // so no sequence to reset.
       assert.ok(!done.includes('processedMessages'))
-      assert.equal(done.length, TABLES.length - 1)
+      assert.ok(!done.includes('entryTombstones'))
+      assert.equal(done.length, TABLES.length - 2)
       assert.ok(sql.every((q) => q.includes('setval')))
       assert.ok(sql.some((q) => q.includes('"report_entries"')))
       assert.ok(!sql.some((q) => q.includes('processed_messages')))

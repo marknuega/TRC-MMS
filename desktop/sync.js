@@ -204,3 +204,111 @@ const LABELS = {
   inventoryItems: 'Inventory items',
   inventoryTxns: 'Ledger lines',
 }
+
+/*
+ * ── Two-way entry sync ───────────────────────────────────────────
+ *
+ * The one part of the database where both directions are meaningful. An entry
+ * carries no number anybody minted and no running total, so two machines can
+ * each hold some without either being wrong — unlike a saved report (seq is
+ * unique, both would mint REP-0043) or stock (begin/out are counters, and two
+ * machines each consuming is a lost update). Those still travel one way,
+ * through the whole-database copy above.
+ *
+ * The exchange, in the order it has to happen:
+ *
+ *   1. read what changed HERE since the last sync — before anything lands, or
+ *      the rows that just arrived get pushed straight back
+ *   2. ask live what changed THERE
+ *   3. apply live's changes here, last-write-wins per entry
+ *   4. push ours
+ *   5. remember the SERVER's clock as the mark, not ours — paging by our own
+ *      would skip or repeat rows by exactly the amount we are out
+ */
+
+/** The header the server measures clock skew from. See clockProblem in routes/entrySync.js. */
+const nowHeader = () => ({ 'x-sync-now': new Date().toISOString() })
+
+async function liveJson(origin, path, cookie, init = {}) {
+  const res = await fetch(`${origin}${path}`, {
+    ...init,
+    headers: {
+      ...(init.body ? { 'content-type': 'application/json' } : {}),
+      ...nowHeader(),
+      ...(cookie ? { cookie } : {}),
+    },
+    signal: AbortSignal.timeout(120_000),
+  })
+  const body = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(body.error ?? `${path} failed (${res.status}).`)
+  return body
+}
+
+/** Sign in and hand back the cookie the rest of the exchange rides on. */
+export async function liveSession({ url, username, password }) {
+  const origin = normalizeUrl(url)
+  if (!origin) throw new Error('That is not a valid address for the live server.')
+  const login = await fetch(`${origin}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+    signal: AbortSignal.timeout(30_000),
+  })
+  if (!login.ok) {
+    const body = await login.json().catch(() => ({}))
+    throw new Error(
+      login.status === 401
+        ? 'The live server rejected that username or password.'
+        : (body.error ?? `Sign-in failed (${login.status}).`),
+    )
+  }
+  return { origin, cookie: (login.headers.getSetCookie?.() ?? []).map((c) => c.split(';')[0]).join('; ') }
+}
+
+/**
+ * Exchange working entries with the live server, both directions.
+ *
+ * @param creds  url + username + password
+ * @param deps   { prisma, applyChanges, pullChanges } — the LOCAL database and
+ *               the same two functions the server route uses, so both ends
+ *               resolve a conflict by one rule rather than two that agree today
+ * @param since  ISO mark from the last successful sync, or null for everything
+ */
+export async function syncEntries(creds, { prisma, applyChanges, pullChanges }, { since = null } = {}) {
+  const { origin, cookie } = await liveSession(creds)
+
+  // 1. Ours first — before anything from live lands here.
+  const ours = await pullChanges(prisma, { since })
+
+  // 2 + 3. Theirs, applied here.
+  const qs = since ? `?since=${encodeURIComponent(since)}` : ''
+  const theirs = await liveJson(origin, `/api/sync/entries${qs}`, cookie)
+  const down = await applyChanges(prisma, { entries: theirs.entries, tombstones: theirs.tombstones })
+
+  // 4. Ours, pushed.
+  const up = await liveJson(origin, '/api/sync/entries', cookie, {
+    method: 'POST',
+    body: JSON.stringify({ entries: ours.entries, tombstones: ours.tombstones }),
+  })
+
+  return {
+    origin,
+    // The server's clock. Ours is not the authority on when the server last
+    // changed, and using it would drop rows written in the gap between them.
+    mark: up.now ?? theirs.now,
+    down: { applied: down.applied.length, removed: down.removed.length, kept: down.kept.length },
+    up: { applied: up.applied.length, removed: up.removed.length, kept: up.kept.length, refused: up.refused.length },
+  }
+}
+
+/** The two-way result, in a sentence somebody can check rather than "synced". */
+export const describeExchange = (r) =>
+  [
+    `From live:  ${r.down.applied} entr${r.down.applied === 1 ? 'y' : 'ies'} updated here` +
+      (r.down.removed ? `, ${r.down.removed} deleted here` : '') +
+      (r.down.kept ? `, ${r.down.kept} already newer here` : ''),
+    `To live:    ${r.up.applied} entr${r.up.applied === 1 ? 'y' : 'ies'} updated there` +
+      (r.up.removed ? `, ${r.up.removed} deleted there` : '') +
+      (r.up.kept ? `, ${r.up.kept} already newer there` : '') +
+      (r.up.refused ? `, ${r.up.refused} refused` : ''),
+  ].join('\n')

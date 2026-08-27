@@ -5,6 +5,8 @@ import { branchWhere, writeBranch, canAccessBranch } from '../scope.js'
 // creates the same entries from a texted code. See src/reportEntry.js.
 import { parseEntry, createEntry, ensureReportSeq, withFaults, repId, dateKey } from '../reportEntry.js'
 
+import { buryEntries } from '../entryTombstones.js'
+
 const router = Router()
 
 const ACTIONS = ['CHANGE', 'REPAIR', 'NEW', 'PCB', 'PROGRAM', 'RE-PROGRAM', 'INSTALL', 'RE-INSTALL', 'DISMANTLE']
@@ -63,8 +65,14 @@ router.post('/', async (req, res, next) => {
 // if no mode is given. Faults cascade. Returns the count removed.
 router.delete('/', async (req, res, next) => {
   try {
-    const { count } = await prisma.reportEntry.deleteMany({
-      where: { ...modeWhere(req), ...branchWhere(req, req.query.branch, req.query.region) },
+    const where = { ...modeWhere(req), ...branchWhere(req, req.query.branch, req.query.region) }
+    const count = await prisma.$transaction(async (tx) => {
+      // Tombstoned before they go, so the deletion can travel. A desktop copy
+      // that still holds these has no other way to tell "cleared here" from
+      // "never sent", and would push every one of them straight back.
+      await buryEntries(tx, where)
+      const { count } = await tx.reportEntry.deleteMany({ where })
+      return count
     })
     res.json({ cleared: count })
   } catch (err) {
@@ -87,7 +95,10 @@ router.put('/:id', async (req, res, next) => {
       const seq = await ensureReportSeq(tx, data.reportDate)
       const entry = await tx.reportEntry.update({
         where: { id },
-        data: { ...scalar, faults: { deleteMany: {}, create: faults.create } },
+        // syncRev is stamped on every edit made HERE. It is what a two-way sync
+        // compares to decide which of two versions is the later one, so an edit
+        // that does not move it is an edit the other machine would never see.
+        data: { ...scalar, syncRev: new Date(), faults: { deleteMany: {}, create: faults.create } },
         include: withFaults,
       })
       return { ...entry, reportId: repId(seq) }
@@ -107,7 +118,10 @@ router.delete('/:id', async (req, res, next) => {
     if (!existing || !canAccessBranch(req, existing.branch)) {
       return res.status(404).json({ error: 'Entry not found' })
     }
-    await prisma.reportEntry.delete({ where: { id } })
+    await prisma.$transaction(async (tx) => {
+      await buryEntries(tx, { id })
+      await tx.reportEntry.delete({ where: { id } })
+    })
     res.status(204).end()
   } catch (err) {
     if (err.code === 'P2025') return res.status(404).json({ error: 'Entry not found' })
