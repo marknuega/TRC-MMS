@@ -542,8 +542,8 @@ Where the same entry was changed in both places, the version with more edits beh
     win?.webContents?.reload()
     return { ok: true, result }
   } catch (err) {
-    if (!silent) dialog.showErrorBox('Could not sync entries', err.message)
-    return { ok: false, reason: err.message }
+    if (silent) return { ok: false, reason: err.message }
+    return offerNewCredentials(win, err, () => syncEntriesWithLive(win, { silent: false }))
   }
 }
 
@@ -606,9 +606,47 @@ async function syncFromLive(win, { silent = false } = {}) {
     win?.webContents?.reload()
     return { ok: true, result }
   } catch (err) {
-    if (!silent) dialog.showErrorBox('Sync failed', `${err.message}\n\nNothing on this machine was changed.`)
+    if (silent) return { ok: false, reason: err.message }
+    return offerNewCredentials(win, err, () => syncFromLive(win, { silent: false }))
+  }
+}
+
+/**
+ * A sync failed. If it failed over WHO signed in, offer to fix that.
+ *
+ * This exists because both sync paths used to end at an error box, while the
+ * credentials prompt only ever appeared when credentials were MISSING. Once a
+ * wrong username was stored, nothing in the app could change it: every retry
+ * went straight back to the same refusal, and the only real fix was editing
+ * config.json by hand. A rejected password and an account without admin rights
+ * both landed there, and both are things the person in front of the machine
+ * could have corrected in seconds if anything had asked them.
+ *
+ * Only credential failures reopen the prompt. A timeout or an unreachable
+ * server is not something retyping a password fixes, and offering it would
+ * teach people to blame their own login for the network being down.
+ *
+ * The retry is never automatic — it happens only after somebody chooses to
+ * change the sign-in and completes the prompt — so this cannot spin.
+ */
+async function offerNewCredentials(win, err, retry) {
+  if (!err?.credentials) {
+    dialog.showErrorBox('Sync failed', `${err.message}\n\nNothing on this machine was changed.`)
     return { ok: false, reason: err.message }
   }
+  const { response } = await dialog.showMessageBox(win, {
+    type: 'warning',
+    title: 'Sync failed',
+    message: err.message,
+    detail: 'Nothing on this machine was changed.\n\nSign in as a different account on the live server?',
+    buttons: ['Cancel', 'Change sign-in'],
+    defaultId: 1,
+    cancelId: 0,
+    noLink: true,
+  })
+  if (response !== 1) return { ok: false, reason: err.message }
+  if (!(await configureSync(win))) return { ok: false, reason: 'cancelled' }
+  return retry()
 }
 
 /** Where the live server is and who to sign in as. Returns whether it is now usable. */
@@ -764,6 +802,15 @@ function buildMenu(win, config) {
             // The live server is the authority and this machine is a copy of
             // it; see the header of sync.js for why it can only go this way.
             click: () => syncFromLive(win),
+          },
+          { type: 'separator' },
+          {
+            label: 'Live server sign-in…',
+            // Reachable WITHOUT having to fail first. Both sync items store the
+            // address and account on first use and then never ask again, so
+            // before this existed the only way to correct a wrong username was
+            // to edit config.json by hand — and you had to know that.
+            click: () => configureSync(win),
           },
           { type: 'separator' },
           {

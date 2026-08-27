@@ -120,6 +120,18 @@ export async function reachable(url, timeoutMs = 8000) {
 }
 
 /**
+ * An error the person can fix by typing something different.
+ *
+ * Flagged on the error rather than recognised from its message, because the
+ * caller reopens the sign-in prompt for exactly these and a string comparison
+ * would quietly stop doing that the first time one of these sentences is
+ * reworded. A wrong password and an account without the necessary rights are
+ * the same problem from where the user is standing: the credentials in use are
+ * not the ones this job needs, and only they can supply better ones.
+ */
+const credentialError = (message) => Object.assign(new Error(message), { credentials: true })
+
+/**
  * Log in to the live server and read its whole database out.
  *
  * Kept separate from the import so a failure has an unambiguous side: either
@@ -138,11 +150,8 @@ export async function fetchLiveExport({ url, username, password }, { timeoutMs =
   })
   if (!login.ok) {
     const body = await login.json().catch(() => ({}))
-    throw new Error(
-      login.status === 401
-        ? 'The live server rejected that username or password.'
-        : (body.error ?? `Sign-in failed (${login.status}).`),
-    )
+    if (login.status === 401) throw credentialError('The live server rejected that username or password.')
+    throw new Error(body.error ?? `Sign-in failed (${login.status}).`)
   }
   const cookie = (login.headers.getSetCookie?.() ?? []).map((c) => c.split(';')[0]).join('; ')
 
@@ -152,11 +161,10 @@ export async function fetchLiveExport({ url, username, password }, { timeoutMs =
   })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
-    throw new Error(
-      res.status === 403
-        ? 'That account is not an admin on the live server, so it cannot export the database.'
-        : (body.error ?? `The live server refused the export (${res.status}).`),
-    )
+    if (res.status === 403)
+      throw credentialError('That account is not an admin on the live server, so it cannot export the database.')
+    if (res.status === 401) throw credentialError('The live server rejected that username or password.')
+    throw new Error(body.error ?? `The live server refused the export (${res.status}).`)
   }
   return res.json()
 }
@@ -250,6 +258,9 @@ async function liveJson(origin, path, cookie, init = {}) {
     signal: AbortSignal.timeout(120_000),
   })
   const body = await res.json().catch(() => ({}))
+  if (res.status === 401 || res.status === 403) {
+    throw credentialError(body.error ?? `The live server refused that account (${res.status}).`)
+  }
   if (!res.ok) throw new Error(body.error ?? `${path} failed (${res.status}).`)
   return body
 }
@@ -266,11 +277,8 @@ export async function liveSession({ url, username, password }) {
   })
   if (!login.ok) {
     const body = await login.json().catch(() => ({}))
-    throw new Error(
-      login.status === 401
-        ? 'The live server rejected that username or password.'
-        : (body.error ?? `Sign-in failed (${login.status}).`),
-    )
+    if (login.status === 401) throw credentialError('The live server rejected that username or password.')
+    throw new Error(body.error ?? `Sign-in failed (${login.status}).`)
   }
   return { origin, cookie: (login.headers.getSetCookie?.() ?? []).map((c) => c.split(';')[0]).join('; ') }
 }
