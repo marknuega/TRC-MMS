@@ -26,24 +26,31 @@
  * and the server's entry 5 are different entries and matching on it would
  * merge two people's work into one row.
  *
- * WHO WINS. The later syncRev — the moment the owning machine last changed the
- * entry, in its own clock. An entry is treated as ONE DOCUMENT: the winner's
- * faults replace the loser's outright rather than being merged fault by fault,
- * because a half-and-half list of faults is a device nobody worked on.
+ * WHO WINS. The higher syncRev — a COUNTER, bumped by one on every edit made
+ * on the machine that made it, never a wall clock. Ties go to the higher
+ * syncOrigin, so both machines reach the same verdict independently. Both
+ * rules live in compareRev, in syncClock.js.
  *
- * THE CLOCK. Last-write-wins on wall clocks is only as good as the clocks, and
- * a desktop PC's clock is not guaranteed to be anything. A machine running an
- * hour fast wins every conflict it is in, including the ones it should lose,
- * and nothing about the result looks wrong afterwards. skewOf() below measures
- * the difference and the caller refuses a sync that is badly out — which
- * converts a silent wrong answer into a message somebody can act on. It cannot
- * make LWW correct; it can stop it being confidently wrong.
+ * This used to be last-write-wins on timestamps, and the change is worth
+ * stating plainly: NOTHING HERE READS A CLOCK TO DECIDE A WINNER any more. A
+ * machine whose clock is wrong now syncs correctly rather than being refused,
+ * because its clock was never the thing that mattered — only the order of its
+ * own edits, which it can count without help. The only remaining use of wall
+ * time is pruning tombstones by age, which is a question about elapsed time
+ * and not about who is right.
+ *
+ * WHAT A COUNTER MEANS, since it is not the promise a timestamp made. The
+ * winner is the version with more edits behind it in its own lineage, not the
+ * one made most recently. A machine that goes away, edits an entry five times
+ * and comes back beats a machine that edited the same entry once yesterday.
+ * That is the intended reading: that machine did more work on the entry.
+ *
+ * AN ENTRY IS ONE DOCUMENT. The winner's faults replace the loser's outright
+ * rather than being merged fault by fault, because a half-and-half list of
+ * faults is a device nobody worked on.
  */
 
-// A machine more than this far from the server cannot be trusted to say which
-// of two edits came second. Five minutes is far wider than any real drift and
-// far narrower than the gap that does damage.
-export const MAX_CLOCK_SKEW_MS = 5 * 60 * 1000
+import { compareRev, nextSeq, syncOrigin } from './syncClock.js'
 
 // How long a deletion has to keep being announced. A machine that syncs less
 // often than this and then pushes would resurrect an entry deleted while it was
@@ -54,10 +61,18 @@ export const entryShape = {
   include: { faults: { orderBy: { position: 'asc' } } },
 }
 
-/** The fields an entry carries across, without the local-only id. */
+/*
+ * The fields an entry carries across.
+ *
+ * changeSeq is deliberately NOT here. It describes a position in the SENDING
+ * database's write order and means nothing in the receiving one, which stamps
+ * its own. Carrying it across would corrupt the receiver's paging for every
+ * later puller.
+ */
 const SCALARS = [
   'syncId',
   'syncRev',
+  'syncOrigin',
   'reportDate',
   'mode',
   'branch',
@@ -80,51 +95,63 @@ export const wireEntry = (e) => ({
   faults: (e.faults ?? []).map((f) => pick(f, FAULT_SCALARS)),
 })
 
-/**
- * How far the other machine's clock is from this one's, in milliseconds.
- *
- * Positive means the caller is ahead. Measured from a timestamp the caller
- * sends at the moment it sends it, so it includes the request's flight time —
- * which is the conservative direction: a slow link makes the skew look worse
- * and the sync more cautious, never less.
- */
-export const skewOf = (theirNow, now = Date.now()) => {
-  const t = Date.parse(String(theirNow ?? ''))
-  return Number.isNaN(t) ? null : t - now
+/** A revision number that can actually be compared, or null if it cannot. */
+const readRev = (value) => {
+  const n = Number(value)
+  return Number.isSafeInteger(n) && n >= 0 ? n : null
+}
+
+/** The highest change-sequence number this database has issued. */
+export async function currentSeq(prisma) {
+  const [entries, tombs] = await Promise.all([
+    prisma.reportEntry.aggregate({ _max: { changeSeq: true } }),
+    prisma.entryTombstone.aggregate({ _max: { changeSeq: true } }),
+  ])
+  return Math.max(entries._max.changeSeq ?? 0, tombs._max.changeSeq ?? 0)
 }
 
 /**
- * Everything that has changed since `since`, for the branches a caller may see.
+ * Everything written since `since`, for the branches a caller may see.
  *
- * `since` is exclusive of nothing — it is compared with >=, so an entry written
- * in the same millisecond as the last sync is sent again rather than missed.
- * Sending a row twice costs a comparison; missing one loses work.
+ * `since` is a changeSeq from THIS database, handed out by a previous pull —
+ * never the caller's own number, which counts a different database's writes and
+ * would skip or repeat by however far the two have diverged.
+ *
+ * Compared with `>=`, not `>`, and the returned mark is the highest sequence in
+ * use rather than one past it. Both together are what make a race harmless: two
+ * writers can be issued the same number, and only one of them may have landed
+ * when the mark was read. Re-sending the boundary row on the next pull costs a
+ * comparison; excluding it would silently lose the row that came second.
  */
 export async function pullChanges(prisma, { since, where = {} } = {}) {
-  const after = since ? new Date(since) : null
-  const timeFilter = after && !Number.isNaN(after.getTime()) ? { gte: after } : undefined
+  const after = readRev(since)
+  const seqFilter = after === null ? undefined : { gte: after }
 
   const entries = await prisma.reportEntry.findMany({
-    where: { ...where, ...(timeFilter ? { syncRev: timeFilter } : {}) },
+    where: { ...where, ...(seqFilter ? { changeSeq: seqFilter } : {}) },
     ...entryShape,
-    orderBy: { syncRev: 'asc' },
+    orderBy: { changeSeq: 'asc' },
   })
   const tombstones = await prisma.entryTombstone.findMany({
-    where: { ...(timeFilter ? { deletedAt: timeFilter } : {}) },
-    orderBy: { deletedAt: 'asc' },
+    where: { ...(seqFilter ? { changeSeq: seqFilter } : {}) },
+    orderBy: { changeSeq: 'asc' },
   })
   return {
-    // The server's clock, so the caller can both detect its own skew and know
-    // what to pass as `since` next time — using its own clock for that would
-    // skip or repeat rows by exactly the amount it is out.
-    now: new Date().toISOString(),
+    // What the caller passes as `since` next time.
+    seq: await currentSeq(prisma),
     entries: entries.map(wireEntry),
-    tombstones: tombstones.map((t) => ({ syncId: t.syncId, deletedAt: t.deletedAt, branch: t.branch, mode: t.mode })),
+    tombstones: tombstones.map((t) => ({
+      syncId: t.syncId,
+      syncRev: t.syncRev,
+      syncOrigin: t.syncOrigin,
+      branch: t.branch,
+      mode: t.mode,
+    })),
   }
 }
 
 /**
- * Apply a batch from the other machine, last-write-wins per entry.
+ * Apply a batch from the other machine — higher revision wins, per entry.
  *
  * Returns a per-entry verdict rather than a count, so the caller can say what
  * actually happened — "12 sent, 9 applied, 3 already newer here" is a sentence
@@ -139,24 +166,58 @@ export async function applyChanges(prisma, { entries = [], tombstones = [] } = {
   for (const t of tombstones) {
     const syncId = String(t?.syncId ?? '')
     if (!syncId) continue
-    const existing = await prisma.reportEntry.findUnique({ where: { syncId }, select: { branch: true, syncRev: true } })
+    const rev = readRev(t.syncRev)
+    if (rev === null) {
+      refused.push({ syncId, reason: 'unreadable syncRev' })
+      continue
+    }
+    const origin = String(t.syncOrigin ?? '')
+
+    const existing = await prisma.reportEntry.findUnique({
+      where: { syncId },
+      select: { branch: true, syncRev: true, syncOrigin: true },
+    })
     if (existing && !canWrite(existing.branch)) {
       refused.push({ syncId, reason: 'branch' })
       continue
     }
-    const at = new Date(t.deletedAt ?? Date.now())
     // A deletion loses to an edit made after it, exactly as an edit would. The
     // entry was deleted on one machine and then worked on again on the other;
-    // the later act is the one that stands.
-    if (existing && existing.syncRev > at) {
+    // the higher revision is the later act, and it stands.
+    if (existing && compareRev(existing.syncRev, existing.syncOrigin, rev, origin) > 0) {
       kept.push({ syncId, reason: 'edited after it was deleted' })
       continue
     }
+
+    // A grave already held at the same or a higher revision is the later word
+    // on this entry; an older repeat of the same deletion must not move it
+    // backwards. The row still goes, if somehow it is still here.
+    const grave = await prisma.entryTombstone.findUnique({ where: { syncId } })
+    if (grave && compareRev(grave.syncRev, grave.syncOrigin, rev, origin) >= 0) {
+      if (existing) {
+        await prisma.reportEntry.delete({ where: { syncId } })
+        removed.push(syncId)
+      } else {
+        kept.push({ syncId, reason: 'already deleted here' })
+      }
+      continue
+    }
+
     if (existing) await prisma.reportEntry.delete({ where: { syncId } })
+    const seq = await nextSeq(prisma)
+    const deletedAt = new Date()
     await prisma.entryTombstone.upsert({
       where: { syncId },
-      create: { syncId, branch: t.branch ?? '', mode: t.mode ?? 'report', deletedAt: at },
-      update: { deletedAt: at },
+      create: {
+        syncId,
+        branch: t.branch ?? '',
+        mode: t.mode ?? 'report',
+        syncRev: rev,
+        syncOrigin: origin,
+        changeSeq: seq,
+        deletedAt,
+      },
+      update: { syncRev: rev, syncOrigin: origin, changeSeq: seq, deletedAt },
     })
     removed.push(syncId)
   }
@@ -164,36 +225,38 @@ export async function applyChanges(prisma, { entries = [], tombstones = [] } = {
   for (const e of entries) {
     const syncId = String(e?.syncId ?? '')
     if (!syncId) continue
-    const rev = new Date(e.syncRev ?? 0)
-    if (Number.isNaN(rev.getTime())) {
+    const rev = readRev(e.syncRev)
+    if (rev === null) {
       refused.push({ syncId, reason: 'unreadable syncRev' })
       continue
     }
+    const origin = String(e.syncOrigin ?? '')
     if (!canWrite(e.branch ?? '')) {
       refused.push({ syncId, reason: 'branch' })
       continue
     }
 
-    // An entry deleted HERE after the incoming edit stays deleted: the
+    // An entry deleted HERE at the same or a higher revision stays deleted: the
     // tombstone is the later act. Without this the entry comes back on every
     // sync from a machine that has not yet heard about the deletion.
     const grave = await prisma.entryTombstone.findUnique({ where: { syncId } })
-    if (grave && grave.deletedAt >= rev) {
+    if (grave && compareRev(grave.syncRev, grave.syncOrigin, rev, origin) >= 0) {
       kept.push({ syncId, reason: 'deleted here more recently' })
       continue
     }
 
     const existing = await prisma.reportEntry.findUnique({
       where: { syncId },
-      select: { id: true, syncRev: true, branch: true },
+      select: { id: true, syncRev: true, syncOrigin: true, branch: true },
     })
     if (existing && !canWrite(existing.branch)) {
       refused.push({ syncId, reason: 'branch' })
       continue
     }
-    if (existing && existing.syncRev >= rev) {
-      // Ours is the same or newer. Equal counts as ours on purpose: a re-sent
-      // identical row must not churn the record or move its revision forward.
+    if (existing && compareRev(existing.syncRev, existing.syncOrigin, rev, origin) >= 0) {
+      // Ours is the same or higher. Equal-and-same-origin counts as ours on
+      // purpose: a re-sent identical row must not churn the record or move its
+      // revision forward.
       kept.push({ syncId, reason: 'newer here' })
       continue
     }
@@ -201,7 +264,14 @@ export async function applyChanges(prisma, { entries = [], tombstones = [] } = {
     const data = {
       ...pick(e, SCALARS),
       reportDate: new Date(e.reportDate),
+      // The incoming revision travels verbatim. Re-stamping it with a local
+      // number would make this machine claim authorship of somebody else's
+      // edit, and the two ends would then disagree about what happened.
       syncRev: rev,
+      syncOrigin: origin,
+      // The sequence, by contrast, is this database's own: it says where this
+      // write sits in OUR write order, which is what our next puller reads.
+      changeSeq: await nextSeq(prisma),
       faults: { create: (e.faults ?? []).map((f) => pick(f, FAULT_SCALARS)) },
     }
     if (existing) {
@@ -225,9 +295,16 @@ export async function applyChanges(prisma, { entries = [], tombstones = [] } = {
   return { applied, kept, refused, removed }
 }
 
-/** Drop tombstones older than the window a copy is allowed to be away for. */
+/**
+ * Drop tombstones older than the window a copy is allowed to be away for.
+ *
+ * The one place wall time is still consulted, and legitimately so: this asks
+ * how long ago something happened, not which of two things happened later.
+ */
 export async function pruneTombstones(prisma, days = TOMBSTONE_DAYS) {
   const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
   const { count } = await prisma.entryTombstone.deleteMany({ where: { deletedAt: { lt: cutoff } } })
   return count
 }
+
+export { compareRev, nextSeq, syncOrigin }

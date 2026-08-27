@@ -6,6 +6,7 @@ import { branchWhere, writeBranch, canAccessBranch } from '../scope.js'
 import { parseEntry, createEntry, ensureReportSeq, withFaults, repId, dateKey } from '../reportEntry.js'
 
 import { buryEntries } from '../entryTombstones.js'
+import { nextSeq, syncOrigin } from '../syncClock.js'
 
 const router = Router()
 
@@ -95,10 +96,17 @@ router.put('/:id', async (req, res, next) => {
       const seq = await ensureReportSeq(tx, data.reportDate)
       const entry = await tx.reportEntry.update({
         where: { id },
-        // syncRev is stamped on every edit made HERE. It is what a two-way sync
-        // compares to decide which of two versions is the later one, so an edit
-        // that does not move it is an edit the other machine would never see.
-        data: { ...scalar, syncRev: new Date(), faults: { deleteMany: {}, create: faults.create } },
+        // Every edit made HERE advances the counter by one and signs it with
+        // this installation. That pair is what a two-way sync compares to
+        // decide which of two versions is the later one, so an edit that does
+        // not move the revision is an edit the other machine would never see.
+        data: {
+          ...scalar,
+          syncRev: { increment: 1 },
+          syncOrigin: syncOrigin(),
+          changeSeq: await nextSeq(tx),
+          faults: { deleteMany: {}, create: faults.create },
+        },
         include: withFaults,
       })
       return { ...entry, reportId: repId(seq) }

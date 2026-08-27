@@ -217,24 +217,34 @@ const LABELS = {
  *
  * The exchange, in the order it has to happen:
  *
- *   1. read what changed HERE since the last sync — before anything lands, or
+ *   1. read what changed HERE since our last push — before anything lands, or
  *      the rows that just arrived get pushed straight back
  *   2. ask live what changed THERE
- *   3. apply live's changes here, last-write-wins per entry
+ *   3. apply live's changes here, higher revision wins per entry
  *   4. push ours
- *   5. remember the SERVER's clock as the mark, not ours — paging by our own
- *      would skip or repeat rows by exactly the amount we are out
+ *   5. keep BOTH marks, each in the counter of the database it belongs to
+ *
+ * TWO MARKS, NOT ONE, and this is the part that changed when the ordering
+ * became a counter. There is no longer a shared clock both machines can page
+ * by. Each database numbers its OWN writes, so "everything since 41" means
+ * something different on each side and the two numbers cannot be swapped or
+ * merged. We therefore remember how far we have read of theirs and how far we
+ * have pushed of ours, separately.
+ *
+ * A SMALL, BOUNDED ECHO is accepted on purpose. Both marks are taken BEFORE
+ * anything is applied, so the rows that arrive during this sync fall above our
+ * local mark and get offered back once, on the next sync — where the far side
+ * sees an identical revision and keeps its own. It costs one comparison per row
+ * for one round and then stops. Taking the marks afterwards would close it, and
+ * would also silently swallow anything typed on this machine while the sync was
+ * in flight. Re-sending a row is cheap; losing somebody's entry is not.
  */
-
-/** The header the server measures clock skew from. See clockProblem in routes/entrySync.js. */
-const nowHeader = () => ({ 'x-sync-now': new Date().toISOString() })
 
 async function liveJson(origin, path, cookie, init = {}) {
   const res = await fetch(`${origin}${path}`, {
     ...init,
     headers: {
       ...(init.body ? { 'content-type': 'application/json' } : {}),
-      ...nowHeader(),
       ...(cookie ? { cookie } : {}),
     },
     signal: AbortSignal.timeout(120_000),
@@ -272,16 +282,22 @@ export async function liveSession({ url, username, password }) {
  * @param deps   { prisma, applyChanges, pullChanges } — the LOCAL database and
  *               the same two functions the server route uses, so both ends
  *               resolve a conflict by one rule rather than two that agree today
- * @param since  ISO mark from the last successful sync, or null for everything
+ * @param marks  { localSeq, serverSeq } from the last successful sync, or nulls
+ *               for everything. They are counters in two different databases
+ *               and are never interchangeable — see the note above.
  */
-export async function syncEntries(creds, { prisma, applyChanges, pullChanges }, { since = null } = {}) {
+export async function syncEntries(
+  creds,
+  { prisma, applyChanges, pullChanges },
+  { localSeq = null, serverSeq = null } = {},
+) {
   const { origin, cookie } = await liveSession(creds)
 
-  // 1. Ours first — before anything from live lands here.
-  const ours = await pullChanges(prisma, { since })
+  // 1. Ours first — read before anything from live lands here.
+  const ours = await pullChanges(prisma, { since: localSeq })
 
   // 2 + 3. Theirs, applied here.
-  const qs = since ? `?since=${encodeURIComponent(since)}` : ''
+  const qs = serverSeq === null ? '' : `?since=${encodeURIComponent(serverSeq)}`
   const theirs = await liveJson(origin, `/api/sync/entries${qs}`, cookie)
   const down = await applyChanges(prisma, { entries: theirs.entries, tombstones: theirs.tombstones })
 
@@ -293,9 +309,10 @@ export async function syncEntries(creds, { prisma, applyChanges, pullChanges }, 
 
   return {
     origin,
-    // The server's clock. Ours is not the authority on when the server last
-    // changed, and using it would drop rows written in the gap between them.
-    mark: up.now ?? theirs.now,
+    // Each mark in its own database's counter, both as they stood before this
+    // exchange wrote anything.
+    localSeq: ours.seq,
+    serverSeq: theirs.seq,
     down: { applied: down.applied.length, removed: down.removed.length, kept: down.kept.length },
     up: { applied: up.applied.length, removed: up.removed.length, kept: up.kept.length, refused: up.refused.length },
   }

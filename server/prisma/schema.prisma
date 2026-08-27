@@ -218,14 +218,25 @@ model ReportEntry {
   // A uuid is minted where the entry is CREATED and never changes, so the same
   // entry is the same entry whichever database it is sitting in.
   syncId     String   @unique @default(uuid()) @map("sync_id")
-  // When the owning machine last changed this entry, in ITS clock. The winner
-  // of a two-way sync is the later of these — see server/src/entrySync.js, and
-  // read the clock-skew note there before trusting it.
+  // The entry's revision: a COUNTER, not a clock. Bumped by one on every edit
+  // made here, carried across verbatim when an edit arrives from elsewhere.
+  // The higher number wins a conflict — see server/src/entrySync.js.
   //
-  // Separate from updatedAt, which Prisma stamps with the LOCAL clock on every
-  // write: a synced-in entry would have its origin time overwritten the instant
-  // it landed, and the next sync back would think it was newer than it is.
-  syncRev    DateTime @default(now()) @map("sync_rev")
+  // A counter rather than a timestamp because a timestamp is only as good as
+  // the two machines' clocks, and a desktop PC's clock is not guaranteed to be
+  // anything. Nothing here consults a clock to decide who wins.
+  syncRev    Int      @default(1) @map("sync_rev")
+  // Which installation produced this revision. Only ever read to break a tie:
+  // two machines can both take rev 3 to rev 4 while offline, and the counter
+  // alone cannot separate them. Compared as text, higher wins, so both ends
+  // reach the same verdict without either asking the other.
+  syncOrigin String   @default("") @map("sync_origin")
+  // This DATABASE's change sequence, which is a different job from syncRev:
+  // syncRev orders the versions OF ONE ENTRY, changeSeq orders WRITES ACROSS
+  // ALL entries so a puller can ask for "everything since". A per-entry counter
+  // cannot answer that — entry A at rev 5 and entry B at rev 2 say nothing
+  // about which was written first.
+  changeSeq  Int      @default(0) @map("change_seq")
   reportDate DateTime @map("report_date") @db.Date
   mode       String   @default("report") // report | transmittal — separate working sets
   branch     String   @default("") // owning branch; non-admins are scoped to their own
@@ -243,6 +254,7 @@ model ReportEntry {
   @@index([reportDate])
   @@index([mode])
   @@index([branch])
+  @@index([changeSeq])
   @@map("report_entries")
 }
 
@@ -262,12 +274,23 @@ model ReportEntry {
  * grow for the life of the installation.
  */
 model EntryTombstone {
-  syncId    String   @id @map("sync_id")
-  branch    String   @default("")
-  mode      String   @default("report")
-  deletedAt DateTime @default(now()) @map("deleted_at")
+  syncId     String   @id @map("sync_id")
+  branch     String   @default("")
+  mode       String   @default("report")
+  // A deletion is an edit, and is versioned like one: the dead entry's syncRev
+  // plus one. That is what lets "deleted there" and "edited here" be compared
+  // at all — the higher number is the later act, by the same rule that decides
+  // between two edits.
+  syncRev    Int      @default(1) @map("sync_rev")
+  syncOrigin String   @default("") @map("sync_origin")
+  changeSeq  Int      @default(0) @map("change_seq")
+  // Kept for PRUNING only, never to decide a winner. Dropping a tombstone once
+  // it is older than any copy could plausibly be is a question about elapsed
+  // time, and a wall clock is the right instrument for it.
+  deletedAt  DateTime @default(now()) @map("deleted_at")
 
   @@index([deletedAt])
+  @@index([changeSeq])
   @@map("entry_tombstones")
 }
 

@@ -20,6 +20,9 @@ import { mergeOptions } from '../../../client/src/options.js'
 import { CODEMAP_SEED } from '../codemapSeed.js'
 
 import { buryEntries } from '../entryTombstones.js'
+// Aliased: this module already has a nextSeq(), which mints REP numbers and
+// is an entirely different sequence from the sync one.
+import { nextSeq as nextChangeSeq, syncOrigin } from '../syncClock.js'
 
 const router = Router()
 
@@ -603,12 +606,21 @@ router.post('/:id/load', async (req, res, next) => {
       // them back in on its next sync.
       await buryEntries(tx, { mode, branch })
       await tx.reportEntry.deleteMany({ where: { mode, branch } })
+      // Loading mints brand new entries, so each one needs what a new entry
+      // gets anywhere else: this installation's signature, and a place in this
+      // database's write order. Left at the column default a restored entry
+      // would sit at sequence 0 — below every mark a puller could hold — and
+      // would simply never reach the other machine, silently, for good.
+      const origin = syncOrigin()
+      let changeSeq = await nextChangeSeq(tx)
       for (const e of snapshot) {
         await tx.reportEntry.create({
           data: {
             reportDate: new Date(e.reportDate),
             mode,
             branch,
+            syncOrigin: origin,
+            changeSeq: changeSeq++,
             technician: e.technician ?? '',
             agency: e.agency ?? '',
             telNumber: e.telNumber || '-',

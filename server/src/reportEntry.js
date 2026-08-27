@@ -17,6 +17,7 @@
 // route owns only what is request-shaped: which branch the caller may write to.
 
 import { prisma } from './db.js'
+import { nextSeq, syncOrigin } from './syncClock.js'
 // A stand-in Tel prefix is typed to select a model the real prefix cannot name
 // (107 the SRG3900 bike, 108 the desktop) and is swapped back for the real one
 // here, at the one point every entry passes through — the browser's POST and
@@ -158,7 +159,14 @@ export async function ensureReportSeq(tx, reportDate) {
 export async function createEntry(data) {
   return prisma.$transaction(async (tx) => {
     const seq = await ensureReportSeq(tx, data.reportDate)
-    const entry = await tx.reportEntry.create({ data, include: withFaults })
+    // A new entry starts at revision 1 (the schema default) and is signed with
+    // the installation that created it, so the very first two-way sync can
+    // already say where it came from. changeSeq is this database's own write
+    // order, which is what a puller pages by. See syncClock.js.
+    const entry = await tx.reportEntry.create({
+      data: { ...data, syncOrigin: syncOrigin(), changeSeq: await nextSeq(tx) },
+      include: withFaults,
+    })
     return { ...entry, reportId: repId(seq) }
   })
 }
