@@ -2305,7 +2305,14 @@ button.sync-pill {
 }
 .search-results li {
   display: grid;
-  grid-template-columns: 2fr 1fr 0.9fr 0.9fr 0.4fr 1.3fr auto;
+  /* The last column is a FIXED width, not `auto`. Every row is its own grid, so
+     an auto column is measured per row: the header's last cell is empty and
+     collapsed to nothing, which left its share of the width to be divided among
+     the columns above — so every header sat a little to the right of the column
+     it named. A fixed track resolves to the same width in a row that holds the
+     Load button and in the header that holds nothing, which is what makes the
+     two line up. Wide enough for the button at its longest label. */
+  grid-template-columns: 2fr 1fr 0.9fr 0.9fr 0.4fr 1.3fr 4.4rem;
   gap: 0.6rem;
   align-items: center;
   padding: 0.55rem 0.8rem;
@@ -2321,7 +2328,10 @@ button.sync-pill {
 }
 .search-results-head {
   background: transparent !important;
-  border: 0 !important;
+  /* Transparent, NOT removed: dropping the border would take 1px off each side
+     of the header's content box and shift every column against the rows below
+     by exactly that much. The line goes; the space it occupied stays. */
+  border-color: transparent !important;
   padding-bottom: 0.15rem !important;
   font-weight: 700;
   text-transform: uppercase;
@@ -4740,4 +4750,102 @@ button.sync-pill {
 }
 :root[data-theme='dark'] .update-banner {
   color: #93c5fd;
+}
+
+/* ── Backup & restore ────────────────────────────────────────────
+   Sits under Users & Access. Deliberately plain: the only thing on it that
+   needs to catch the eye is the count table, which is what stops somebody
+   restoring the wrong file. */
+.backup-panel {
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
+}
+.backup-counts {
+  border-collapse: collapse;
+  margin: 0.75rem 0 1rem;
+  font-size: 0.88rem;
+}
+.backup-counts th[scope='row'] {
+  text-align: left;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 0.2rem 1.25rem 0.2rem 0;
+}
+.backup-counts th[scope='col'] {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  padding: 0 0 0.2rem 1rem;
+  text-align: right;
+}
+.backup-counts td {
+  padding: 0.2rem 0 0.2rem 1rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+/* The number that is about to replace the one beside it. Coloured because the
+   comparison IS the safeguard — a file with three entries against a database
+   with twelve hundred should not read as two neutral columns. */
+.backup-counts .backup-incoming {
+  font-weight: 700;
+  color: var(--primary);
+}
+.backup-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.backup-restore {
+  margin-top: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: flex-start;
+  max-width: 46rem;
+}
+.backup-file span,
+.backup-confirm span {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 0.25rem;
+}
+.backup-confirm input {
+  width: 12rem;
+  height: 2.3rem;
+  padding: 0 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+.backup-keep {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--text-h);
+}
+.backup-warn {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.4rem;
+  border: 1px solid color-mix(in srgb, var(--danger, #c0392b) 45%, var(--border));
+  background: color-mix(in srgb, var(--danger, #c0392b) 8%, transparent);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.backup-ok,
+.backup-bad {
+  margin: 0.9rem 0 0;
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+.backup-ok {
+  color: var(--ok, #1a7f4b);
+}
+.backup-bad {
+  color: var(--danger, #c0392b);
 }
