@@ -79,7 +79,118 @@ const STEPS = [
       (await hasColumn(prisma, 'report_entries', 'sync_rev')) &&
       (await hasTable(prisma, 'entry_tombstones')),
   },
+  {
+    name: 'entry sync counter (sync_origin, change_seq, sync_rev as a number)',
+    // sync_rev stops being a moment and becomes a count of edits, so that no
+    // clock decides which of two versions wins. See server/src/syncClock.js.
+    columns: [
+      ['report_entries', 'sync_origin', `TEXT NOT NULL DEFAULT ''`],
+      ['report_entries', 'change_seq', 'INTEGER NOT NULL DEFAULT 0'],
+      ['entry_tombstones', 'sync_origin', `TEXT NOT NULL DEFAULT ''`],
+      ['entry_tombstones', 'change_seq', 'INTEGER NOT NULL DEFAULT 0'],
+      ['entry_tombstones', 'sync_rev', 'INTEGER NOT NULL DEFAULT 1'],
+    ],
+    sql: [
+      /*
+       * The conversion, and the reason it is a CASE rather than one expression.
+       *
+       * The values in sync_rev were not written by one hand. The step above
+       * filled them from updated_at/created_at — which Prisma stores as INTEGER
+       * milliseconds — or from CURRENT_TIMESTAMP, which SQLite writes as TEXT.
+       * A column can therefore hold both, because SQLite types values and not
+       * columns, and a single strftime() would silently mangle the integers
+       * while looking perfectly correct on the text.
+       *
+       * Seconds since 2023-11-14 (epoch 1700000000), matching the server's
+       * migration exactly. That correspondence is the point: both ends convert
+       * the same underlying instants the same way, so the first sync after the
+       * cutover still orders shared entries as it would have before. Resetting
+       * everything to 1 instead would tie the entire working set at once.
+       *
+       * The WHERE is what makes it safe to run twice — a converted value is
+       * around 77 million and matches neither branch again.
+       */
+      `UPDATE "report_entries"
+          SET "sync_rev" = MAX(1, COALESCE(
+                CASE
+                  WHEN typeof("sync_rev") IN ('integer', 'real') AND "sync_rev" > 100000000000
+                    THEN CAST("sync_rev" / 1000 AS INTEGER) - 1700000000
+                  WHEN typeof("sync_rev") = 'text'
+                    THEN CAST(strftime('%s', "sync_rev") AS INTEGER) - 1700000000
+                END, 1))
+        WHERE typeof("sync_rev") = 'text'
+           OR (typeof("sync_rev") IN ('integer', 'real') AND "sync_rev" > 100000000000)`,
+      `UPDATE "entry_tombstones"
+          SET "sync_rev" = MAX(1, COALESCE(
+                CASE
+                  WHEN typeof("deleted_at") IN ('integer', 'real') AND "deleted_at" > 100000000000
+                    THEN CAST("deleted_at" / 1000 AS INTEGER) - 1700000000
+                  WHEN typeof("deleted_at") = 'text'
+                    THEN CAST(strftime('%s', "deleted_at") AS INTEGER) - 1700000000
+                END, 1))
+        WHERE "sync_rev" = 1`,
+      /*
+       * Whose edits these are.
+       *
+       * A function rather than a string because STEPS is built when this module
+       * is imported and SYNC_ORIGIN is not set until the server starts — a
+       * literal here would bake in an empty origin every time.
+       *
+       * It matters that this is not left blank: an empty origin sorts below
+       * every other, so this machine would quietly lose every tie for work it
+       * did before the upgrade.
+       */
+      () => `UPDATE "report_entries" SET "sync_origin" = '${originLiteral()}' WHERE "sync_origin" = ''`,
+      () => `UPDATE "entry_tombstones" SET "sync_origin" = '${originLiteral()}' WHERE "sync_origin" = ''`,
+      // One sequence shared by both tables, so a puller carries a single mark.
+      // Entries take their existing revision order, tombstones continue past
+      // them, and every later write takes MAX+1 across the two.
+      `UPDATE "report_entries"
+          SET "change_seq" = (SELECT COUNT(*) FROM "report_entries" AS r
+                               WHERE r."sync_rev" < "report_entries"."sync_rev"
+                                  OR (r."sync_rev" = "report_entries"."sync_rev" AND r."id" <= "report_entries"."id"))
+        WHERE "change_seq" = 0`,
+      `UPDATE "entry_tombstones"
+          SET "change_seq" = (SELECT COALESCE(MAX("change_seq"), 0) FROM "report_entries")
+                           + (SELECT COUNT(*) FROM "entry_tombstones" AS t
+                               WHERE t."deleted_at" < "entry_tombstones"."deleted_at"
+                                  OR (t."deleted_at" = "entry_tombstones"."deleted_at"
+                                      AND t."sync_id" <= "entry_tombstones"."sync_id"))
+        WHERE "change_seq" = 0`,
+      `CREATE INDEX IF NOT EXISTS "report_entries_change_seq_idx" ON "report_entries"("change_seq")`,
+      `CREATE INDEX IF NOT EXISTS "entry_tombstones_change_seq_idx" ON "entry_tombstones"("change_seq")`,
+    ],
+    /*
+     * Done means CONVERTED, not merely "the columns are there".
+     *
+     * Checking the catalogue alone would mark this finished after a crash
+     * between the ALTERs and the UPDATEs, leaving millisecond timestamps in a
+     * column the app now reads as a count of edits — every one of them an
+     * astronomically high revision that would beat the live server at
+     * everything, forever, and look like an ordinary number while doing it.
+     */
+    done: async (prisma) =>
+      (await hasColumn(prisma, 'report_entries', 'sync_origin')) &&
+      (await hasColumn(prisma, 'report_entries', 'change_seq')) &&
+      (await hasColumn(prisma, 'entry_tombstones', 'sync_origin')) &&
+      (await hasColumn(prisma, 'entry_tombstones', 'change_seq')) &&
+      (await hasColumn(prisma, 'entry_tombstones', 'sync_rev')) &&
+      (await isConverted(prisma)),
+  },
 ]
+
+/** This installation's id, reduced to what is safe to paste into SQL. */
+const originLiteral = () => String(process.env.SYNC_ORIGIN || '').replace(/[^a-zA-Z0-9_-]/g, '')
+
+/** True once no sync_rev anywhere still holds a millisecond timestamp. */
+async function isConverted(prisma) {
+  const rows = await prisma.$queryRawUnsafe(
+    `SELECT COUNT(*) AS n FROM "report_entries"
+      WHERE typeof("sync_rev") = 'text'
+         OR (typeof("sync_rev") IN ('integer', 'real') AND "sync_rev" > 100000000000)`,
+  )
+  return Number(rows?.[0]?.n ?? 0) === 0
+}
 
 async function hasColumn(prisma, table, column) {
   const rows = await prisma.$queryRawUnsafe(`PRAGMA table_info("${table}")`)
@@ -109,7 +220,9 @@ export async function upgradeSchema(prisma) {
       if (await hasColumn(prisma, table, column)) continue
       await prisma.$executeRawUnsafe(`ALTER TABLE "${table}" ADD COLUMN "${column}" ${type}`)
     }
-    for (const sql of step.sql) await prisma.$executeRawUnsafe(sql)
+    // A step may carry a statement as a function when it depends on something
+    // that is not known at import time — see the origin backfill above.
+    for (const sql of step.sql) await prisma.$executeRawUnsafe(typeof sql === 'function' ? sql() : sql)
     ran.push(step.name)
   }
   return ran

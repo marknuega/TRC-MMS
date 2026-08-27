@@ -98,7 +98,7 @@ function loadConfig() {
   mkdirSync(userData, { recursive: true })
   if (existsSync(CONFIG_PATH)) {
     try {
-      return JSON.parse(readFileSync(CONFIG_PATH, 'utf8'))
+      return withInstallId(JSON.parse(readFileSync(CONFIG_PATH, 'utf8')))
     } catch {
       // Corrupt config: fall through and rebuild it. Losing the secret only
       // signs everyone out, which is recoverable; refusing to start is not.
@@ -110,10 +110,36 @@ function loadConfig() {
     // will reach the same number independently. This tag is what tells their
     // documents apart after the fact.
     deviceTag: randomBytes(2).toString('hex').toUpperCase(),
+    installId: newInstallId(),
     createdAt: new Date().toISOString(),
   }
   writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf8')
   return config
+}
+
+/*
+ * Who this installation is, for the purpose of breaking a sync tie.
+ *
+ * Distinct from deviceTag, which is four hex characters and exists to tell two
+ * machines' REP numbers apart on paper. Four characters collide about once in
+ * 65,536, and a collision here is not cosmetic: two installs sharing an origin
+ * cannot break a tie at all, so each would keep its own version of a tied entry
+ * and the pair would stay quietly split while syncing cleanly every time. 128
+ * bits removes that as something to think about.
+ *
+ * Lower-case hex on purpose. The comparison is textual and the live server
+ * answers to 'live', which sorts above every hex digit — so a genuine tie goes
+ * to the server, which is the copy more people can see. See compareRev in
+ * server/src/syncClock.js.
+ */
+const newInstallId = () => randomBytes(16).toString('hex')
+
+/** Backfill an install id into a config written before entries synced by counter. */
+function withInstallId(config) {
+  if (config.installId) return config
+  const filled = { ...config, installId: newInstallId() }
+  writeFileSync(CONFIG_PATH, JSON.stringify(filled, null, 2), 'utf8')
+  return filled
 }
 
 // ── The database ─────────────────────────────────────────────────
@@ -142,6 +168,12 @@ async function startServer(config) {
   // it hides the sync UI and stops trusting navigator.onLine — which is false
   // on a PC with no network even though this server is a millimetre away.
   process.env.APP_EDITION = 'desktop'
+
+  // Which installation the shared sync code should sign its edits with. Passed
+  // in through the environment exactly as DATABASE_URL is, so server/src runs
+  // here byte for byte as it runs on Railway — where nothing sets it and the
+  // default, 'live', is correct. See server/src/syncClock.js.
+  process.env.SYNC_ORIGIN = config.installId
 
   // This build generates its own SQLite Prisma client into app/generated/prisma
   // (see make-sqlite-schema.mjs for why it is not in the default location).
@@ -485,10 +517,16 @@ async function syncEntriesWithLive(win, { silent = false } = {}) {
   }
 
   try {
+    // Two marks, each a counter in its own database, and never interchangeable
+    // — see the note in sync.js. A config written before the counter existed
+    // has neither, and starting from nothing is the right answer: the first
+    // sync then compares every entry by revision rather than trusting a mark
+    // that counted something else.
     const result = await syncEntries({ url, username: stored.username, password }, await entrySyncDeps(), {
-      since: stored.entriesSyncedAt ?? null,
+      localSeq: stored.entriesLocalSeq ?? null,
+      serverSeq: stored.entriesServerSeq ?? null,
     })
-    writeSync(CONFIG_PATH, { entriesSyncedAt: result.mark })
+    writeSync(CONFIG_PATH, { entriesLocalSeq: result.localSeq, entriesServerSeq: result.serverSeq })
     if (!silent) {
       await dialog.showMessageBox(win, {
         type: 'info',
@@ -496,7 +534,7 @@ async function syncEntriesWithLive(win, { silent = false } = {}) {
         message: `Exchanged with ${result.origin}`,
         detail: `${describeExchange(result)}
 
-Where the same entry was changed in both places, the later edit won.`,
+Where the same entry was changed in both places, the version with more edits behind it won.`,
         buttons: ['Close'],
         noLink: true,
       })
