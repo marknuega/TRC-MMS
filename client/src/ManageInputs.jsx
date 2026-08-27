@@ -30,6 +30,7 @@ import {
   optionPrefixes,
   optionIssiPrefixes,
   optionStandIns,
+  optionStandInRules,
   optionStandInReal,
   optionFullForm,
   technicianName,
@@ -889,9 +890,17 @@ export default function ManageInputs({
             {/* An arrow rather than a bare pair: the row has to say
                             which of the two digits is typed and which is stored,
                             and 107 → 109 says it without a legend. */}
-            {hasStandIn && optionStandIns(value).length > 0 && optionStandInReal(value) && (
+            {hasStandIn && optionStandInRules(value).length > 0 && (
               <span className="manage-item-code" title="Stand-in prefixes, and what they are stored as">
-                {optionStandIns(value).join(' / ')} → {optionStandInReal(value)}
+                {/* Read off the RULES rather than the stored list, so the device
+                    letter appears here beside the digits it works exactly like.
+                    It is not in the stored list on purpose — nobody typed it —
+                    but it is a rule this row follows, and a row that does not
+                    show it leaves the admin to find out by trying. */}
+                {optionStandInRules(value)
+                  .map((r) => r.standIn)
+                  .join(' / ')}{' '}
+                → {optionStandInRules(value)[0].real}
               </span>
             )}
             {/* Labelled, so the digits say which number they answer
@@ -1533,9 +1542,11 @@ export default function ManageInputs({
               a TH1N. The Type then follows from the Model as it always has. Give one as many prefixes as it needs,
               separated by commas; 2 to 6 digits each, and the longest one that matches wins, so a narrower range can
               sit inside a wider one. Two models may share a prefix — the one higher up this list is the one selected,
-              and the other is a dropdown away. Leave it blank for a model no number identifies. A Tel number names the{' '}
-              <strong>device and nothing else</strong>: whose radio it is comes off the ISSI, on the Agencies list. This
-              is where a new device is taught to the auto-select — nothing else needs changing.
+              and the other is a dropdown away. Leave it blank for a model no number identifies. Every model also
+              answers to its <strong>device letter</strong> — the one in front of its CDS codes — so <code>H</code> is a
+              TH1N and <code>T</code> an STP9000, and typing it stores the real prefix just as a digit shorthand does. A
+              Tel number names the <strong>device and nothing else</strong>: whose radio it is comes off the ISSI, on
+              the Agencies list. This is where a new device is taught to the auto-select — nothing else needs changing.
               {newPrefixes.trim() && <span className="manage-code-hint"> {prefixShareHint(newPrefixes)}</span>}
             </p>
           )}
