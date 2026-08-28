@@ -2858,7 +2858,9 @@ function App({ user, onLogout }) {
           </div>
         </aside>
 
-        <main className={`page-main app${WIDE_PAGES.has(page) ? ' wide' : ''}`}>
+        <main
+          className={`page-main app${WIDE_PAGES.has(page) ? ' wide' : ''}${page === 'monthly' ? ' fixed-viewport' : ''}`}
+        >
           <UpdateBanner />
           {error && <p className="error">{error}</p>}
           <WireIssiOffer wire={wire} onAgree={agreeWire} onDismiss={() => setWire(null)} />
@@ -3870,7 +3872,9 @@ function App({ user, onLogout }) {
                     ) : (
                       <>
                         Activity counts per terminal, built from your saved <strong>reports</strong> for{' '}
-                        {periodLabel(monthPeriod)}. Model cells = total part quantity; Install/Dismantle are per brand.
+                        {periodLabel(monthPeriod)}. Model cells = devices repaired/programmed that day (one device
+                        counts once, however many parts it took — the printed report's Device Summary counts parts
+                        instead, so the two totals are not meant to match); Install/Dismantle are per brand.
                         {matrix.kind === 'year' &&
                           ' One row per month; the activity-description column is per-day, so it is blank here.'}
                       </>
