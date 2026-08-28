@@ -594,6 +594,8 @@ function App({ user, onLogout }) {
   const [editForm, setEditForm] = useState(null)
   const lastEntriesSig = useRef('') // baseline for the live-refresh poll
   const lastSavedSig = useRef('') // baseline for saved-report changes (any source)
+  const lastOptionsSig = useRef('') // baseline for the Manage Inputs live-refresh poll
+  const optionsSaving = useRef(false) // true from the moment a save PUT is sent until it settles
 
   // Plain users are pinned to their own branch everywhere.
   useEffect(() => {
@@ -1257,7 +1259,10 @@ function App({ user, onLogout }) {
     refreshSaved()
     refreshInventory()
     getOptions()
-      .then((stored) => setOptions(mergeOptions(stored)))
+      .then((stored) => {
+        lastOptionsSig.current = JSON.stringify(stored)
+        setOptions(mergeOptions(stored))
+      })
       .catch(() => {})
   }
 
@@ -1316,6 +1321,39 @@ function App({ user, onLogout }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, busy, branch, isAllBranches, region])
+
+  // Live refresh: poll Manage Inputs (models, prefixes, stand-ins, agencies,
+  // issue types, ...) every 5s so a change saved from another tab or device —
+  // or a change this tab just saved itself — is reflected everywhere without a
+  // reload. Skipped while a local edit is pending or in flight (saveTimer /
+  // optionsSaving), so a poll can never clobber an edit the user is mid-typing.
+  useEffect(() => {
+    let cancelled = false
+    const poll = async () => {
+      if (document.hidden || saveTimer.current || optionsSaving.current) return
+      try {
+        const stored = await getOptions()
+        if (cancelled) return
+        const sig = JSON.stringify(stored)
+        if (lastOptionsSig.current && sig !== lastOptionsSig.current) {
+          setOptions(mergeOptions(stored))
+        }
+        lastOptionsSig.current = sig
+      } catch {
+        /* offline or transient — try again next tick */
+      }
+    }
+    const id = setInterval(poll, 5000)
+    const onVisible = () => {
+      if (!document.hidden) poll() // catch up the moment the tab is focused
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      cancelled = true
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [])
 
   // Narrowing to another region changes what the server may return, so the
   // entries and the stock have to be re-fetched under it — the saved list does
@@ -1439,7 +1477,16 @@ function App({ user, onLogout }) {
       const next = { ...prev, [key]: list }
       clearTimeout(saveTimer.current)
       saveTimer.current = setTimeout(() => {
-        saveOptions(next).catch((err) => setError(`Could not save inputs: ${err.message}`))
+        saveTimer.current = null
+        optionsSaving.current = true
+        saveOptions(next)
+          .then((saved) => {
+            lastOptionsSig.current = JSON.stringify(saved ?? next)
+          })
+          .catch((err) => setError(`Could not save inputs: ${err.message}`))
+          .finally(() => {
+            optionsSaving.current = false
+          })
       }, 400)
       return next
     })
@@ -1473,7 +1520,16 @@ function App({ user, onLogout }) {
       }
       clearTimeout(saveTimer.current)
       saveTimer.current = setTimeout(() => {
-        saveOptions(next).catch((err) => setError(`Could not save inputs: ${err.message}`))
+        saveTimer.current = null
+        optionsSaving.current = true
+        saveOptions(next)
+          .then((saved) => {
+            lastOptionsSig.current = JSON.stringify(saved ?? next)
+          })
+          .catch((err) => setError(`Could not save inputs: ${err.message}`))
+          .finally(() => {
+            optionsSaving.current = false
+          })
       }, 400)
       return next
     })
