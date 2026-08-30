@@ -5,9 +5,14 @@
 
 .app {
   --page-pad-top: 1.75rem;
+  /* Matches .sidebar's own padding. The footer and the sidebar's account block
+     are both the last thing in their column, so their bottom edges land at
+     this distance from the bottom of the screen — the two only line up while
+     the numbers agree. */
+  --page-pad-bottom: 1.25rem;
   max-width: 64rem;
   margin: 0 auto;
-  padding: var(--page-pad-top) 1.25rem 5rem;
+  padding: var(--page-pad-top) 1.25rem var(--page-pad-bottom);
   text-align: left;
   color: var(--text);
 }
@@ -17,6 +22,13 @@
   display: flex;
   align-items: flex-start;
   min-height: 100vh;
+  /* The bottom band. The sidebar's account block and the page footer are the
+     two halves of one strip across the foot of the screen, so they are given
+     one height: the taller of the two, so neither is cropped, and both top
+     borders then meet as a single line. Before this the footer sat some 4rem
+     above Sign out and they read as two unrelated blocks that happened to be
+     near each other. */
+  --bottom-band: 6rem;
 }
 .sidebar {
   position: sticky;
@@ -1255,38 +1267,6 @@ h2 {
 .monthly-body {
   padding-top: 1rem;
 }
-/* Heading on the left, the note that explains the numbers on the right, on one
-   row. The note is the wider of the two and takes the free space; below the
-   wrap point it drops under the title and reads as it always did. */
-.monthly-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1.25rem;
-  flex-wrap: wrap;
-  margin-bottom: 1rem;
-}
-/* Both margins belong to the row now, or the two halves sit on different
-   baselines and the row keeps the taller one's trailing space. */
-.monthly-head > .page-title,
-.monthly-head > .saved-hint {
-  margin-bottom: 0;
-}
-.monthly-head > .page-title {
-  flex: 0 0 auto;
-}
-/* A measure, not the whole remainder: three short lines beside the title read
-   better than one long one running the width of a desktop table. min-width is
-   what lets it wrap onto its own row on a narrow screen instead of squeezing
-   into a column two words wide. */
-.monthly-head > .saved-hint {
-  flex: 1 1 22rem;
-  min-width: 18rem;
-  max-width: 52rem;
-  font-size: 0.82rem;
-  line-height: 1.45;
-}
-
 .monthly-controls {
   display: flex;
   align-items: flex-end;
@@ -2039,6 +2019,23 @@ button.sync-pill {
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
+}
+/* Both halves of the bottom band, held to one height with their contents
+   against the floor of it — so the account block and the footer sit on the
+   same line whatever the username does to the height of the left one. Only
+   where the sidebar is a rail: below 820px it is a top bar with nothing
+   beside it to line up with. */
+@media (min-width: 821px) {
+  .side-user,
+  .layout .app-footer {
+    box-sizing: border-box;
+    min-height: var(--bottom-band);
+    justify-content: flex-end;
+  }
+  .layout .app-footer {
+    display: flex;
+    flex-direction: column;
+  }
 }
 .side-user-info {
   display: flex;
