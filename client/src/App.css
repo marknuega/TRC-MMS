@@ -153,12 +153,13 @@
   padding-left: 2rem;
   padding-right: 2rem;
 }
-/* Monthly Report's table already scrolls internally (.monthly-scroll below).
-   Without this, the page itself grows past 100vh too — title + controls +
-   the table's own capped height rarely add up exactly, so the window grew a
-   second, redundant scrollbar alongside the table's own. Pinning the page to
-   the viewport and letting only the table's flex area absorb the overflow
-   leaves exactly one scrollbar, on the table. */
+/* Monthly Report and Inventory both scroll their table internally
+   (.monthly-scroll and .inv-scroll below). Without this, the page itself grows
+   past 100vh too — title + controls + the table's own capped height rarely add
+   up exactly, so the window grew a second, redundant scrollbar alongside the
+   table's own, and there were two things to drag to reach the same rows.
+   Pinning the page to the viewport and letting only the table's flex area
+   absorb the overflow leaves exactly one scrollbar, on the table. */
 .page-main.fixed-viewport {
   /* No global box-sizing: border-box reset in this stylesheet (see the
      .monthly-table comment above) — .page-main's own padding is content-box,
@@ -169,16 +170,32 @@
   overflow: hidden;
 }
 .page-main.fixed-viewport .monthly,
-.page-main.fixed-viewport .monthly-body {
+.page-main.fixed-viewport .monthly-body,
+.page-main.fixed-viewport .inventory,
+.page-main.fixed-viewport .inventory-body {
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
 }
-.page-main.fixed-viewport .monthly-scroll {
+.page-main.fixed-viewport .monthly-scroll,
+/* Inventory's own table only. `.inv-scroll` is also the Transaction History
+   list inside a modal, which is a descendant of .inventory and would otherwise
+   be told to fill a flex parent it does not have — the modal sizes itself. */
+.page-main.fixed-viewport .inventory-body > .inv-scroll {
   flex: 1 1 auto;
   min-height: 0;
   max-height: none;
+}
+/* Everything above the table holds its natural height. The table's flex-basis
+   is auto — 144 rows of it — so the free space in .inventory-body is deeply
+   negative, and a flex container shrinks every shrinkable child in proportion,
+   not just the one that can spare it. Without this the filters, the toolbar
+   and the Add/Edit form all lose height to a table that is already scrolling:
+   the fields somebody is typing into get squashed to make room for rows they
+   cannot see. Only .inv-scroll flexes; opening the form shortens the table. */
+.page-main.fixed-viewport .inventory-body > *:not(.inv-scroll) {
+  flex: 0 0 auto;
 }
 .page-title {
   font-size: 1.4rem;
