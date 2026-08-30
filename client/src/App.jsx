@@ -1591,6 +1591,9 @@ function App({ user, onLogout }) {
   // field that starts identifying the next device — so filing one entry
   // walks straight into the next without reaching for the mouse.
   const telRef = useRef(null)
+  // The hidden file input Import Entries clicks through — a plain <input
+  // type="file"> has no styling hook of its own, so a real button triggers it.
+  const importFileRef = useRef(null)
 
   // The agency a number selected on its own, or '' when none has.
   //
@@ -2531,6 +2534,72 @@ function App({ user, onLogout }) {
       setTimeout(() => setCopied(false), 1500)
     } catch (err) {
       setError(`Could not copy: ${err.message}`)
+    }
+  }
+
+  // Export the current working entries as a small JSON file — the same detail
+  // a save would snapshot (device, faults, Tel/ISSI, technician), so nothing
+  // is lost. For moving a report between installs that do not share a
+  // database (see desktop/README.md's "each install is an island"): copy the
+  // file across the same way you would a PDF (USB, email), then Import it on
+  // the other side. The printed text/PDF cannot serve this role — it is a
+  // rolled-up summary per part, with no way back to which device or agency
+  // each came from.
+  function handleExportEntries() {
+    if (!entries.length) return
+    const payload = entries.map((e) => ({
+      reportDate: String(e.reportDate).slice(0, 10),
+      type: e.type,
+      model: e.model,
+      agency: e.agency,
+      technician: e.technician,
+      telNumber: e.telNumber,
+      issiNumber: e.issiNumber,
+      comment: e.comment,
+      faults: (e.faults ?? []).map((f) => ({
+        issue: f.issue,
+        quantity: f.quantity,
+        action: f.action,
+        company: f.company,
+        status: f.status,
+      })),
+    }))
+    const blob = new Blob([JSON.stringify({ mode, entries: payload }, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = Object.assign(document.createElement('a'), {
+      href: url,
+      download: `${(nextShortId || 'trc-report').replace(/[^\w-]+/g, '_')}.json`,
+    })
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  }
+
+  // Import entries a matching Export produced elsewhere, ADDING them to the
+  // current working set — they land in Report text exactly like typing them
+  // in would, ready to review and Save normally through the same numbering
+  // and stock deduction every other save goes through. Never touches what is
+  // already saved, here or anywhere else — nothing here can overwrite or
+  // duplicate a document.
+  async function handleImportEntries(e) {
+    const file = e.target.files?.[0]
+    e.target.value = '' // let the same file be picked again later
+    if (!file) return
+    try {
+      const text = await file.text()
+      const doc = JSON.parse(text)
+      const list = Array.isArray(doc) ? doc : Array.isArray(doc?.entries) ? doc.entries : null
+      if (!list || !list.length) throw new Error('No entries found in that file')
+      for (const item of list) {
+        await createEntry({ ...item, mode, branch: isAllBranches ? '' : branch })
+      }
+      await refresh()
+      window.alert(
+        `Imported ${list.length} ${list.length === 1 ? 'entry' : 'entries'} — review below, then Save report.`,
+      )
+    } catch (err) {
+      setError(`Could not import: ${err.message}`)
     }
   }
 
@@ -3627,6 +3696,40 @@ function App({ user, onLogout }) {
                     <button type="button" className="btn-txt" onClick={handleCopyTxt} disabled={!reports.length}>
                       {copied ? '✅ Copied' : '⧉ Copy'}
                     </button>
+                    {/* Moves a report between installs that share no database —
+                    a standalone desktop copy and the live site chief among
+                    them (see desktop/README.md). Exports/imports the actual
+                    entries (device, faults, Tel/ISSI, technician), not the
+                    printed summary, which cannot be read back into them. */}
+                    <button
+                      type="button"
+                      className="btn-txt"
+                      onClick={handleExportEntries}
+                      disabled={!entries.length}
+                      title="Save the current entries as a file — move it to another install (USB, email) and Import it there"
+                    >
+                      ⭳ Export
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-txt"
+                      onClick={() => importFileRef.current?.click()}
+                      disabled={isAllBranches}
+                      title={
+                        isAllBranches
+                          ? 'All-Branches is a merged read-only view'
+                          : 'Add entries from a file an Export produced elsewhere'
+                      }
+                    >
+                      ⭱ Import
+                    </button>
+                    <input
+                      ref={importFileRef}
+                      type="file"
+                      accept="application/json"
+                      onChange={handleImportEntries}
+                      style={{ display: 'none' }}
+                    />
                     <a
                       href="https://chat.whatsapp.com/GseaRTA11rvBvlAPBjunb5"
                       target="_blank"
