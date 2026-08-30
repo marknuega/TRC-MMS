@@ -3806,9 +3806,35 @@ function App({ user, onLogout }) {
 
           {page === 'monthly' && (
             <section className="monthly">
-              <h2 className="page-title">
-                📅 Activity report <span className="hint">· {periodLabel(monthPeriod)}</span>
-              </h2>
+              {/* Title and the note that explains the numbers share one row. The
+                  note used to sit between the controls and the table, where it
+                  cost three lines of a screen the table is already short of —
+                  beside the heading it fills space the title was never using. */}
+              <div className="monthly-head">
+                <h2 className="page-title">
+                  📅 Activity report <span className="hint">· {periodLabel(monthPeriod)}</span>
+                </h2>
+                {matrix && (
+                  <p className="saved-hint">
+                    {matrix.kind === 'month' && manualSheet ? (
+                      <>
+                        📌 Showing <strong>pasted data</strong> for {periodLabel(monthPeriod)}
+                        {monthBranch ? ` · ${monthBranch}` : ''}. Paste again to replace, or Clear to revert to live.
+                      </>
+                    ) : (
+                      <>
+                        Activity counts per terminal, built from your saved <strong>reports</strong> for{' '}
+                        {periodLabel(monthPeriod)}. Model cells = devices repaired/programmed that day (one device
+                        counts once, however many parts it took, plus each charger / power supply on its own — the
+                        printed report&apos;s Device Summary counts parts instead, so the two totals are not meant to
+                        match); Install/Dismantle are per brand.
+                        {matrix.kind === 'year' &&
+                          ' One row per month; the activity-description column is per-day, so it is blank here.'}
+                      </>
+                    )}
+                  </p>
+                )}
+              </div>
 
               {matrix && (
                 <div className="monthly-body">
@@ -3871,24 +3897,6 @@ function App({ user, onLogout }) {
                     </div>
                   )}
 
-                  <p className="saved-hint">
-                    {matrix.kind === 'month' && manualSheet ? (
-                      <>
-                        📌 Showing <strong>pasted data</strong> for {periodLabel(monthPeriod)}
-                        {monthBranch ? ` · ${monthBranch}` : ''}. Paste again to replace, or Clear to revert to live.
-                      </>
-                    ) : (
-                      <>
-                        Activity counts per terminal, built from your saved <strong>reports</strong> for{' '}
-                        {periodLabel(monthPeriod)}. Model cells = devices repaired/programmed that day (one device
-                        counts once, however many parts it took, plus each charger / power supply on its own — the
-                        printed report&apos;s Device Summary counts parts instead, so the two totals are not meant to
-                        match); Install/Dismantle are per brand.
-                        {matrix.kind === 'year' &&
-                          ' One row per month; the activity-description column is per-day, so it is blank here.'}
-                      </>
-                    )}
-                  </p>
                   <div className="monthly-scroll">
                     <table className="monthly-table">
                       <thead>
@@ -4059,26 +4067,18 @@ function App({ user, onLogout }) {
               (adminRequired on the router) — this only keeps a control a
               director could not use off their screen. */}
           {page === 'admin' && isAdmin && <BackupPanel edition={sync.standalone ? 'desktop' : 'server'} />}
+
+          <footer className="app-footer">
+            <Credit />
+            {/* Which bundle this is. Dull until the day a total looks wrong —
+                then it is the first thing to check, and the difference between
+                "the rules changed" and "this tab is running last week's code". */}
+            <span className="build-id" title="Build identifier — quote this when reporting a problem">
+              build {BUILD_ID}
+            </span>
+          </footer>
         </main>
       </div>
-
-      {/* Outside .layout on purpose. Monthly and Inventory pin .page-main to
-          100vh so only their table scrolls (see .page-main.fixed-viewport);
-          a footer inside that box is parked on screen permanently and spends
-          rows the tablets do not have. Out here it is an ordinary block after
-          the layout, so it sits just below the fold and is scrolled to — the
-          same way it already behaved on a phone, now at every width.
-          `no-print` has to be repeated: it was inherited from .layout, and
-          the credentials must not reach a printed report (spec rule 3). */}
-      <footer className="app-footer no-print">
-        <Credit />
-        {/* Which bundle this is. Dull until the day a total looks wrong — then
-            it is the first thing to check, and the difference between "the
-            rules changed" and "this tab is running last week's code". */}
-        <span className="build-id" title="Build identifier — quote this when reporting a problem">
-          build {BUILD_ID}
-        </span>
-      </footer>
 
       {/* Printable view — hidden on screen, shown only when printing (Save as PDF). */}
       <div className="print-only print-report">
