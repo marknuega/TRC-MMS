@@ -3033,6 +3033,19 @@ button.sync-pill {
   border-top: 0;
   min-height: 0;
   padding-top: 0;
+  /* The card is a flex column and its gap — the 0.75rem Manage Inputs sets on
+     every card — falls between its ROWS. That is what separates one variant
+     from the next, and it is not padding on either of them, so zeroing the
+     paddings above and below never touched it: 44A's two claims stayed 12px
+     apart while 99A's two devices, stacked inside a single row, sit 0.1rem
+     apart. Twice the gap of anything else on the card, for the one pair on
+     the card that is not two of anything.
+
+     A continuation is not a new variant, so it hands back the gap it was
+     given and keeps a line's worth — the exact spacing 99A reads at. Taken
+     off this row rather than off the card's gap, because the gap between
+     genuine variants is right as it is, on this card and every other. */
+  margin-top: calc(0.1rem - var(--manage-card-gap, 0rem));
 }
 /* ...and the claim ABOVE a continuation gives up the space it was holding for
    nothing, so a run of claims on one letter closes right up.
@@ -3445,7 +3458,11 @@ button.sync-pill {
 }
 .manage-inputs .manage-list li {
   align-items: flex-start; /* the pencil sits at the card's top-right */
-  gap: 0.75rem;
+  /* Named, because a variant card is a flex COLUMN and this same gap then
+     falls between its rows, where one row has to cancel it (see
+     .manage-row.variant-cont). Two places, one number. */
+  --manage-card-gap: 0.75rem;
+  gap: var(--manage-card-gap);
   background: var(--surface-2);
   border-color: var(--border);
   border-radius: var(--radius-sm);
