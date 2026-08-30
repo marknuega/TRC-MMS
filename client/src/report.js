@@ -275,6 +275,40 @@ function maintenanceCount(faults) {
   return standalone + otherMax
 }
 
+/**
+ * The same standalone rule, split for a sheet whose unit is the DEVICE.
+ *
+ * The monthly activity sheet does not count parts, it counts devices worked on:
+ * a radio that had its antenna and its fistmic changed is one radio on that
+ * sheet however many parts came out of the store, and three batteries fitted on
+ * one entry are still that one entry's device. A charger is not a part OF a
+ * device though — it is the thing being worked on — so it cannot fold into a
+ * device that way, and each unit stands on its own exactly as it does in
+ * maintenanceCount.
+ *
+ * Returns the two halves rather than a total because the caller adds its own
+ * third: an entry with only programming on it still has a device on it.
+ *
+ * Kept here, beside the rule it shares, so what a charger does to a count is
+ * still decided in one place. The monthly sheet used to answer it with a flat
+ * `+= 1` per entry and silently dropped every charger on the day.
+ *
+ * @returns {{standalone: number, device: 0|1}}
+ */
+export function deviceMaintenanceUnits(faults) {
+  let standalone = 0
+  let device = 0
+  for (const f of faults ?? []) {
+    if (classify(f.action) !== 'maintenance') continue
+    const q = Math.max(0, Number(f.quantity) || 0)
+    if (isStandaloneItem(f.issue)) standalone += q
+    // A quantity of zero is not work done, and must not conjure a device out of
+    // a row somebody left blank.
+    else if (q > 0) device = 1
+  }
+  return { standalone, device }
+}
+
 // Per-entry service counts. Maintenance follows the standalone-item rule above;
 // programming/install/dismantle count the MAX quantity among that category's
 // faults on the entry. -> { maintenance, programming, install, dismantle }.
@@ -1491,25 +1525,26 @@ export function buildMonthlyMatrix(savedReports, opts = {}) {
         const mk = up(e.model)
         const mCol = modelKey(e.model) // what the column layout knows it as
         const t = up(e.type)
-        let maintSum = 0
-        let program = 0
-        let install = 0
-        let dismantle = 0
-        for (const f of e.faults ?? []) {
-          const cat = classify(f.action)
-          const q = Math.max(0, Number(f.quantity) || 0)
-          if (cat === 'maintenance') maintSum += q
-          else if (cat === 'programming') program += q
-          else if (cat === 'install') install += q
-          else if (cat === 'dismantle') dismantle += q
-        }
-        // Repair/programming model columns count the device once (a device with
-        // several faults is still one device). Install & Dismantle are device-
-        // level counts, so they use the quantity — the SAME "max per entry" rule
-        // the Dashboard uses (dismantling 6 devices in one entry counts as 6).
         const c = entryCounts(e)
+        // Repair/programming model columns count the DEVICE plus each charger /
+        // power-supply unit on its own:
+        //
+        //   column += (chargers + power supply units on the entry)
+        //           + (1 if anything else was repaired or programmed)
+        //
+        // Several faults on one radio are still one radio, and a radio both
+        // repaired AND programmed is still one — that half has not changed.
+        // What has is that a charger no longer disappears into it: an entry
+        // with two chargers and a PCB is 3 here, exactly as it is on the
+        // Dashboard, where it used to be 1.
+        //
+        // Install & Dismantle are device-level counts and use the quantity —
+        // the SAME "max per entry" rule the Dashboard uses (dismantling 6
+        // devices in one entry counts as 6).
+        const u = deviceMaintenanceUnits(e.faults)
+        const worked = u.standalone + (u.device || c.programming > 0 ? 1 : 0)
         const mKey = modelToKey.get(mCol)
-        if (mKey && maintSum + program > 0) counts[mKey] += 1
+        if (mKey && worked > 0) counts[mKey] += worked
         const iKey = installByType.get(t)
         if (iKey && c.install > 0) counts[iKey] += c.install
         const dKey = dismantleByType.get(t)

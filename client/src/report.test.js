@@ -1568,3 +1568,154 @@ describe('the old spelling still sorts and counts as the same terminal', () => {
     assert.equal(m.totals.tmr880i, 1)
   })
 })
+
+// The monthly sheet used to credit a flat 1 per entry, so a day on which ten
+// chargers were repaired read the same as a day on which one was. It counts
+// devices — several parts off one radio are still that radio — but a charger is
+// not a part off a radio, it IS the thing worked on, and each one now stands on
+// its own here exactly as it does on the Dashboard.
+describe('the monthly sheet counts each charger and power supply on its own', () => {
+  const CLAIMS = [
+    { name: 'Charger12', parts: '99', variant: 'A' },
+    { name: 'Power Supply - PSE65-12', parts: '98', variant: 'A' },
+    { name: 'CHARGER CABLE', parts: '45', variant: 'C' }, // named like one, but is not
+    { name: 'ANTENNA', parts: '10', variant: 'A' },
+    { name: 'BATTERY 3180', parts: '44', variant: 'A' },
+  ]
+  const claiming = (list, fn) => {
+    try {
+      setIssueClaims(list)
+      fn()
+    } finally {
+      setIssueClaims([])
+    }
+  }
+
+  const f = (issue, quantity = 1, action = 'CHANGE') => ({ issue, quantity, action, company: 'MOT' })
+  const on = (faults, model = 'TH1N') => ({
+    reportDate: '2026-08-27',
+    technician: 'AMIR',
+    agency: 'PSD',
+    type: 'AIRBUS',
+    model,
+    faults,
+  })
+  const saved = (entries) => [{ mode: 'report', branch: 'Makkah', dateLabel: '27/08/2026', entries }]
+  const th1n = (entries) => {
+    const m = buildMonthlyMatrix(saved(entries), { year: 2026, month: 7, branch: 'Makkah' })
+    return m.rows.find((r) => r.day === 27).counts.th1n
+  }
+
+  test('chargers add on top of the one device the other parts represent', () => {
+    // 1 radio + 10 chargers. This is the case that used to report 1.
+    assert.equal(th1n([on([f('CHARGER12', 10), f('PCB', 1)])]), 11)
+  })
+
+  test('a charger-only entry counts the chargers, and does not invent a radio', () => {
+    assert.equal(th1n([on([f('CHARGER12', 2)])]), 2)
+  })
+
+  test('a power supply follows the same rule', () => {
+    claiming(CLAIMS, () => assert.equal(th1n([on([f('Power Supply - PSE65-12', 3), f('ANTENNA', 1)])]), 4))
+  })
+
+  test('a part claimed as something else does not, however charger-ish its name', () => {
+    claiming(CLAIMS, () => assert.equal(th1n([on([f('CHARGER CABLE', 4)])]), 1))
+  })
+
+  test('a hand-typed charger still falls back to the name pattern', () => {
+    claiming(CLAIMS, () => assert.equal(th1n([on([f('CHARGER818', 2), f('ANTENNA', 1)])]), 3))
+  })
+
+  test('a CHARGING PIN is an ordinary part and stays out of it', () => {
+    assert.equal(th1n([on([f('CHARGING PIN', 4)])]), 1)
+  })
+
+  // The half that has not changed, restated here so a future edit to the
+  // standalone rule cannot quietly take the device count with it.
+  test('several ordinary parts on one radio are still one radio', () => {
+    assert.equal(th1n([on([f('ANTENNA', 1), f('BATTERY 3180', 3), f('B COVER', 2)])]), 1)
+  })
+
+  test('a radio both repaired and programmed is still one radio', () => {
+    assert.equal(th1n([on([f('ANTENNA', 1), f('PROGRAM', 1, 'PROGRAMMING')])]), 1)
+  })
+
+  test('programming alone still counts its radio', () => {
+    assert.equal(th1n([on([f('PROGRAM', 1, 'PROGRAMMING')])]), 1)
+  })
+
+  // A quantity nobody filled in is not work done.
+  test('a zero-quantity row conjures nothing', () => {
+    assert.equal(th1n([on([f('ANTENNA', 0)])]), 0)
+  })
+
+  // The sheet's own day and year views read the same numbers, because both are
+  // built from buildMonthlyMatrix rather than a second copy of the rule.
+  test('the day and year views inherit the charger rule', () => {
+    const rep = saved([on([f('CHARGER12', 10), f('PCB', 1)])])
+    const day = buildDayMatrix(rep, { year: 2026, month: 7, day: 27, branch: 'Makkah' })
+    const year = buildYearMatrix(rep, { year: 2026, branch: 'Makkah' })
+    assert.equal(day.totals.th1n, 11)
+    assert.equal(year.totals.th1n, 11)
+    assert.equal(year.rows[7].counts.th1n, 11) // August
+  })
+
+  // Every model column reads the same rule, not just the one the bug was found on.
+  test('every repair/programming column follows it', () => {
+    const one = (model, key) => {
+      const m = buildMonthlyMatrix(saved([on([f('CHARGER12', 2), f('PCB', 1)], model)]), {
+        year: 2026,
+        month: 7,
+        branch: 'Makkah',
+      })
+      assert.equal(m.totals[key], 3, model)
+    }
+    one('THR9', 'thr9')
+    one('TMR880i', 'tmr880i')
+    one('STP9000', 'stp9000')
+    one('SRG3900 Carkit', 'srg_carkit')
+    one('PT580H', 'pt580')
+    one('MT680', 'mt680')
+  })
+
+  // The whole month is consolidated from the saved records, day 1 onward — the
+  // rule cannot be right on the 27th and wrong on the 1st.
+  test('it holds from day 1 of the month, and the total is the sum of the days', () => {
+    const dayN = (n) => ({
+      mode: 'report',
+      branch: 'Makkah',
+      dateLabel: `${String(n).padStart(2, '0')}/08/2026`,
+      entries: [{ ...on([f('CHARGER12', 2), f('PCB', 1)]), reportDate: `2026-08-${String(n).padStart(2, '0')}` }],
+    })
+    const m = buildMonthlyMatrix([dayN(1), dayN(15), dayN(31)], { year: 2026, month: 7, branch: 'Makkah' })
+    for (const d of [1, 15, 31]) assert.equal(m.rows.find((r) => r.day === d).counts.th1n, 3, `day ${d}`)
+    assert.equal(m.totals.th1n, 9)
+    assert.equal(
+      m.totals.th1n,
+      m.rows.reduce((s, r) => s + r.counts.th1n, 0),
+    )
+  })
+
+  // Only the model columns changed. A pasted sheet is still the day's answer,
+  // and install/dismantle still count devices by quantity.
+  test('a pasted day still wins over the derived count', () => {
+    const m = buildMonthlyMatrix(saved([on([f('CHARGER12', 10), f('PCB', 1)])]), {
+      year: 2026,
+      month: 7,
+      branch: 'Makkah',
+      manual: { 27: { counts: { th1n: 2 }, description: 'pasted' } },
+    })
+    assert.equal(m.rows.find((r) => r.day === 27).counts.th1n, 2)
+  })
+
+  test('a transmittal and a reference-only report are still counted nowhere', () => {
+    const skip = (extra) => [
+      { mode: 'report', branch: 'Makkah', dateLabel: '27/08/2026', entries: [on([f('CHARGER12', 2)])], ...extra },
+    ]
+    for (const extra of [{ mode: 'transmittal' }, { isReferenceOnly: true }]) {
+      const m = buildMonthlyMatrix(skip(extra), { year: 2026, month: 7, branch: 'Makkah' })
+      assert.equal(m.totals.th1n, 0)
+    }
+  })
+})
