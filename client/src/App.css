@@ -4,9 +4,10 @@
    ============================================================ */
 
 .app {
+  --page-pad-top: 1.75rem;
   max-width: 64rem;
   margin: 0 auto;
-  padding: 1.75rem 1.25rem 5rem;
+  padding: var(--page-pad-top) 1.25rem 5rem;
   text-align: left;
   color: var(--text);
 }
@@ -158,16 +159,21 @@
    past 100vh too — title + controls + the table's own capped height rarely add
    up exactly, so the window grew a second, redundant scrollbar alongside the
    table's own, and there were two things to drag to reach the same rows.
-   Pinning the page to the viewport and letting only the table's flex area
-   absorb the overflow leaves exactly one scrollbar, on the table. */
+   Pinning that to the viewport and letting only the table's flex area absorb
+   the overflow leaves exactly one scrollbar, on the table.
+
+   What gets pinned is the page's own section, not .page-main itself. Pinning
+   .page-main parked the footer — its last child — at the bottom of the viewport
+   on these two pages: permanently on screen, spending rows the tablets, on
+   their small window, do not have. Sizing the section instead leaves the footer
+   in normal flow after it, starting exactly at the fold. */
 .page-main.fixed-viewport {
   /* No global box-sizing: border-box reset in this stylesheet (see the
      .monthly-table comment above) — .page-main's own padding is content-box,
-     so height:100vh here must fold that padding in itself or it renders
-     100vh + padding tall, bringing the outer scrollbar right back. */
+     so a viewport-height figure must fold that padding in itself or it renders
+     100vh + padding tall, bringing a redundant outer scrollbar right back. */
   box-sizing: border-box;
-  height: 100vh;
-  overflow: hidden;
+  min-height: 100vh;
 }
 .page-main.fixed-viewport .monthly,
 .page-main.fixed-viewport .monthly-body,
@@ -177,6 +183,14 @@
   flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
+}
+/* Exactly one viewport, measured from where the section actually starts — the
+   page's top padding is above it, and nothing of the section may fall below
+   the fold or the table would be the thing you scroll the window for. */
+.page-main.fixed-viewport > .monthly,
+.page-main.fixed-viewport > .inventory {
+  flex: 0 0 auto;
+  height: calc(100vh - var(--page-pad-top));
 }
 .page-main.fixed-viewport .monthly-scroll,
 /* Inventory's own table only. `.inv-scroll` is also the Transaction History
@@ -1241,6 +1255,38 @@ h2 {
 .monthly-body {
   padding-top: 1rem;
 }
+/* Heading on the left, the note that explains the numbers on the right, on one
+   row. The note is the wider of the two and takes the free space; below the
+   wrap point it drops under the title and reads as it always did. */
+.monthly-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+/* Both margins belong to the row now, or the two halves sit on different
+   baselines and the row keeps the taller one's trailing space. */
+.monthly-head > .page-title,
+.monthly-head > .saved-hint {
+  margin-bottom: 0;
+}
+.monthly-head > .page-title {
+  flex: 0 0 auto;
+}
+/* A measure, not the whole remainder: three short lines beside the title read
+   better than one long one running the width of a desktop table. min-width is
+   what lets it wrap onto its own row on a narrow screen instead of squeezing
+   into a column two words wide. */
+.monthly-head > .saved-hint {
+  flex: 1 1 22rem;
+  min-width: 18rem;
+  max-width: 52rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
 .monthly-controls {
   display: flex;
   align-items: flex-end;
@@ -3872,12 +3918,8 @@ button.sync-pill {
 
 /* ---- Footer ---- */
 /* Copyright footer — AMIR DEV STANDARD: bottom of page, theme-aware colours. */
-/* It is the last block of the document, after .layout rather than inside the
-   page, so it is never pinned into the viewport: no `margin-top: auto` and no
-   height of its own to hold. On the pages that pin themselves to 100vh it ends
-   up just below the fold, which is the point — the screen belongs to the data,
-   and the credit is a short scroll away at every width. */
 .app-footer {
+  margin-top: auto; /* push to the bottom of the page */
   padding: 1rem;
   border-top: 1px solid var(--border);
   text-align: center;
@@ -4776,10 +4818,7 @@ button.sync-pill {
 }
 
 /* ---- Build identity + update banner ---- */
-/* Quiet by design: it only needs to be findable when a number looks wrong.
-   It sits in the footer, under the credit line — off the bottom of the fold on
-   the pages that pin themselves to the viewport, which is fine: it is looked up
-   when something is being reported, not read at a glance. */
+/* Quiet by design: it only needs to be findable when a number looks wrong. */
 .build-id {
   display: block;
   margin-top: 0.4rem;
