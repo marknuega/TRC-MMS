@@ -4772,14 +4772,21 @@ button.sync-pill {
 }
 
 /* ---- Build identity + update banner ---- */
-/* Quiet by design: it only needs to be findable when a number looks wrong. */
+/* Quiet by design: it only needs to be findable when a number looks wrong.
+   It sits under Sign out in the sidebar, so it is indented to that column and
+   stays on screen on the tablets, where the page footer is below the fold. */
 .build-id {
   display: block;
-  margin-top: 0.4rem;
+  padding: 0 0.75rem 0.15rem;
   font-size: 0.68rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   color: var(--muted);
   opacity: 0.65;
+}
+/* A collapsed rail is icon-width — an 8-character build id has nowhere to go,
+   and the hover title on the row still carries it. */
+.sidebar.collapsed .build-id {
+  display: none;
 }
 
 /* The opposite: this one has to interrupt, because the tab is quietly
