@@ -3806,35 +3806,9 @@ function App({ user, onLogout }) {
 
           {page === 'monthly' && (
             <section className="monthly">
-              {/* Title and the note that explains the numbers share one row. The
-                  note used to sit between the controls and the table, where it
-                  cost three lines of a screen the table is already short of —
-                  beside the heading it fills space the title was never using. */}
-              <div className="monthly-head">
-                <h2 className="page-title">
-                  📅 Activity report <span className="hint">· {periodLabel(monthPeriod)}</span>
-                </h2>
-                {matrix && (
-                  <p className="saved-hint">
-                    {matrix.kind === 'month' && manualSheet ? (
-                      <>
-                        📌 Showing <strong>pasted data</strong> for {periodLabel(monthPeriod)}
-                        {monthBranch ? ` · ${monthBranch}` : ''}. Paste again to replace, or Clear to revert to live.
-                      </>
-                    ) : (
-                      <>
-                        Activity counts per terminal, built from your saved <strong>reports</strong> for{' '}
-                        {periodLabel(monthPeriod)}. Model cells = devices repaired/programmed that day (one device
-                        counts once, however many parts it took, plus each charger / power supply on its own — the
-                        printed report&apos;s Device Summary counts parts instead, so the two totals are not meant to
-                        match); Install/Dismantle are per brand.
-                        {matrix.kind === 'year' &&
-                          ' One row per month; the activity-description column is per-day, so it is blank here.'}
-                      </>
-                    )}
-                  </p>
-                )}
-              </div>
+              <h2 className="page-title">
+                📅 Activity report <span className="hint">· {periodLabel(monthPeriod)}</span>
+              </h2>
 
               {matrix && (
                 <div className="monthly-body">
@@ -3897,6 +3871,24 @@ function App({ user, onLogout }) {
                     </div>
                   )}
 
+                  <p className="saved-hint">
+                    {matrix.kind === 'month' && manualSheet ? (
+                      <>
+                        📌 Showing <strong>pasted data</strong> for {periodLabel(monthPeriod)}
+                        {monthBranch ? ` · ${monthBranch}` : ''}. Paste again to replace, or Clear to revert to live.
+                      </>
+                    ) : (
+                      <>
+                        Activity counts per terminal, built from your saved <strong>reports</strong> for{' '}
+                        {periodLabel(monthPeriod)}. Model cells = devices repaired/programmed that day (one device
+                        counts once, however many parts it took, plus each charger / power supply on its own — the
+                        printed report&apos;s Device Summary counts parts instead, so the two totals are not meant to
+                        match); Install/Dismantle are per brand.
+                        {matrix.kind === 'year' &&
+                          ' One row per month; the activity-description column is per-day, so it is blank here.'}
+                      </>
+                    )}
+                  </p>
                   <div className="monthly-scroll">
                     <table className="monthly-table">
                       <thead>
