@@ -46,6 +46,7 @@ import {
   writeSync,
 } from './sync.js'
 import { upgradeSchema } from './schemaUpgrade.js'
+import { ACTIVATION_PERIOD_DAYS, WARN_WITHIN_DAYS, daysRemaining, isExpired, verifyLicenseKey } from './license.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 
@@ -88,6 +89,11 @@ const TEMPLATE_DB = app.isPackaged ? join(process.resourcesPath, 'template.db') 
 
 let serverUrl = null
 let firstRunAdmin = null // { username, password } to show once, after the window opens
+// Live reference to the on-disk config, kept current so the Help menu and
+// About dialog always read the license actually in effect — including one
+// just renewed through Help -> Enter activation key…, which loadConfig() at
+// startup would not see.
+let currentConfig = null
 
 // ── Per-install configuration ────────────────────────────────────
 // JWT_SECRET must be stable across restarts or every session cookie is
@@ -140,6 +146,149 @@ function withInstallId(config) {
   const filled = { ...config, installId: newInstallId() }
   writeFileSync(CONFIG_PATH, JSON.stringify(filled, null, 2), 'utf8')
   return filled
+}
+
+// ── Activation ────────────────────────────────────────────────────
+// This build stops working ACTIVATION_PERIOD_DAYS after activation and needs
+// a new key from the developer — see license.js for why (the tripwire this
+// is, and is not). Checked once here, before the server or window start:
+// nothing about the app — not even the local HTTP server — comes up unless
+// config.license verifies against THIS install's own deviceTag.
+
+function saveLicense(config, license) {
+  const next = { ...config, license }
+  writeFileSync(CONFIG_PATH, JSON.stringify(next, null, 2), 'utf8')
+  currentConfig = next // Help menu / About / the expiry reminder all read this live
+  return next
+}
+
+/**
+ * Block until a valid, unexpired key is on file, or the app is told to quit.
+ *
+ * Runs before startServer/createWindow on purpose: an expired or never-
+ * activated copy should not stand up so much as the local server, let alone
+ * show a working window behind the prompt.
+ *
+ * @returns the (possibly updated) config, or null if the user chose to quit —
+ * a deliberate, ordinary exit, not a failure, so the caller must not route it
+ * through the "TRC-MMS could not start" error path.
+ */
+async function ensureActivated(config) {
+  currentConfig = config
+  while (!config.license || isExpired(config.license.expiresAt)) {
+    const key = await promptActivation(config, {
+      reason: config.license ? 'expired' : 'first-run',
+      allowCancel: false,
+    })
+    if (key === null) return null
+    const result = verifyLicenseKey(key, config.deviceTag)
+    if (result.ok) {
+      config = saveLicense(config, { key, expiresAt: result.expiresAt })
+      break
+    }
+    await dialog.showMessageBox({
+      type: 'error',
+      title: 'Activation failed',
+      message: result.error,
+      buttons: ['Try again'],
+      noLink: true,
+    })
+  }
+  return config
+}
+
+/**
+ * The activation screen: shows this install's own id (what to send the
+ * developer) and a box to paste back the key they issue for it. Standalone
+ * (no parent) when it gates startup, since no window exists yet at that
+ * point — see ensureActivated. Reused, with allowCancel:true, by Help ->
+ * Enter activation key…, which renews early rather than waiting for a lapse.
+ *
+ * @returns the pasted key, or null if the window was cancelled/closed.
+ */
+function promptActivation(config, { reason, allowCancel, win } = {}) {
+  return new Promise((resolve) => {
+    const child = new BrowserWindow({
+      parent: allowCancel ? win : undefined,
+      modal: Boolean(allowCancel && win),
+      show: false,
+      width: 560,
+      height: 460,
+      resizable: false,
+      minimizable: false,
+      maximizable: false,
+      title: 'TRC-MMS — Activation',
+      webPreferences: { preload: join(here, 'preload.cjs'), contextIsolation: true, nodeIntegration: false },
+    })
+    const esc = (t) =>
+      String(t ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
+
+    const heading =
+      reason === 'expired'
+        ? 'This copy’s activation has expired'
+        : reason === 'renew'
+          ? 'Enter a new activation key'
+          : 'Activation required'
+    const intro =
+      reason === 'expired'
+        ? `Every activation lasts ${ACTIVATION_PERIOD_DAYS} days. Contact Muhammad Amir with the installation ID below to get another key — the app will not open until then.`
+        : reason === 'renew'
+          ? 'Paste a key issued for this installation.'
+          : `This is the first time this copy has run. Contact Muhammad Amir with the installation ID below to get an activation key, good for ${ACTIVATION_PERIOD_DAYS} days.`
+
+    const channel = `activation-done-${child.id}`
+    const html = [
+      '<!doctype html><meta charset="utf-8"><style>',
+      'body{font:14px system-ui,Segoe UI,sans-serif;margin:0;padding:20px;background:#fff;color:#111}',
+      'h1{font-size:16px;margin:0 0 8px}p{margin:0 0 14px;color:#555;font-size:12.5px;line-height:1.5}',
+      'label{display:block;font-weight:600;font-size:12px;margin:0 0 4px}',
+      'input,textarea{width:100%;box-sizing:border-box;font:13px/1.4 ui-monospace,Consolas,monospace;',
+      'padding:8px 10px;border:1px solid #bbb;border-radius:6px}',
+      'input{margin-bottom:14px}textarea{resize:none;height:88px}',
+      '.row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}',
+      'button{font:14px system-ui,sans-serif;padding:7px 16px;border-radius:6px;border:1px solid #bbb;background:#f4f4f4}',
+      'button.p{background:#1f57d6;border-color:#1f57d6;color:#fff}',
+      '.err{color:#b00020;font-size:12px;min-height:16px;margin-top:8px}',
+      '@media (prefers-color-scheme:dark){body{background:#1e1e1e;color:#eee}p{color:#aaa}',
+      'input,textarea{background:#2b2b2b;color:#eee;border-color:#444}button{background:#333;color:#eee;border-color:#555}}',
+      '</style>',
+      `<h1>${esc(heading)}</h1><p>${esc(intro)}</p>`,
+      '<label>This installation’s ID</label>',
+      `<input id="id" readonly value="${esc(config.deviceTag)}" onclick="this.select()">`,
+      '<label>Activation key</label>',
+      '<textarea id="key" placeholder="Paste the key here" autofocus></textarea>',
+      '<div class="err" id="err"></div>',
+      '<div class="row">',
+      allowCancel ? '<button id="c">Cancel</button>' : '<button id="c">Quit TRC-MMS</button>',
+      '<button id="o" class="p">Activate</button>',
+      '</div>',
+      '<script>',
+      `const CH=${JSON.stringify(channel)};`,
+      "const k=document.getElementById('key');k.focus();",
+      'const done=(key)=>window.desktop.promptDone(CH, key);',
+      "document.getElementById('o').onclick=()=>{",
+      "  const v=k.value.trim();",
+      "  if(!v){document.getElementById('err').textContent='Paste an activation key first.';return;}",
+      '  done(v);',
+      '};',
+      "document.getElementById('c').onclick=()=>done(null);",
+      '</script>',
+    ].join('')
+
+    let settled = false
+    const finish = (result) => {
+      if (settled) return
+      settled = true
+      resolve(result)
+      if (!child.isDestroyed()) child.destroy()
+    }
+    ipcMain.once(channel, (_e, result) => finish(result))
+    child.webContents.once('did-finish-load', () => child.show())
+    // Closing the window (the titlebar X) is a cancel, same as the button —
+    // in first-run/expired mode that means quitting, decided by the caller.
+    child.on('closed', () => finish(null))
+    child.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`)
+  })
 }
 
 // ── The database ─────────────────────────────────────────────────
@@ -400,6 +549,7 @@ function createWindow() {
   win.once('ready-to-show', () => {
     win.show()
     if (firstRunAdmin) showFirstRunAdmin(win)
+    else warnIfExpiringSoon(win) // the two share one slot — never stack two boot dialogs
   })
 
   // Nothing in this app should open an external browser, but a stray target=_blank
@@ -431,6 +581,29 @@ function showFirstRunAdmin(win) {
       'Sign in and change it from Users & Access. If you lose it, use ' +
       'Help → Reset admin password.',
     buttons: ['I have written it down'],
+    noLink: true,
+  })
+}
+
+// A reminder, not a gate — the window is already open and usable. Fires once
+// per launch, only inside the last WARN_WITHIN_DAYS of the current key, so
+// renewing is something to plan for rather than a surprise the day it lapses.
+function warnIfExpiringSoon(win) {
+  const license = currentConfig?.license
+  if (!license) return
+  const remaining = daysRemaining(license.expiresAt)
+  if (remaining > WARN_WITHIN_DAYS) return
+  dialog.showMessageBox(win, {
+    type: 'warning',
+    title: 'Activation expiring soon',
+    message:
+      remaining <= 0
+        ? 'This copy’s activation has expired.'
+        : `This copy’s activation expires in ${remaining} ${remaining === 1 ? 'day' : 'days'}.`,
+    detail:
+      `Contact Muhammad Amir with this installation's ID (${currentConfig.deviceTag}) to get a new key ` +
+      'before it runs out — Help → Enter activation key… once you have one.',
+    buttons: ['OK'],
     noLink: true,
   })
 }
@@ -783,7 +956,7 @@ function startAutoSync(win) {
   return timer
 }
 
-function buildMenu(win, config) {
+function buildMenu(win) {
   Menu.setApplicationMenu(
     Menu.buildFromTemplate([
       {
@@ -852,6 +1025,9 @@ function buildMenu(win, config) {
         submenu: [
           { label: 'Reset admin password', click: () => resetAdminPassword(win) },
           { type: 'separator' },
+          { label: 'Activation status…', click: () => showActivationStatus(win) },
+          { label: 'Enter activation key…', click: () => renewActivation(win) },
+          { type: 'separator' },
           {
             label: 'About TRC-MMS',
             click: () =>
@@ -863,7 +1039,8 @@ function buildMenu(win, config) {
                   'Software Developed by Muhammad Amir · MT# MT1063\n' +
                   '© 2026 Muhammad Amir. All rights reserved.\n\n' +
                   `Build:  ${clientBuildId()}\n` +
-                  `Installation ID:  ${config.deviceTag}\n` +
+                  `Installation ID:  ${currentConfig.deviceTag}\n` +
+                  `Activation:  ${activationSummary()}\n` +
                   `Data folder:  ${userData}\n\n` +
                   'This copy runs entirely on this computer. It stores its reports in ' +
                   'its own local database and never contacts the internet.',
@@ -875,6 +1052,54 @@ function buildMenu(win, config) {
       },
     ]),
   )
+}
+
+/** One line for About / the status dialog — never throws even on a corrupt license. */
+function activationSummary() {
+  const license = currentConfig?.license
+  if (!license) return 'not activated'
+  const remaining = daysRemaining(license.expiresAt)
+  const until = new Date(license.expiresAt).toLocaleDateString()
+  return remaining <= 0 ? `expired ${until}` : `valid until ${until} (${remaining} ${remaining === 1 ? 'day' : 'days'})`
+}
+
+function showActivationStatus(win) {
+  dialog
+    .showMessageBox(win, {
+      type: 'info',
+      title: 'Activation status',
+      message: `This copy is ${activationSummary()}`,
+      detail:
+        `Installation ID:  ${currentConfig.deviceTag}\n\n` +
+        `Every activation lasts ${ACTIVATION_PERIOD_DAYS} days. Contact Muhammad Amir with the ` +
+        'installation ID above when you need another key.',
+      buttons: ['Close', 'Enter a new key…'],
+      defaultId: 0,
+      noLink: true,
+    })
+    .then(({ response }) => {
+      if (response === 1) renewActivation(win)
+    })
+}
+
+/** Help -> Enter activation key… — renews early, or replaces a bad key. Never quits the app. */
+async function renewActivation(win) {
+  const key = await promptActivation(currentConfig, { reason: 'renew', allowCancel: true, win })
+  if (key === null) return
+  const result = verifyLicenseKey(key, currentConfig.deviceTag)
+  if (!result.ok) {
+    dialog.showErrorBox('Activation failed', result.error)
+    return
+  }
+  saveLicense(currentConfig, { key, expiresAt: result.expiresAt })
+  dialog.showMessageBox(win, {
+    type: 'info',
+    title: 'Activated',
+    message: 'This copy is now activated.',
+    detail: `Valid until ${new Date(result.expiresAt).toLocaleDateString()}.`,
+    buttons: ['Close'],
+    noLink: true,
+  })
 }
 
 // One install, one window. A second launch focuses the running copy rather than
@@ -891,10 +1116,12 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(async () => {
     try {
-      const config = loadConfig()
+      let config = loadConfig()
+      config = await ensureActivated(config)
+      if (!config) return // the user chose to quit at the activation screen — nothing went wrong
       serverUrl = await startServer(config)
       mainWindow = createWindow()
-      buildMenu(mainWindow, config)
+      buildMenu(mainWindow)
       // Only does anything once somebody has ticked the box in the sync dialog.
       startAutoSync(mainWindow)
     } catch (err) {
