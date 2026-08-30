@@ -3035,18 +3035,38 @@ button.sync-pill {
   padding-top: 0;
 }
 /* ...and the claim ABOVE a continuation gives up the space it was holding for
-   nothing. A row's min-height is sized for the edit button, which is pinned
-   out of the flow, so a claim of a single line reserved most of a row it did
-   not use: the two claims of 44A sat a full row apart, while the two devices
-   of 99A, which share one row, sat a line apart. Same letter, two shapes.
+   nothing, so a run of claims on one letter closes right up.
 
-   1.95rem, not 0, because the button is what the height is for — 1.5rem tall
-   pinned 0.45rem down — and a row shorter than that would push it over the
-   claim beneath. That is the floor, and it is a rem less than the 2.9rem a
-   standalone row keeps. */
+   99A is a SINGLE entry narrowed to two devices: its two lines stack inside
+   one row, a line apart, and that is the spacing this card is read against.
+   44A is two entries, so it is two rows — and a row's min-height exists to
+   hold the edit button, which is pinned out of the flow and contributes
+   nothing to layout. Every claim therefore reserved most of a row it did not
+   use, and 44A's two claims sat a third of a row further apart than 99A's two
+   devices. Same letter, two shapes, and the card with more rows to it looked
+   the emptier for them. */
 .manage-group .manage-row.variant-lead:not(.editing) {
-  min-height: 1.95rem;
+  min-height: 0;
   padding-bottom: 0;
+}
+/* What was holding the floor up: the button is 1.5rem pinned 0.45rem down, so
+   a row shorter than 1.95rem pushed it over the claim beneath. Inside a run it
+   rides higher and smaller — 1.25rem at 0.3rem needs 1.55rem, which a row is
+   already, so the row is free to be exactly as tall as the line it holds.
+
+   Only inside a run. A standalone claim keeps the full-size button and the
+   2.9rem row: B and C on this card, and every row on every other card. The
+   comparison that matters is with 99A, whose second line has no button at all
+   because it is not a second entry. */
+.manage-inputs .manage-body .manage-row.variant-lead:not(.editing) .manage-item-actions button.icon-edit,
+.manage-inputs .manage-body .manage-row.variant-cont:not(.editing) .manage-item-actions button.icon-edit {
+  width: 1.25rem;
+  height: 1.25rem;
+  font-size: 0.85rem;
+}
+.manage-group .manage-row.variant-lead:not(.editing) > .manage-item-actions,
+.manage-group .manage-row.variant-cont:not(.editing) > .manage-item-actions {
+  top: 0.3rem;
 }
 /* The badge keeps its box and loses only its ink, so the device rows beneath
    stay in the column the letter set rather than sliding under it. */
