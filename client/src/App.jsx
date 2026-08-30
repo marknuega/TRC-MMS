@@ -168,6 +168,12 @@ const NAV = [
 // Data-heavy pages fill the available width (tables/charts); form-style pages
 // stay centred at a readable measure.
 const WIDE_PAGES = new Set(['dashboard', 'monthly', 'spareparts', 'agency', 'inventory', 'reference'])
+// Pages whose table scrolls INSIDE itself, so the window must not scroll too.
+// Both of these cap their table's height and then sit under a title, filters
+// and a toolbar, which rarely add up to exactly one viewport — leaving the
+// window with a second scrollbar beside the table's own, and two places to
+// drag to reach the same rows. See .page-main.fixed-viewport in App.css.
+const FIXED_VIEWPORT_PAGES = new Set(['monthly', 'inventory'])
 const SIDEBAR_KEY = 'trc_sidebar'
 const loadSidebar = () => {
   try {
@@ -2859,7 +2865,9 @@ function App({ user, onLogout }) {
         </aside>
 
         <main
-          className={`page-main app${WIDE_PAGES.has(page) ? ' wide' : ''}${page === 'monthly' ? ' fixed-viewport' : ''}`}
+          className={`page-main app${WIDE_PAGES.has(page) ? ' wide' : ''}${
+            FIXED_VIEWPORT_PAGES.has(page) ? ' fixed-viewport' : ''
+          }`}
         >
           <UpdateBanner />
           {error && <p className="error">{error}</p>}
