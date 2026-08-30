@@ -4068,12 +4068,20 @@ function App({ user, onLogout }) {
               (adminRequired on the router) — this only keeps a control a
               director could not use off their screen. */}
           {page === 'admin' && isAdmin && <BackupPanel edition={sync.standalone ? 'desktop' : 'server'} />}
-
-          <footer className="app-footer">
-            <Credit />
-          </footer>
         </main>
       </div>
+
+      {/* Outside .layout on purpose. Monthly and Inventory pin .page-main to
+          100vh so only their table scrolls (see .page-main.fixed-viewport);
+          a footer inside that box is parked on screen permanently and spends
+          rows the tablets do not have. Out here it is an ordinary block after
+          the layout, so it sits just below the fold and is scrolled to — the
+          same way it already behaved on a phone, now at every width.
+          `no-print` has to be repeated: it was inherited from .layout, and
+          the credentials must not reach a printed report (spec rule 3). */}
+      <footer className="app-footer no-print">
+        <Credit />
+      </footer>
 
       {/* Printable view — hidden on screen, shown only when printing (Save as PDF). */}
       <div className="print-only print-report">

@@ -3872,8 +3872,12 @@ button.sync-pill {
 
 /* ---- Footer ---- */
 /* Copyright footer — AMIR DEV STANDARD: bottom of page, theme-aware colours. */
+/* It is the last block of the document, after .layout rather than inside the
+   page, so it is never pinned into the viewport: no `margin-top: auto` and no
+   height of its own to hold. On the pages that pin themselves to 100vh it ends
+   up just below the fold, which is the point — the screen belongs to the data,
+   and the credit is a short scroll away at every width. */
 .app-footer {
-  margin-top: auto; /* push to the bottom of the page */
   padding: 1rem;
   border-top: 1px solid var(--border);
   text-align: center;
