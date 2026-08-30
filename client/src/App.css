@@ -3017,6 +3017,20 @@ button.sync-pill {
   min-height: 0;
   padding-top: 0;
 }
+/* ...and the claim ABOVE a continuation gives up the space it was holding for
+   nothing. A row's min-height is sized for the edit button, which is pinned
+   out of the flow, so a claim of a single line reserved most of a row it did
+   not use: the two claims of 44A sat a full row apart, while the two devices
+   of 99A, which share one row, sat a line apart. Same letter, two shapes.
+
+   1.95rem, not 0, because the button is what the height is for — 1.5rem tall
+   pinned 0.45rem down — and a row shorter than that would push it over the
+   claim beneath. That is the floor, and it is a rem less than the 2.9rem a
+   standalone row keeps. */
+.manage-group .manage-row.variant-lead:not(.editing) {
+  min-height: 1.95rem;
+  padding-bottom: 0;
+}
 /* The badge keeps its box and loses only its ink, so the device rows beneath
    stay in the column the letter set rather than sliding under it. */
 .manage-group .manage-row.variant-cont:not(.editing) .variant-code {

@@ -1733,10 +1733,22 @@ export default function ManageInputs({
                     {partsName(g.parts) && <span className="manage-group-base">{partsName(g.parts)}</span>}
                   </div>
                 )}
-                {g.items.map(({ value, i, cont }) => (
+                {/* `variant-lead` marks a claim that has another claim of the
+                    SAME letter after it. Its row closes up its bottom so the
+                    two sit as one block: the row's min-height is sized for the
+                    edit button, which is pinned out of flow, so a one-line
+                    claim reserves a rem and a half of empty space it does not
+                    use — the gap that made 44A read as two separate blocks
+                    where 99A, whose two devices live inside a single row,
+                    reads as one. Flagged here rather than matched with
+                    :has(+ .variant-cont), so what the layout depends on is
+                    stated where it is decided. */}
+                {g.items.map(({ value, i, cont }, idx) => (
                   <div
                     key={`${nameOf(value)}-${i}`}
-                    className={`manage-row${editIndex === i ? ' editing' : ''}${cont ? ' variant-cont' : ''}`}
+                    className={`manage-row${editIndex === i ? ' editing' : ''}${cont ? ' variant-cont' : ''}${
+                      g.items[idx + 1]?.cont ? ' variant-lead' : ''
+                    }`}
                   >
                     {rowBody(value, i)}
                   </div>
