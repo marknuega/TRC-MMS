@@ -2861,15 +2861,6 @@ function App({ user, onLogout }) {
               <span className="side-ico">⎋</span>
               <span className="side-label">Sign out</span>
             </button>
-            {/* Which bundle this is. Dull until the day a total looks wrong —
-                then it is the first thing to check, and the difference between
-                "the rules changed" and "this tab is running last week's code".
-                It lives here rather than in the footer because the footer is off
-                the bottom of the tablets' window, and this is the one line
-                someone gets asked to read back. */}
-            <span className="build-id" title="Build identifier — quote this when reporting a problem">
-              build {BUILD_ID}
-            </span>
           </div>
         </aside>
 
@@ -4081,6 +4072,12 @@ function App({ user, onLogout }) {
           the credentials must not reach a printed report (spec rule 3). */}
       <footer className="app-footer no-print">
         <Credit />
+        {/* Which bundle this is. Dull until the day a total looks wrong — then
+            it is the first thing to check, and the difference between "the
+            rules changed" and "this tab is running last week's code". */}
+        <span className="build-id" title="Build identifier — quote this when reporting a problem">
+          build {BUILD_ID}
+        </span>
       </footer>
 
       {/* Printable view — hidden on screen, shown only when printing (Save as PDF). */}
