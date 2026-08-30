@@ -1055,8 +1055,12 @@ describe('a PCB, a programming and an installation on one day', () => {
     // read off the first fault seen, exactly as the company already is.
     test('the code does not split the part into two lines', () => {
       assert.deepEqual(one([did('PCB', 'CHANGE', 'MOI'), did('PCB', 'CHANGE', 'MOTECO')]), ['PCB (C) (MOI) = 2'])
-      // …and the repaired board adds no unit to it, having consumed none.
-      assert.deepEqual(one([did('PCB', 'CHANGE', 'MOI'), did('PCB', 'REPAIR', 'MOTECO')]), ['PCB (C) (MOI) = 1'])
+      // …but a repaired board is its own line — it reused the part rather than
+      // drawing a new one, so it must not merge into the Change quantity.
+      assert.deepEqual(one([did('PCB', 'CHANGE', 'MOI'), did('PCB', 'REPAIR', 'MOTECO')]), [
+        'PCB (C) (MOI) = 1',
+        'PCB (R) = 1',
+      ])
     })
 
     // A custom action has no entry in the code table, so it prints its own name
@@ -1069,22 +1073,24 @@ describe('a PCB, a programming and an installation on one day', () => {
     })
   })
 
-  // -- A repair consumed nothing, so it is not a material --
+  // -- A repair reuses the part, so it is tagged rather than dropped --
   //
-  // "NO POWER = 1" printed under a heading reading Materials says a part called
-  // No Power was fitted. The work happened and is counted: a Repair classifies
-  // as maintenance, so the Device Summary carries it — and now carries it
-  // alone.
-  describe('a repair leaves the materials block to the parts', () => {
+  // "NO POWER = 1" printed under a heading reading Materials, with no tag,
+  // would say a part called No Power was fitted off a shelf. Since it is
+  // instead the same part reused, the line prints as "NO POWER (R) = 1" — no
+  // company, since no pool was drawn from. The work is also counted where it
+  // always was: classify() calls a Repair maintenance, so the Device Summary
+  // carries it too.
+  describe('a repair gets its own tagged line', () => {
     const did = (issue, action, company = 'MOI', quantity = 1) => ({ issue, quantity, action, company })
     const entry = (faults) => [{ agency: 'PSD', type: 'AIRBUS', model: 'TH1N', faults }]
     const lines = (faults) => (materialBlocksByType(entry(faults))['AIRBUS'] ?? []).flatMap((b) => b.lines)
 
-    test('a repaired symptom is no material at all', () => {
-      assert.deepEqual(lines([did('NO POWER', 'REPAIR')]), [])
+    test('a repaired symptom prints its own name, tagged, with no company', () => {
+      assert.deepEqual(lines([did('NO POWER', 'REPAIR')]), ['1. NO POWER (R) = 1'])
     })
 
-    test('…but the device summary still counts the work', () => {
+    test('…and the device summary still counts the work', () => {
       assert.deepEqual(entryCounts(entry([did('NO POWER', 'REPAIR')])[0]), {
         maintenance: 1,
         programming: 0,
@@ -1093,8 +1099,11 @@ describe('a PCB, a programming and an installation on one day', () => {
       })
     })
 
-    test('the parts changed alongside it are listed as they always were', () => {
-      assert.deepEqual(lines([did('NO POWER', 'REPAIR'), did('ANTENNA', 'CHANGE')]), ['1. ANTENNA (MOI) = 1'])
+    test('the parts changed alongside it are listed as they always were, plus the repair line', () => {
+      assert.deepEqual(lines([did('NO POWER', 'REPAIR'), did('ANTENNA', 'CHANGE')]), [
+        '1. ANTENNA (MOI) = 1',
+        '2. NO POWER (R) = 1',
+      ])
     })
 
     // An RTO is counted in no category at all, so its line here is the only

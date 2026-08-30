@@ -110,28 +110,12 @@ const isSparePartAction = (action) => {
 }
 
 /**
- * A fault that took nothing off a shelf, AND is counted somewhere else.
- *
- * A Repair reuses the part it fixes, so "NO POWER = 1" under a heading reading
- * Materials says a part called No Power was fitted, which is not a thing. The
- * work is real and it is already counted: classify() calls a Repair
- * maintenance, so the Device Summary carries it — alone, now.
- *
- * ONLY the Repair. The others that consume nothing each have a reason to stay:
- *
- *   - an RTO is counted NOWHERE else. It is not a service category, so the
- *     Device Summary has nothing to say about it, and dropping its line here
- *     would leave a report that mentions the device it handed back nowhere at
- *     all.
- *   - install, dismantle and programming lines are what the block is read for
- *     — "INSTALLATION = 2" is a sentence somebody wants — and they have always
- *     been there.
- *   - an action nobody here has heard of is not assumed to consume nothing.
- *     Actions are admin-managed; a custom one prints as it always did.
- *
- * The no-activity row is never dropped: being printed is its whole purpose.
+ * A Repair reuses the part it fixes rather than drawing a new one off the
+ * shelf — the Device Summary already counts the work (classify() calls a
+ * Repair maintenance). It still gets its own line in the Materials block,
+ * tagged "(R)" so nobody reads it as stock consumed: see isRepairFault below.
  */
-const consumesNoPart = (f) => !isNoActivityIssue(f.issue) && up(f.action) === 'REPAIR'
+const isRepairFault = (f) => !isNoActivityIssue(f.issue) && up(f.action) === 'REPAIR'
 
 export function classify(action) {
   const a = up(action)
@@ -622,20 +606,27 @@ export function materialBlocksByType(entries) {
       }
       const bucket = byModel.get(md)
       for (const f of e.faults) {
-        if (consumesNoPart(f)) continue // the Device Summary carries it alone
         const isProgram = classify(f.action) === 'programming'
+        const isRepair = !isProgram && isRepairFault(f)
         const label = isProgram ? 'PROGRAMMING' : up(f.issue)
-        const company = isProgram ? '' : summaryCompanyText(f.company)
+        // A Repair reuses the part already on the device — no pool was drawn
+        // from, so no company prints on its line.
+        const company = isProgram || isRepair ? '' : summaryCompanyText(f.company)
         // The action code, on the lines that would otherwise be ambiguous —
-        // "PCB (C)" rather than a bare "PCB". Purely a rendering: it is kept
+        // "PCB (C)" rather than a bare "PCB" — and always on a Repair line,
+        // since a bare "PTT = 1" here would read as a part drawn off a shelf
+        // rather than the same PTT reused. Purely a rendering: it is kept
         // beside the label rather than folded into it, so the alphabetical
         // sort below still orders on the item's own name.
-        const code = !isProgram && isActionNamedItem(f.issue) ? summaryActionText(f.action) : ''
+        const code = !isProgram && (isActionNamedItem(f.issue) || isRepair) ? summaryActionText(f.action) : ''
         // Keyed on the part alone (materialKey), NOT on part-and-company: one
         // line per material, whichever pool each unit was drawn from. The
         // company and the code printed on that line are the first ones seen
-        // for the part.
-        const key = isProgram ? 'PROGRAMMING' : materialKey(f.issue)
+        // for the part. A Repair gets its own key space (R:...) so it never
+        // merges with a Change/New/PCB of the same part — one line represents
+        // stock drawn, the other reuse, and combining their quantities would
+        // hide which is which.
+        const key = isProgram ? 'PROGRAMMING' : isRepair ? `R:${materialKey(f.issue)}` : materialKey(f.issue)
         if (!bucket.has(key)) bucket.set(key, { label, code, company, qty: 0 })
         bucket.get(key).qty += Math.max(0, Number(f.quantity) || 0)
       }
