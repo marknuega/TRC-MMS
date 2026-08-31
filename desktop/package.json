@@ -39,6 +39,7 @@
       "main.js",
       "sync.js",
       "schemaUpgrade.js",
+      "license.js",
       "preload.cjs",
       "app/**/*",
       "prisma/schema.prisma",

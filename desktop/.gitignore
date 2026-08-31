@@ -6,6 +6,12 @@ prisma/
 release/
 node_modules/
 
+# Signs activation keys (scripts/issue-license.mjs) — never commit, never
+# ship. Not in package.json's build.files either, so it can never be bundled
+# into the installer even if this line is somehow bypassed. See
+# scripts/license-keygen.mjs.
+license-private-key.pem
+
 # The repo root ignores build/ (it means "compiler output" there). Here it is
 # the opposite: build/ holds the icons electron-builder reads as INPUT, so a
 # clone without them cannot produce an installer. This deeper rule wins.
