@@ -4,7 +4,17 @@
  */
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
-import { formatDate, formatDateTime, monthKeyOf, storedDateLabel, parseDateLabel } from './dates.js'
+import {
+  formatDate,
+  formatDateTime,
+  monthKeyOf,
+  storedDateLabel,
+  parseDateLabel,
+  dateMatches,
+  dateOptions,
+  dateFiltered,
+  NO_DATE_PICK,
+} from './dates.js'
 
 describe('formatDate writes one date format, everywhere', () => {
   test('from the ISO a report date is stored as', () => {
@@ -72,4 +82,64 @@ describe('formatDateTime', () => {
 test('parseDateLabel hands back the calendar parts', () => {
   assert.deepEqual(parseDateLabel('27/08/2026'), { y: 2026, m: 7, d: 27 })
   assert.equal(parseDateLabel('nonsense'), null)
+})
+
+// Narrowing a Saved card to a day, a month or a year. The labels are the
+// dd/mm/yyyy a saved report stores; the month in a pick is 0-based.
+describe('the saved-list date filter', () => {
+  const LABELS = ['30/08/2026', '27/08/2026', '05/10/2026', '14/01/2025']
+
+  const kept = (pick) => LABELS.filter((l) => dateMatches(l, pick))
+
+  test('nothing picked keeps everything', () => {
+    assert.deepEqual(kept(NO_DATE_PICK), LABELS)
+    assert.deepEqual(kept({}), LABELS)
+    assert.equal(dateFiltered(NO_DATE_PICK), false)
+  })
+
+  test('a year, a month and a day each narrow on their own', () => {
+    assert.deepEqual(kept({ y: '2026' }), ['30/08/2026', '27/08/2026', '05/10/2026'])
+    assert.deepEqual(kept({ m: '7' }), ['30/08/2026', '27/08/2026']) // August
+    assert.deepEqual(kept({ d: '5' }), ['05/10/2026'])
+  })
+
+  test('they combine — one specific day', () => {
+    assert.deepEqual(kept({ y: '2026', m: '7', d: '30' }), ['30/08/2026'])
+    assert.deepEqual(kept({ y: '2025', m: '7' }), []) // no August 2025
+  })
+
+  // '0' is January and a real choice; '' is "any". The one place a 0-based
+  // month and an empty-means-any convention could quietly meet.
+  test('January is a choice, not an absent one', () => {
+    assert.deepEqual(kept({ m: '0' }), ['14/01/2025'])
+    assert.equal(dateFiltered({ m: '0' }), true)
+    assert.equal(dateFiltered({ y: '', m: '', d: '' }), false)
+  })
+
+  test('a label nothing can read is excluded while a filter is on, and kept while it is off', () => {
+    assert.equal(dateMatches('not a date', { y: '2026' }), false)
+    assert.equal(dateMatches('not a date', NO_DATE_PICK), true)
+  })
+
+  describe('the choices offered', () => {
+    test('are only the years, months and days actually held', () => {
+      const o = dateOptions(LABELS)
+      assert.deepEqual(o.years, [2026, 2025]) // newest first
+      assert.deepEqual(o.months, [0, 7, 9]) // January, August, October
+      assert.deepEqual(o.days, [5, 14, 27, 30])
+    })
+
+    test('each list narrows to the pick above it', () => {
+      assert.deepEqual(dateOptions(LABELS, { y: '2025' }).months, [0])
+      assert.deepEqual(dateOptions(LABELS, { y: '2026' }).months, [7, 9])
+      assert.deepEqual(dateOptions(LABELS, { y: '2026', m: '7' }).days, [27, 30])
+      // The years never narrow — they are the top of the chain.
+      assert.deepEqual(dateOptions(LABELS, { y: '2026', m: '7' }).years, [2026, 2025])
+    })
+
+    test('an empty list offers nothing rather than throwing', () => {
+      assert.deepEqual(dateOptions([]), { years: [], months: [], days: [] })
+      assert.deepEqual(dateOptions(undefined), { years: [], months: [], days: [] })
+    })
+  })
 })

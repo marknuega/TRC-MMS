@@ -1263,6 +1263,37 @@ h2 {
   margin: 0 0 0.9rem;
 }
 
+/* Day / month / year, under the search box they narrow the list with. Three
+   equal tracks that wrap rather than shrink: a year is four characters and a
+   month up to nine, and squeezing them onto one line on a phone would clip the
+   longer names off. */
+.saved-dates {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.9rem;
+}
+.saved-dates .saved-date-pick {
+  flex: 1 1 7.5rem;
+  min-width: 6.5rem;
+}
+.saved-dates-clear {
+  flex: none;
+  padding: 0.45rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+.saved-dates-clear:hover {
+  color: var(--text-h);
+  border-color: var(--border-strong);
+}
+
 /* ---- Monthly matrix ---- */
 .monthly-body {
   padding-top: 1rem;

@@ -110,3 +110,64 @@ export function storedDateLabel(value) {
   const p = parts(value)
   return p ? `${two(p.d)}/${two(p.m + 1)}/${p.y}` : ''
 }
+
+// ---------------------------------------------------------------------------
+// Filtering a saved list by day / month / year
+//
+// A pick is { y, m, d }, each one either a chosen value or '' for "any" — so
+// {} is every report and { y: 2026, m: 7 } is August 2026 whichever day. The
+// month is 0-BASED, matching what parts() reads and what MONTHS is indexed by;
+// there is exactly one month numbering in this file and this is it.
+//
+// Held as STRINGS, because that is what a picker's value is and converting at
+// the edge would mean two shapes for one thing. '0' is January and is a real
+// choice, so "chosen" is tested against '' rather than for truthiness — the one
+// place a 0-based month and an empty-means-any convention could quietly meet.
+// ---------------------------------------------------------------------------
+
+const chosen = (v) => v !== '' && v != null
+
+/** Does a stored dateLabel fall inside the pick? An unset part means "any". */
+export function dateMatches(label, pick = {}) {
+  const { y = '', m = '', d = '' } = pick
+  if (!chosen(y) && !chosen(m) && !chosen(d)) return true
+  const p = parts(label)
+  // Only reachable for a label nothing could read. Excluded rather than kept:
+  // a filter that is on should never be answered with a row it cannot vouch for.
+  if (!p) return false
+  if (chosen(y) && p.y !== Number(y)) return false
+  if (chosen(m) && p.m !== Number(m)) return false
+  if (chosen(d) && p.d !== Number(d)) return false
+  return true
+}
+
+/**
+ * The years, months and days a set of labels actually covers, each narrowed by
+ * the pick above it: the months of the chosen year, the days of that month.
+ *
+ * Only what is really there. A year with no reports in it is a choice that can
+ * only ever return nothing, and offering all twelve months on a card holding
+ * one is a list to read past rather than a list to pick from.
+ *
+ * @returns {{years: number[], months: number[], days: number[]}}
+ */
+export function dateOptions(labels, pick = {}) {
+  const { y = '', m = '' } = pick
+  const all = (labels ?? []).map(parts).filter(Boolean)
+  const inYear = chosen(y) ? all.filter((p) => p.y === Number(y)) : all
+  const inMonth = chosen(m) ? inYear.filter((p) => p.m === Number(m)) : inYear
+  const uniq = (ns) => [...new Set(ns)]
+  return {
+    // Newest year first — the one being worked in is the one wanted.
+    years: uniq(all.map((p) => p.y)).sort((a, b) => b - a),
+    // Months and days read in calendar order, which is how a date is thought of.
+    months: uniq(inYear.map((p) => p.m)).sort((a, b) => a - b),
+    days: uniq(inMonth.map((p) => p.d)).sort((a, b) => a - b),
+  }
+}
+
+/** Is anything at all picked? What decides whether a "Clear" is worth showing. */
+export const dateFiltered = (pick = {}) => chosen(pick.y) || chosen(pick.m) || chosen(pick.d)
+
+/** An empty pick — one definition, so "clear" and "initial" cannot drift. */
+export const NO_DATE_PICK = { y: '', m: '', d: '' }
