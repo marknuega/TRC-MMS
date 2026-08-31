@@ -111,7 +111,7 @@ Two things that are easy to get wrong here, both checked by
 ```bash
 cd desktop
 npm install
-npm run build      # -> desktop/release/TRC-MMS (Desktop) Setup 1.1.5.exe
+npm run build      # -> desktop/release/TRC-MMS (Desktop) Setup 1.1.2.exe
 ```
 
 `npm run build` runs `scripts/prepare.mjs` first, which:
@@ -141,13 +141,52 @@ PostgreSQL→SQLite conversion could have broken silently.
 
 ## Installing on a technician's PC
 
-Copy `TRC-MMS (Desktop) Setup 1.1.5.exe` (about 126 MB) to the machine and run it. It
+Copy `TRC-MMS (Desktop) Setup 1.1.2.exe` (about 126 MB) to the machine and run it. It
 installs per-user, so it needs no administrator rights, and it creates a desktop
 and Start Menu shortcut.
 
 **On first launch a dialog shows the administrator username and a generated
 password. Write it down — it is shown once and is never stored in readable
 form.** If it is lost, use **Help → Reset admin password**.
+
+## Activation
+
+The app will not open — not even the local server behind it — without a valid
+activation key, and a key stops working 120 days after it was issued. This is
+not copy protection against a determined attacker; it is a tripwire. A copy of
+the installer that leaves your hands without your knowledge runs for at most
+120 days before its holder has no choice but to come back and ask you for
+another key — which is the moment an install you did not know about becomes
+one you do.
+
+**One-time setup (developer only, on a machine you trust):**
+
+```bash
+cd desktop
+node scripts/license-keygen.mjs
+```
+
+Writes `license-private-key.pem` (gitignored — **never commit it, never put
+it in the installer, never send it to anyone**; keep a copy somewhere safe
+outside this repo) and `license-public-key.pem`. Paste the public key's
+contents into the `PUBLIC_KEY_PEM` constant in `desktop/license.js`, then
+rebuild the installer. This step only ever runs once — generating a new pair
+invalidates every key already issued.
+
+**Issuing a key**, on first install or when a technician's key is about to
+lapse: they read you the 4-character installation ID off the activation
+screen (or Help → About, or Help → Activation status…), and you run
+
+```bash
+node scripts/issue-license.mjs <installation ID> [days=120]
+```
+
+and send back the printed key however reaches them — email, WhatsApp, text
+file over USB. It is meaningless on any installation but the one it names:
+the id is signed into the key, and the app refuses a key issued for a
+different one. **Help → Enter activation key…** lets them renew early,
+without waiting for a lapse; a warning dialog already reminds them starting
+14 days out.
 
 ## Where the data lives
 
