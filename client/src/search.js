@@ -136,13 +136,16 @@ export function searchInside(list, query) {
   return out.slice(0, 300)
 }
 
-// A column that runs past a dozen parts stops being a summary and becomes a
-// second list. Counted PER DEVICE, because the limit is there to keep one
-// column readable, not to ration the answer across all of them — and what falls
-// off the end is by definition the smallest, since the parts are ordered by
-// quantity. The remainder is counted into a "+N more" at the foot of its own
-// column, so no device is ever silently shown a partial total.
-export const TALLY_LIMIT = 12
+// Every part is listed. There used to be a cap of a dozen per column, with the
+// rest rolled into a "+N more" — which put the answer behind a number on
+// exactly the searches that most needed it, since a column only grows long
+// when a lot was found. The parts are ordered by quantity, so what the cap hid
+// was the tail; but "20 kinds of part" is itself the answer to some questions,
+// and a total nobody can read the parts of is a total nobody can check.
+//
+// A long column costs height, not width: the columns are a wrapping grid and
+// each is sized independently, so one device with a long list makes the panel
+// taller without touching the ones beside it.
 
 /**
  * What the search found, counted one PART at a time.

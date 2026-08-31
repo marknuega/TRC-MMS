@@ -1243,11 +1243,6 @@ h2 {
   font-size: 0.78rem;
   text-align: center;
 }
-.tally-chip.more {
-  padding-right: 0.6rem;
-  color: var(--muted);
-  font-weight: 600;
-}
 @media (max-width: 620px) {
   /* Narrower tracks rather than fewer of them: two short columns still read as
      two devices, where one column of everything reads as one long list. */
