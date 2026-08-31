@@ -208,6 +208,132 @@ describe('a "0" placeholder for a not-available tel or ISSI', () => {
   })
 })
 
+// The entry form has always taken a full tel and ISSI, and the WhatsApp
+// decoder has always read two plain-digit tokens of any length. The code box
+// was the one place still fixed at 4 + 4.
+describe('a full-length tel and ISSI', () => {
+  test('each is stored in full when it is written as its own token', () => {
+    const r = parseCodeReport('H43A CT 1234567 1804888 1', FALLBACK, OPTS)
+    assert.equal(r.ok, true, r.errors.join('; '))
+    assert.equal(r.telNumber, '1234567')
+    assert.equal(r.issiNumber, '1804888')
+    assert.equal(r.entry.technician, 'AMIR')
+  })
+
+  test('the dense form is untouched — run together, they are still the last 4 of each', () => {
+    const r = parseCodeReport('H43ACT123456718048881', FALLBACK, OPTS)
+    assert.equal(r.ok, true, r.errors.join('; '))
+    assert.equal(r.telNumber, '1234')
+    assert.equal(r.issiNumber, '5671')
+  })
+
+  test('the "0" marker still stands in for whichever number is not known', () => {
+    const noIssi = parseCodeReport('H43A CT 1234567 0 1', FALLBACK, OPTS)
+    assert.equal(noIssi.ok, true, noIssi.errors.join('; '))
+    assert.equal(noIssi.telNumber, '1234567')
+    assert.equal(noIssi.issiNumber, '')
+
+    const noTel = parseCodeReport('H43A CT 0 1804888 1', FALLBACK, OPTS)
+    assert.equal(noTel.ok, true, noTel.errors.join('; '))
+    assert.equal(noTel.telNumber, '')
+    assert.equal(noTel.issiNumber, '1804888')
+  })
+
+  test('a full pair reads the same after an inline technician, with no technician left at the end', () => {
+    const r = parseCodeReport('H43ACT1 11ANI 1234567 1804888', FALLBACK, OPTS)
+    assert.equal(r.ok, true, r.errors.join('; '))
+    assert.equal(r.faults.length, 2)
+    assert.equal(r.telNumber, '1234567')
+    assert.equal(r.issiNumber, '1804888')
+    assert.equal(r.entry.technician, 'AMIR')
+  })
+})
+
+// The tel already says which radio this is — by the device letter written in
+// front of it, or by a Tel range an admin mapped to a model. So the first code
+// may leave its letter off, the way every code after it already may.
+describe('the device letter taken from the tel', () => {
+  test('a letter written in front of the tel lets the first code drop its own', () => {
+    const spelled = parseCodeReport('H43A CT 1234567 1804888 1', FALLBACK, OPTS)
+    const fromTel = parseCodeReport('43A CT H1234567 1804888 1', FALLBACK, OPTS)
+    assert.equal(fromTel.ok, true, fromTel.errors.join('; '))
+    // Not merely "it parses" — the same device, part, action and company.
+    assert.deepEqual(fromTel.faults, spelled.faults)
+    assert.equal(fromTel.faults[0].code, 'H43A')
+    assert.equal(fromTel.entry.model, 'TH1N')
+    // The letter reaches the record as typed. It is the entry form's own Tel
+    // rule from here on: the server swaps it for the model's real prefix at the
+    // save (telForModel), exactly as it does for a number typed by hand.
+    assert.equal(fromTel.telNumber, 'H1234567')
+    assert.equal(fromTel.issiNumber, '1804888')
+  })
+
+  test("a Tel RANGE names the device too — the admin's own mapping, not just the letter", () => {
+    // 355 is the TH1N's range under Manage inputs -> Models.
+    const r = parseCodeReport('43A CT 3551234567 1804888 1', FALLBACK, OPTS)
+    assert.equal(r.ok, true, r.errors.join('; '))
+    assert.equal(r.faults[0].code, 'H43A')
+    assert.equal(r.telNumber, '3551234567')
+  })
+
+  test('a tel that names nothing leaves the near-miss message, not a guess', () => {
+    const r = parseCodeReport('43A CT 1234567 1804888 1', FALLBACK, OPTS)
+    assert.equal(r.ok, false)
+    assert.match(r.errors[0], /first code must start with the device letter/)
+    // And only that message: with no code decoded there is no tail either, so
+    // the unreadable code is not also complained about as a technician ID.
+    assert.deepEqual(r.warnings, [])
+  })
+
+  // The letter has two places it may be written and the second exists to save
+  // writing the first, so writing both is a habit to head off rather than a
+  // form to support — the moment they disagree, the entry is filed against a
+  // radio nobody meant.
+  test('the letter written in both places, disagreeing, asks for it to be written in one', () => {
+    const r = parseCodeReport('T43A CT H1234567 1804888 1', FALLBACK, OPTS)
+    assert.equal(r.ok, true, r.errors.join('; '))
+    assert.equal(r.faults[0].code, 'T43A') // the code wins
+    const said = r.warnings.join(' ')
+    assert.match(said, /Name the device once/)
+    // Both devices named, so it is clear WHICH two are in conflict.
+    assert.match(said, /Sepura STP9000/)
+    assert.match(said, /Airbus TH1n/)
+    // And the message written each way, so choosing is a glance not a puzzle.
+    assert.match(said, /T43A … 1234567/)
+    assert.match(said, /43A … T1234567/)
+  })
+
+  test('the reminder does not depend on the ISSI being there — the lettered tel is enough', () => {
+    // A tel with the letter in front of it is unmistakable on its own: a fault
+    // token always carries three letters or more, and an ordinary tail is
+    // nothing but digits.
+    const r = parseCodeReport('T43A CT H1234567 0 1', FALLBACK, OPTS)
+    assert.match(r.warnings.join(' '), /Name the device once/)
+  })
+
+  test('the letter written in both places, agreeing, passes without comment', () => {
+    const r = parseCodeReport('H43A CT H1234567 1804888 1', FALLBACK, OPTS)
+    assert.equal(r.ok, true, r.errors.join('; '))
+    assert.deepEqual(r.warnings, [])
+  })
+
+  test('a lettered tel with no ISSI is a tel that needs one, never a technician ID', () => {
+    // TAIL_RE would take "H1234567" for a technician ID — letters and digits is
+    // all it asks — and the report would save with no tel at all.
+    const r = parseCodeReport('H43A CT H1234567', FALLBACK, OPTS)
+    assert.equal(r.ok, false)
+    assert.match(r.errors.join(' '), /Tel H1234567 needs the ISSI beside it/)
+    assert.doesNotMatch(r.warnings.join(' '), /technician/i)
+  })
+
+  test('a Tel range that disagrees loses in silence — it is a guess, not a statement', () => {
+    const r = parseCodeReport('T43A CT 3551234567 1804888 1', FALLBACK, OPTS)
+    assert.equal(r.ok, true, r.errors.join('; '))
+    assert.equal(r.faults[0].code, 'T43A')
+    assert.deepEqual(r.warnings, [])
+  })
+})
+
 test('mixing devices in one report is rejected, not silently merged', () => {
   const r = parseCodeReport('H43AC1MT T26AR1MI 2221 6575 1', FALLBACK, OPTS)
   assert.equal(r.ok, false)

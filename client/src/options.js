@@ -506,6 +506,25 @@ export function telPick(tel, list) {
 }
 
 /**
+ * The device LETTER a Tel number names — 'H' for a TH1N — or '' when nothing
+ * claims the number.
+ *
+ * The same answer telPick gives, said in the vocabulary a CDS code is written
+ * in. It is what lets a code box accept `43A CT H1234567 …` and `43A CT 3551234
+ * …`: the number already says which radio this is, so the code need not repeat
+ * it. Both routes are covered, because modelTelPrefixes already matches the
+ * letter and the admin's digit ranges against one list — H and 355 select the
+ * TH1N by the same rule, and only the model row knows which letter that is.
+ *
+ * Matching the model by name is what telForModel does, past case and padding.
+ */
+export function letterForTel(tel, models) {
+  const name = telPick(tel, models).trim().toUpperCase()
+  if (!name) return ''
+  return optionLetter((models ?? []).find((m) => optionName(m).trim().toUpperCase() === name))
+}
+
+/**
  * A Tel number with its leading `from` prefix swapped for `to`, or unchanged
  * when it does not start with `from`.
  *

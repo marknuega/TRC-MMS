@@ -23,6 +23,7 @@ import {
   optionIssiPrefixes,
   prefixOwners,
   telPick,
+  letterForTel,
   issiPick,
   isNoActivityIssi,
   isNoActivityModel,
@@ -311,6 +312,32 @@ describe('prefixOwners', () => {
   test('a prefix outside 2-6 digits is ignored rather than matched', () => {
     assert.equal(prefixOwners('1234567', [{ name: 'Greedy', prefixes: ['1'] }]), null)
     assert.equal(prefixOwners('1234567', [{ name: 'Greedy', prefixes: ['1234567'] }]), null)
+  })
+})
+
+// The same answer telPick gives, said in the vocabulary a CDS code is written
+// in — what lets the code box take the device off the Tel number instead of
+// the code (see codes.js).
+describe('letterForTel', () => {
+  const MODELS = mergeOptions(undefined).models
+
+  test('a Tel range gives the letter of the model that owns it', () => {
+    assert.equal(letterForTel('1903324096', MODELS), 'T') // STP9000
+    assert.equal(letterForTel('0625455', MODELS), 'H') // TH1N
+  })
+
+  test('the device letter written in front of a number gives itself back', () => {
+    assert.equal(letterForTel('H1234567', MODELS), 'H')
+    assert.equal(letterForTel('T1234567', MODELS), 'T')
+  })
+
+  test('a number nothing claims names no device', () => {
+    assert.equal(letterForTel('1234567', MODELS), '')
+    assert.equal(letterForTel('', MODELS), '')
+  })
+
+  test('a model selected but carrying no letter names none — the row is the only source', () => {
+    assert.equal(letterForTel('7712345', [{ name: 'Something Custom', prefixes: ['77'] }]), '')
   })
 })
 

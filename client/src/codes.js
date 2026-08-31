@@ -10,6 +10,19 @@
  *   type parts variant action qty company  tel  issi tech
  *   └──── the 4-char CDS code ────┘
  *
+ * The tel and the ISSI may be written out in full instead of as their last 4,
+ * so long as each is its own token — the separator is what tells one number
+ * from the next once they are longer than the fixed width:
+ *
+ *     H43A CT 1234567 1804888 1
+ *
+ * And a tel written in full may carry the device LETTER in front of it, exactly
+ * as the entry form's Tel field takes one. The number then says which radio
+ * this is, so the FIRST code may leave the letter off the same way every code
+ * after it already may:
+ *
+ *     43A CT H1234567 1804888 1
+ *
  * The 4-char head (H43A) is the CDS code proper: [TYPE][PARTS][VARIANT]. The
  * variant letter is part of the code's identity, not a build of the part
  * before it: 12A is an A Cover and 12B a B Cover, two different items. Where
@@ -61,7 +74,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 // Extension-ful so `node --test` resolves it too, not just Vite.
-import { optionNames, technicianName } from './options.js'
+import { letterForTel, optionNames, technicianName } from './options.js'
 import { claimIndex, matchOption, resolveClaim, up } from './pairCode.js'
 
 // This app now OWNS the code map, so the mirror is same-origin. It stays a
@@ -182,6 +195,137 @@ const primaryAction = (name) => up(String(name ?? '').split('/')[0])
 // Strip every supported separator so one grammar covers all six write-ups.
 export const denseCode = (text) => up(text).replace(/[\s\-_:.]+/g, '')
 
+/**
+ * The same dense string, with the separator POSITIONS kept beside it.
+ *
+ * Scanning still runs on the dense text — one grammar, no per-style special
+ * cases. The tail is the one place that needs more, and only since the numbers
+ * grew: a tel and an ISSI at their real length run together into a single
+ * indivisible digit block, where the fixed 4+4 shorthand never could. Where
+ * someone wrote separators they are the boundaries; where nobody did, the dense
+ * reading stands exactly as it always has. See readTailTokens below.
+ *
+ * `dense` is denseCode(text) by construction, so the two can never disagree
+ * about what a separator is.
+ */
+export function denseTokens(text) {
+  const tokens = up(text)
+    .split(/[\s\-_:.]+/)
+    .filter(Boolean)
+  const starts = []
+  let at = 0
+  for (const t of tokens) {
+    starts.push(at)
+    at += t.length
+  }
+  return { dense: tokens.join(''), tokens, starts }
+}
+
+// What is left of the tokens once `n` dense characters have been eaten by the
+// fault scan. A token the scan ended INSIDE contributes only its remainder, so
+// a message written densely yields the one token the old grammar always saw and
+// nothing about that form changes.
+function tokensFrom(n, { tokens, starts }) {
+  const out = []
+  for (const [i, tok] of tokens.entries()) {
+    if (starts[i] + tok.length <= n) continue
+    out.push(starts[i] >= n ? tok : tok.slice(n - starts[i]))
+  }
+  return out
+}
+
+// A tel or ISSI written as its own token may now be the WHOLE number rather
+// than the last 4 — the shape the WhatsApp decoder has always accepted
+// (decodeBatch reads two plain-digit tokens of any length). Four digits is
+// still the memorised shorthand and still means the last 4, and "0" still
+// marks whichever number is not available.
+//
+// Four digits is the floor. Two or three stray digits are not a number anyone
+// meant as one, and reading them as one would quietly turn a mistyped
+// technician ID into a tel — "H43AC1MT 22 65 1" is still technician 22651, and
+// deliberately so.
+const ISSI_TOKEN_RE = /^(?:\d{4,}|0)$/
+// The tel may carry a leading device LETTER, as the entry form's Tel field does
+// (LETTER_PREFIX_RE in options.js): "H1234567" says TH1N. That is what lets the
+// code itself leave the letter off.
+const TEL_TOKEN_RE = /^(?:[A-Z]?\d{4,}|0)$/
+
+// The [tel, issi] pair `cut` tokens back from the end, or null when what sits
+// there is not that shape. cut 3 leaves room for a technician ID after it, cut
+// 2 does not.
+function pairAt(tokens, cut) {
+  if (tokens.length < cut) return null
+  const tel = tokens[tokens.length - cut]
+  const issi = tokens[tokens.length - cut + 1]
+  return TEL_TOKEN_RE.test(tel) && ISSI_TOKEN_RE.test(issi) ? { tel, issi } : null
+}
+
+// A tel with the device letter written in front of it. Unmistakable wherever
+// it sits, and that is what earns it its own rule: a fault token always carries
+// three letters or more (device, variant, action, company), and an ordinary
+// tail is nothing but digits, so one letter followed by nothing but digits can
+// be neither.
+const LETTERED_TEL_RE = /^[A-Z]\d{4,}$/
+
+/**
+ * The tel a whole message ends on, whether or not a technician ID follows it.
+ *
+ * Read BEFORE the fault scan, because the device letter this number may carry
+ * is the very letter the first code is then allowed to omit — so it has to be
+ * known before the codes are read, not after. Guessing here is safe: the real
+ * tail is still read off the scan's own end position, and a wrong guess only
+ * costs a seed nothing ends up using.
+ *
+ * A LETTERED tel is taken on its own, without the ISSI beside it to prove what
+ * it is — see LETTERED_TEL_RE. The pair rule still governs what the tail MEANS
+ * (a lone number is genuinely ambiguous, which is what the "0" marker is for),
+ * but which device was named is a separate question, and a written letter has
+ * already answered it. Without this, "T43A CT H1234567" — the letter in both
+ * places, saying two different things — would go by unremarked purely because
+ * the ISSI was left off.
+ */
+const trailingTel = (tokens) =>
+  [...tokens].reverse().find((t) => LETTERED_TEL_RE.test(t)) ?? (pairAt(tokens, 3) ?? pairAt(tokens, 2))?.tel ?? ''
+
+/**
+ * The device letter a trailing tel names, or ''.
+ *
+ * A letter WRITTEN in front of the number is taken as written — it is the same
+ * letter the code map spells a device with, and it is accepted only when the
+ * map knows it. A tel with no letter goes to the models list instead, where an
+ * admin's own Tel ranges answer the same question (355 is a TH1N), so a
+ * technician who types the real number need not spell the device out either.
+ */
+function deviceFromTel(tel, devices, models) {
+  const lead = up(tel)[0] ?? ''
+  if (/[A-Z]/.test(lead)) return devices[lead] ? lead : ''
+  const letter = letterForTel(tel, models)
+  return letter && devices[letter] ? letter : ''
+}
+
+/**
+ * The tail read as the tokens someone actually typed: [tel] [issi] [tech], or
+ * [tel] [issi] when the technician was already given inline.
+ *
+ * null unless BOTH numbers are present and both are number-shaped, which is
+ * what leaves the dense reading in charge of everything it used to decide: one
+ * token, a lone number, a short digit run, a letters-and-digits mess — all of
+ * it falls through to TAIL_RE below, unchanged. A full-length PAIR is the only
+ * thing this form adds, because it is the only thing the fixed 4+4 grammar had
+ * no way to say.
+ */
+function readTailTokens(tail, wantTechnician) {
+  if (tail.length !== (wantTechnician ? 3 : 2)) return null
+  const [tel, issi] = tail
+  if (!TEL_TOKEN_RE.test(tel) || !ISSI_TOKEN_RE.test(issi)) return null
+  // "0" is the marker for a number that is not available, never a number.
+  return {
+    telNumber: tel === '0' ? '' : tel,
+    issiNumber: issi === '0' ? '' : issi,
+    technicianId: wantTechnician ? tail[2] : '',
+  }
+}
+
 // The action is normally ONE letter, but RTO (Return to Owner) is spelled out
 // in full — it is a special designation rather than a service action, and a
 // single letter for it would read as noise next to C/R/N. It is tried FIRST so
@@ -195,15 +339,18 @@ const FAULT_RE = new RegExp(`^([A-Z])(\\d{2})([A-Z])(${ACTION_ALT})(\\d*)([A-Z]{
 // on, inheriting the device from the one before it. One report is one device
 // (enforced below), so repeating the letter was only ever a restatement.
 const SHORT_FAULT_RE = new RegExp(`^(\\d{2})([A-Z])(${ACTION_ALT})(\\d*)([A-Z]{1,2})`)
-// The entry FORM takes a full tel / ISSI now, and the record stores whatever
-// was typed. This code format still carries exactly 4 digits of each, and
-// deliberately so: it is a contract shared with the WhatsApp decoder and with
-// every technician who has memorised it, and eight digits of tel typed into a
-// dense string is a different grammar, not a wider field. A decoded entry
-// therefore holds a genuine partial — the last 4 — which is exactly the shape
-// every report saved before full numbers existed already holds, and which
-// displayNumber (report.js) renders unchanged under both export modes. Someone
-// who wants the whole number on a code-created entry types it into that entry.
+// The DENSE tail — a run with no separators left in it. Exactly 4 digits of
+// each number, and deliberately so: eight digits of tel inside a dense string
+// is not a wider field, it is an unreadable one, with no way to tell where the
+// tel stops and the ISSI starts. So the dense form keeps the memorised
+// contract, and a decoded entry holds a genuine partial — the last 4 — which is
+// the shape every report saved before full numbers existed already holds, and
+// which displayNumber (report.js) renders unchanged under both export modes.
+//
+// A full-length number is written the way the WhatsApp decoder has always taken
+// one instead: as its own token, with a separator either side (see
+// readTailTokens above). The separator is what the dense form cannot supply and
+// what full numbers cannot do without.
 //
 // tel(4) issi(4) technician(1+, letters or digits — a numeric ID or an
 // initials claim), OR just the technician alone with tel/issi both left off,
@@ -233,13 +380,23 @@ const MAX_INLINE_TECH_LEN = 4
 // a single "0" marking the other as not available (see TAIL_RE above).
 const TRAILING_TEL_ISSI_RE = /^(?:\d{8}|0\d{4}|\d{4}0)$/
 
+// Where the fault codes stop and the trailing NUMBERS begin. Deliberately
+// laxer than TRAILING_TEL_ISSI_RE: all this has to recognise is that what is
+// left is numbers rather than more codes, so an inline technician ID can be
+// told apart from the start of an ordinary tail. Since the numbers may now run
+// to their real length, "the numbers" is no longer a block of 8. What they
+// actually mean is settled afterwards by the tail readers, which are strict,
+// and a numeric candidate still has to be followed by a real fault code before
+// it is read as a technician at all (see inlineTechnicianSplit).
+const TRAILING_NUMBERS_RE = /^\d+$/
+
 // Does `str` fully resolve as zero or more chained shorthand fault codes,
-// stopping at either nothing left ('' — no more faults) or a trailing
-// tel/ISSI block (which always sits at the true end, however the
+// stopping at either nothing left ('' — no more faults) or a trailing run of
+// digits (the tel/ISSI, which always sits at the true end, however the
 // technician was placed — see parseCodeReport's inlineTechnician branch)?
 function fullyConsumesAsShortFaultChain(str) {
   let s = str
-  while (s && !TRAILING_TEL_ISSI_RE.test(s)) {
+  while (s && !TRAILING_NUMBERS_RE.test(s)) {
     const m = SHORT_FAULT_RE.exec(s)
     if (!m) return false
     s = s.slice(m[0].length)
@@ -321,7 +478,10 @@ export function resolveCompany(code, companies = {}) {
 export function parseCodeReport(text, map = FALLBACK, options = {}) {
   const errors = []
   const warnings = []
-  const src = denseCode(text)
+  // Tokens as well as the dense string: the fault scan reads the dense form, the
+  // tail reads whichever of the two the technician actually wrote (denseTokens).
+  const parts = denseTokens(text)
+  const src = parts.dense
 
   // The shared vocabulary the code map still owns: which letter is which
   // radio, which letter is which action, and the company/technician codes.
@@ -344,11 +504,22 @@ export function parseCodeReport(text, map = FALLBACK, options = {}) {
 
   if (!src) return { ok: false, errors: ['Nothing to decode.'], warnings, faults: [], entry: null }
 
+  // The device the trailing tel names, if it names one. It seeds the scan below
+  // so the FIRST code may leave its letter off — "43A CT H1234567 …" — exactly
+  // as every code after the first already may. The code still outranks it:
+  // FAULT_RE is tried first on every pass, so a letter that IS written wins.
+  const telToken = trailingTel(parts.tokens)
+  const telDevice = deviceFromTel(telToken, devices, options.models)
+  // Whether that letter was written by hand rather than inferred from a Tel
+  // range — see the contradiction warning at the end.
+  const telLetterWritten = /[A-Z]/.test(up(telToken)[0] ?? '')
+
   // ---- Scan fault tokens off the front ----
   const faults = []
   let rest = src
-  // Device carried forward for a token that omits it (second fault onward).
-  let lastDevice = null
+  // Device carried forward for a token that omits it (second fault onward), or
+  // seeded from the trailing tel so the first one may omit it too.
+  let lastDevice = telDevice || null
   // Set once a technician ID is found sitting right after some fault's
   // company — everything from there on is resolved from it rather than the
   // end-of-line tail (see inlineTechnicianSplit()).
@@ -474,17 +645,38 @@ export function parseCodeReport(text, map = FALLBACK, options = {}) {
   }
 
   // ---- Resolve tel / ISSI / technician ----
+  //
+  // Two readings of the same characters, and the SEPARATED one is tried first
+  // because it is the only one that can carry a full-length number. The dense
+  // reading below is untouched and still decides everything the token form
+  // declines to (readTailTokens says when that is), so no message that decoded
+  // before decodes differently now unless it was written as a genuine pair of
+  // full numbers — which the old grammar could not read at all.
+  //
+  // The dense string stays the authority on WHERE the tail begins: the scan's
+  // own end position, so a token the scan ended inside contributes only its
+  // remainder.
+  const tail = tokensFrom(src.length - rest.length, parts)
   let telNumber = ''
   let issiNumber = ''
   let technician = ''
-  if (inlineTechnician) {
+  if (!faults.length) {
+    // Nothing was decoded, so there is no tail either — what is left is the
+    // unreadable code itself. Reading it as a technician ID only adds a second
+    // complaint about the same typo, under a heading that sends the reader to
+    // the wrong field.
+  } else if (inlineTechnician) {
     // The technician was already given, right after a company earlier in the
     // message — nothing else is expected here except optionally tel+ISSI
     // (full pair, or one of them with "0" marking the other not available;
     // never a second technician).
-    if (rest && !TRAILING_TEL_ISSI_RE.test(rest)) {
+    const spaced = readTailTokens(tail, false)
+    if (spaced) {
+      telNumber = spaced.telNumber
+      issiNumber = spaced.issiNumber
+    } else if (rest && !TRAILING_TEL_ISSI_RE.test(rest)) {
       errors.push(
-        `Could not read "${rest}" after the technician — expected nothing, tel(4) + ISSI(4), or one of them with 0 marking the other as not available.`,
+        `Could not read "${rest}" after the technician — expected nothing, tel + ISSI, or one of them with 0 marking the other as not available.`,
       )
     } else if (/^\d{8}$/.test(rest)) {
       telNumber = rest.slice(0, 4)
@@ -497,23 +689,36 @@ export function parseCodeReport(text, map = FALLBACK, options = {}) {
     technician = resolveTechnicianName(inlineTechnician, technicians, technicianList, warnings)
   } else {
     // ---- Otherwise whatever is left must be the tel / issi / technician tail ----
-    const tail = TAIL_RE.exec(rest)
-    if (!rest) {
+    const spaced = readTailTokens(tail, true)
+    const dense = TAIL_RE.exec(rest)
+    const strayTel = tail.find((t) => LETTERED_TEL_RE.test(t))
+    if (spaced) {
+      telNumber = spaced.telNumber
+      issiNumber = spaced.issiNumber
+      technician = resolveTechnicianName(spaced.technicianId, technicians, technicianList, warnings)
+    } else if (strayTel) {
+      // A lettered tel that the pair rule could not place. TAIL_RE would take
+      // it for a technician ID — it is letters and digits, which is all that
+      // rule asks — and the report would save with no tel at all and a
+      // technician nobody recognises. Both halves of that are wrong, and the
+      // one thing this token certainly is not is a technician.
       errors.push(
-        'Missing the tail — expected the technician ID, with last 4 of tel + last 4 of ISSI in front if known.',
+        `The Tel ${strayTel} needs the ISSI beside it — write both, or 0 for the one that is not known, then the technician ID.`,
       )
-    } else if (!tail) {
-      errors.push(`Could not read "${rest}" as the technician ID, optionally preceded by tel(4) + ISSI(4).`)
+    } else if (!rest) {
+      errors.push('Missing the tail — expected the technician ID, with the tel and ISSI in front if known.')
+    } else if (!dense) {
+      errors.push(`Could not read "${rest}" as the technician ID, optionally preceded by tel + ISSI.`)
     } else {
-      if (tail[1] !== undefined) {
-        telNumber = tail[1]
-        issiNumber = tail[2]
-      } else if (tail[3] !== undefined) {
-        issiNumber = tail[3] // leading 0: tel not available
-      } else if (tail[4] !== undefined) {
-        telNumber = tail[4] // trailing 0: ISSI not available
+      if (dense[1] !== undefined) {
+        telNumber = dense[1]
+        issiNumber = dense[2]
+      } else if (dense[3] !== undefined) {
+        issiNumber = dense[3] // leading 0: tel not available
+      } else if (dense[4] !== undefined) {
+        telNumber = dense[4] // trailing 0: ISSI not available
       }
-      technician = resolveTechnicianName(tail[5], technicians, technicianList, warnings)
+      technician = resolveTechnicianName(dense[5], technicians, technicianList, warnings)
     }
   }
 
@@ -523,6 +728,32 @@ export function parseCodeReport(text, map = FALLBACK, options = {}) {
   if (distinct.length > 1) {
     errors.push(
       `One report covers one device, but this has ${distinct.length} (${distinct.join(', ')}). Send them separately.`,
+    )
+  }
+
+  // The device letter has TWO places it may be written — in front of the parts
+  // code, or in front of the tel — and the whole point of the second is that it
+  // saves writing the first. So writing both is not a form to support, it is a
+  // habit to head off: the moment they disagree the entry is filed against a
+  // radio nobody meant, and nothing in the message says which half was the typo.
+  //
+  // The reminder therefore does not ask which one is right. It says to pick a
+  // place and name the device there, and shows the message written both ways so
+  // the choice is a glance rather than a puzzle. The code wins meanwhile — it is
+  // the thing being decoded — and the message says so rather than leaving it to
+  // be discovered in the preview.
+  //
+  // Only for a letter someone WROTE. A Tel range that happens to match a model
+  // is a helpful guess, not a statement, and a guess loses without comment.
+  if (telLetterWritten && telDevice && faults.length && !faults.some((f) => f.device === telDevice)) {
+    const { code, device, deviceName } = faults[0]
+    const digits = telToken.slice(1)
+    warnings.push(
+      `Two devices named: ${code} says ${deviceName ?? device}, and the Tel ${telToken} says ${
+        devices[telDevice] ?? telDevice
+      }. Name the device once — on the code (${code} … ${digits}) or on the Tel (${code.slice(
+        1,
+      )} … ${device}${digits}), not both. Decoded as ${deviceName ?? device}, from the code.`,
     )
   }
 
