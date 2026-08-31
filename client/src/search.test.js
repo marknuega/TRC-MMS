@@ -50,6 +50,29 @@ test('tel, ISSI, technician, model and branch answer the same way', () => {
   }
 })
 
+// Whose radio it is, which is the one thing about a visit that a technician
+// looking for "everything we did for the PSD" has to search on.
+describe('the agency', () => {
+  test('is searchable, and answers with one row per entry', () => {
+    const out = searchInside([rep([pcbEntry])], 'pri')
+    assert.equal(out.length, 1)
+    // One visit to one device — not one row per fault, which is what putting
+    // the agency beside the company on the fault line would have produced.
+    assert.equal(out[0].item, 'TH1N · PCB + Program')
+    assert.equal(out[0].reportId, 'MAK-REP-A021')
+  })
+
+  test('matches however it is cased — the box is lower case, the record is not', () => {
+    const psd = { ...pcbEntry, agency: 'PSD' }
+    for (const q of ['psd', 'PSD', 'Psd']) assert.equal(searchInside([rep([psd])], q).length, 1, q)
+  })
+
+  test('an entry filed to another agency is not returned', () => {
+    const psd = { ...pcbEntry, agency: 'PSD' }
+    assert.equal(searchInside([rep([psd])], 'mewa').length, 0)
+  })
+})
+
 test('a part names a LINE, so it still answers per fault', () => {
   const out = searchInside([rep([pcbEntry])], 'pcb')
   assert.equal(out.length, 1)

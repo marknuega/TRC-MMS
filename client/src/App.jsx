@@ -25,7 +25,7 @@ import {
   syncNow,
 } from './api'
 import { onSyncChange } from './offline'
-import { formatDate, formatDateTime } from './dates'
+import { formatDate, formatDateTime, dateMatches, dateOptions, dateFiltered, MONTHS, NO_DATE_PICK } from './dates'
 import { FALLBACK, useCodeMap } from './codes.js'
 import {
   claimedPartsCode,
@@ -487,10 +487,16 @@ function App({ user, onLogout }) {
   const [savedAll, setSavedAll] = useState([]) // as fetched; read through `saved` below
   const [savedOpen, setSavedOpen] = useState(false)
   const [savedSearch, setSavedSearch] = useState('')
+  // Which day / month / year each Saved card is narrowed to. One pick per card,
+  // beside the search box it sits under, because the three cards hold different
+  // lists and a month that has reports in one may have none in another.
+  const [savedDate, setSavedDate] = useState(NO_DATE_PICK)
   const [savedRefOpen, setSavedRefOpen] = useState(false)
   const [savedRefSearch, setSavedRefSearch] = useState('')
+  const [savedRefDate, setSavedRefDate] = useState(NO_DATE_PICK)
   const [savedTxOpen, setSavedTxOpen] = useState(false)
   const [savedTxSearch, setSavedTxSearch] = useState('')
+  const [savedTxDate, setSavedTxDate] = useState(NO_DATE_PICK)
   const [page, setPage] = useState('report')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(loadSidebar)
   const [monthExpanded, setMonthExpanded] = useState(false) // false = show 7 days only
@@ -2633,6 +2639,13 @@ function App({ user, onLogout }) {
       </ul>
     )
 
+  // The way back to "no choice" for each picker. A Clear button widens all three
+  // at once, which is the wrong tool for "August was right, show me every day of
+  // it" — so each list carries its own opt-out at the top.
+  const ANY_YEAR = { value: '', label: 'Any year' }
+  const ANY_MONTH = { value: '', label: 'Any month' }
+  const ANY_DAY = { value: '', label: 'Any day' }
+
   // A collapsible "Saved …" card (used for daily reports and transmittals).
   const savedCard = ({
     icon,
@@ -2642,6 +2655,8 @@ function App({ user, onLogout }) {
     setOpen,
     search,
     setSearch,
+    datePick,
+    setDatePick,
     results,
     idHits = [],
     hint,
@@ -2655,11 +2670,37 @@ function App({ user, onLogout }) {
     // The sentence describes the card, so it is worth the room only while
     // nobody is using the card to look for something.
     const showHint = Boolean(hint) && !search.trim()
+    // The date filter narrows the LIST. A text query replaces that list with
+    // its own results, which are searched across everything, so the two are
+    // never both on screen — and the picker row steps aside while a query is in
+    // the box for the same reason the hint above it does, rather than sitting
+    // there as a control that quietly does nothing.
+    const showDates = list.length > 0 && !search.trim()
+    const choices = dateOptions(
+      list.map((r) => r.dateLabel),
+      datePick,
+    )
+    // In effect only while the list is the thing on screen. A text query is
+    // searched across everything, so a pick left over from before it must not
+    // narrow those results, nor be counted in the header as though it had.
+    const dating = dateFiltered(datePick) && !search.trim()
+    const shown = dating ? list.filter((r) => dateMatches(r.dateLabel, datePick)) : list
+    // Changing a wider part invalidates the narrower ones under it: the days of
+    // August say nothing about September, so they are dropped rather than left
+    // pointing at a month that is no longer chosen.
+    const pickYear = (y) => setDatePick({ y, m: '', d: '' })
+    const pickMonth = (m) => setDatePick((p) => ({ ...p, m, d: '' }))
+    const pickDay = (d) => setDatePick((p) => ({ ...p, d }))
     return (
       <section className="saved">
         <button type="button" className="manage-toggle" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
           <span>
-            {icon} {title} {list.length > 0 && <span className="hint">({list.length})</span>}
+            {icon} {title}{' '}
+            {list.length > 0 && (
+              // While a filter is on, the count says what is being shown AND what
+              // is being held back — "(6)" on a card of 21 reads as 15 lost.
+              <span className="hint">{dating ? `(${shown.length} of ${list.length})` : `(${list.length})`}</span>
+            )}
           </span>
           <span className="chev">{open ? '▲' : '▼'}</span>
         </button>
@@ -2716,6 +2757,39 @@ function App({ user, onLogout }) {
                 placeholder={placeholder}
               />
             )}
+            {showDates && (
+              <div className="saved-dates">
+                <SearchSelect
+                  className="saved-date-pick"
+                  ariaLabel={`${title}: year`}
+                  value={datePick.y}
+                  options={[ANY_YEAR, ...choices.years.map((y) => ({ value: String(y), label: String(y) }))]}
+                  onChange={(e) => pickYear(e.target.value)}
+                  placeholder="Any year"
+                />
+                <SearchSelect
+                  className="saved-date-pick"
+                  ariaLabel={`${title}: month`}
+                  value={datePick.m}
+                  options={[ANY_MONTH, ...choices.months.map((m) => ({ value: String(m), label: MONTHS[m] }))]}
+                  onChange={(e) => pickMonth(e.target.value)}
+                  placeholder="Any month"
+                />
+                <SearchSelect
+                  className="saved-date-pick"
+                  ariaLabel={`${title}: day`}
+                  value={datePick.d}
+                  options={[ANY_DAY, ...choices.days.map((d) => ({ value: String(d), label: String(d) }))]}
+                  onChange={(e) => pickDay(e.target.value)}
+                  placeholder="Any day"
+                />
+                {dating && (
+                  <button type="button" className="saved-dates-clear" onClick={() => setDatePick(NO_DATE_PICK)}>
+                    Clear
+                  </button>
+                )}
+              </div>
+            )}
             {list.length === 0 ? (
               <p className="empty">{empty}</p>
             ) : search.trim() ? (
@@ -2732,8 +2806,13 @@ function App({ user, onLogout }) {
                   noise, so the "No items match" line is suppressed. */}
                 {(results.length > 0 || idHits.length === 0) && searchList(results, search, tx)}
               </>
+            ) : shown.length === 0 ? (
+              // Only reachable with a filter on — an empty list took the branch
+              // above. So the line says what to do about it rather than
+              // repeating the card's "nothing saved yet" sentence.
+              <p className="empty">No reports on that date. Widen the filter, or Clear it.</p>
             ) : (
-              <ul className="saved-list">{list.map(savedRow)}</ul>
+              <ul className="saved-list">{shown.map(savedRow)}</ul>
             )}
           </div>
         )}
@@ -3759,10 +3838,12 @@ function App({ user, onLogout }) {
                   setOpen: setSavedOpen,
                   search: savedSearch,
                   setSearch: setSavedSearch,
+                  datePick: savedDate,
+                  setDatePick: setSavedDate,
                   results: reportResults,
                   idHits: reportIdHits,
                   empty: 'No saved reports yet — in Report mode, click “Save report” above.',
-                  placeholder: '🔎 Search reports (id, item, model, branch, date, tel, ISSI)…',
+                  placeholder: '🔎 Search reports (id, item, model, agency, branch, date, tel, ISSI)…',
                 })}
 
               {/* Directly under the daily reports, and deliberately its own card: a
@@ -3777,12 +3858,14 @@ function App({ user, onLogout }) {
                   setOpen: setSavedRefOpen,
                   search: savedRefSearch,
                   setSearch: setSavedRefSearch,
+                  datePick: savedRefDate,
+                  setDatePick: setSavedRefDate,
                   results: refResults,
                   idHits: refIdHits,
                   hint: 'Kept for the record, not counted. Saved under their own REF-#### number, and left out of the monthly report, the dashboard, the spare-parts report and every agency and technician total. Marked automatically when a report contains an RTO; use “Unmark reference” to move one back.',
                   empty:
                     'No reference-only reports — a report is filed here when it contains an RTO, or when you mark it by hand.',
-                  placeholder: '🔎 Search reference-only reports (id, item, model, branch, date, tel, ISSI)…',
+                  placeholder: '🔎 Search reference-only reports (id, item, model, agency, branch, date, tel, ISSI)…',
                 })}
 
               {isTransmittal &&
@@ -3794,6 +3877,8 @@ function App({ user, onLogout }) {
                   setOpen: setSavedTxOpen,
                   search: savedTxSearch,
                   setSearch: setSavedTxSearch,
+                  datePick: savedTxDate,
+                  setDatePick: setSavedTxDate,
                   results: txResults,
                   idHits: txIdHits,
                   hint: 'Transmittal snapshots, saved under a unique TRANS-#### number — kept separate from daily reports.',

@@ -20,8 +20,14 @@ const lc = (v) => String(v ?? '').toLowerCase()
 const faultHay = (f) => lc(`${f.issue} ${f.company} ${f.status}`)
 
 // What is true of the whole ENTRY — the device, the day, the people, the
-// numbers, the note. Every fault on the entry shares all of it, so none of it
-// can tell one fault from another.
+// agency, the numbers, the note. Every fault on the entry shares all of it, so
+// none of it can tell one fault from another.
+//
+// The agency belongs here rather than beside the company on the line above.
+// They read alike and they are not: the company is who supplied the PART and
+// varies from one fault to the next, while the agency is whose RADIO it is and
+// is one fact about the visit. Matching it per fault would hand back a
+// three-fault report as three rows that all say the same thing.
 //
 // Tel/ISSI are here IN FULL, whatever an export is set to show. Masking is
 // about what leaves the app; this is a signed-in technician looking for the
@@ -35,7 +41,7 @@ const faultHay = (f) => lc(`${f.issue} ${f.company} ${f.status}`)
 // near-identical rows next to the report itself.
 const entryHay = (r, e) =>
   lc(
-    `${r.branch} ${r.dateLabel} ${e.technician ?? ''} ${r.receivedBy ?? ''} ${e.telNumber ?? ''} ${e.issiNumber ?? ''} ${e.type} ${e.model} ${e.comment ?? ''}`,
+    `${r.branch} ${r.dateLabel} ${e.technician ?? ''} ${r.receivedBy ?? ''} ${e.agency ?? ''} ${e.telNumber ?? ''} ${e.issiNumber ?? ''} ${e.type} ${e.model} ${e.comment ?? ''}`,
   )
 
 // A fault with no issue of its own is a device-level action — an INSTALL, a
