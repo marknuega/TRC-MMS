@@ -79,7 +79,7 @@ describe('upgrading a database installed before two-way sync', () => {
   test('adds the columns and the tombstone table', async () => {
     await withDb(async (db, prisma) => {
       const ran = await upgradeSchema(prisma)
-      assert.deepEqual(ran.length, 2, 'the identity step and the counter step')
+      assert.deepEqual(ran.length, 3, 'the identity step, the counter step and the sync_rev rebuild')
       const cols = db
         .prepare(`PRAGMA table_info("report_entries")`)
         .all()
@@ -129,6 +129,7 @@ describe('upgrading a database installed before two-way sync', () => {
       assert.deepEqual(await upgradeSchema(prisma), [
         'entry sync (sync_id, sync_rev, entry_tombstones)',
         'entry sync counter (sync_origin, change_seq, sync_rev as a number)',
+        'sync_rev declared as a number, not a moment',
       ])
       const cols = db
         .prepare(`PRAGMA table_info("report_entries")`)
@@ -242,6 +243,113 @@ describe('upgrading a database installed before two-way sync', () => {
         assert.deepEqual(await upgradeSchema(prisma), [], 'second run should report no steps')
         const after = db.prepare(`SELECT sync_rev, change_seq FROM "report_entries" ORDER BY id`).all()
         assert.deepEqual(after, before, 'a revision that drifts on restart would resolve conflicts differently')
+      })
+    })
+  })
+
+  /*
+   * The bug this step exists for, reproduced end to end.
+   *
+   * sync_rev was first ADDED as a DATETIME, back when a revision was a moment.
+   * The step that turned revisions into counters could rewrite the values but
+   * not the column: SQLite has no ALTER COLUMN. So every upgraded database kept
+   * a column DECLARED DATETIME while holding a number — and Prisma decodes by
+   * declared type, reads 86282456 back as 1970-01-01 23:58:02.456, and refuses
+   * to convert that to Int. The first sync that writes an entry dies with
+   * "Error converting field sync_rev of expected non-nullable type Int".
+   *
+   * A fresh install was never affected, which is what kept this hidden.
+   */
+  describe('sync_rev must be declared a number, not just hold one', () => {
+    test('an upgraded database ends up with the type a fresh one has', async () => {
+      await withDb(async (db, prisma) => {
+        await upgradeSchema(prisma)
+        const col = db
+          .prepare(`PRAGMA table_info("report_entries")`)
+          .all()
+          .find((c) => c.name === 'sync_rev')
+        assert.equal(col.type.toUpperCase(), 'INTEGER')
+        // NOT NULL too — the schema says syncRev is non-nullable.
+        assert.equal(col.notnull, 1)
+      })
+    })
+
+    test('every row survives the rebuild, ids and all', async () => {
+      await withDb(async (db, prisma) => {
+        const before = db.prepare(`SELECT id, technician FROM "report_entries" ORDER BY id`).all()
+        await upgradeSchema(prisma)
+        const after = db.prepare(`SELECT id, technician FROM "report_entries" ORDER BY id`).all()
+        // ids are carried across deliberately: faults point at an entry by id.
+        assert.deepEqual(after, before)
+        assert.equal(after.length, 3)
+      })
+    })
+
+    test('sync_id keeps its UNIQUE index — dropping the table took every index with it', async () => {
+      await withDb(async (db, prisma) => {
+        await upgradeSchema(prisma)
+        const names = db
+          .prepare(`SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='report_entries'`)
+          .all()
+          .map((r) => r.name)
+        for (const idx of [
+          'report_entries_sync_id_key',
+          'report_entries_report_date_idx',
+          'report_entries_mode_idx',
+          'report_entries_branch_idx',
+          'report_entries_change_seq_idx',
+        ]) {
+          assert.ok(names.includes(idx), `missing ${idx}`)
+        }
+      })
+    })
+
+    test('the values still read as counters, not as timestamps', async () => {
+      await withDb(async (db, prisma) => {
+        await upgradeSchema(prisma)
+        for (const r of db.prepare(`SELECT sync_rev FROM "report_entries"`).all()) {
+          assert.equal(typeof r.sync_rev, 'number')
+          assert.ok(r.sync_rev >= 1 && r.sync_rev < 100000000000, `${r.sync_rev} is still a timestamp`)
+        }
+      })
+    })
+
+    test('a second run rebuilds nothing', async () => {
+      await withDb(async (db, prisma) => {
+        await upgradeSchema(prisma)
+        assert.deepEqual(await upgradeSchema(prisma), [])
+      })
+    })
+
+    /*
+     * The crash that would otherwise brick the database. Dropping the old table
+     * and renaming the new one cannot be one operation in SQLite, so a machine
+     * that loses power between them wakes with the rows under the working name
+     * and no report_entries at all — which the guard would read as "no tables
+     * yet" and skip, forever.
+     */
+    test('a rebuild interrupted between the drop and the rename is recovered', async () => {
+      await withDb(async (db, prisma) => {
+        await upgradeSchema(prisma)
+        // Recreate exactly that half-done state.
+        db.exec(`ALTER TABLE "report_entries" RENAME TO "report_entries_rebuild"`)
+        const ran = await upgradeSchema(prisma)
+        assert.ok(ran.includes('recovered an interrupted rebuild'), ran.join(', '))
+        const rows = db.prepare(`SELECT id, technician FROM "report_entries" ORDER BY id`).all()
+        assert.equal(rows.length, 3, 'the rows must come back with the table')
+      })
+    })
+
+    test('a leftover rebuild table from a crash before the copy is not mistaken for data', async () => {
+      await withDb(async (db, prisma) => {
+        // Died after CREATE, before INSERT: an empty rebuild table beside a
+        // healthy report_entries. The step drops it and starts over.
+        db.exec(`CREATE TABLE "report_entries_rebuild" ("id" INTEGER PRIMARY KEY)`)
+        await upgradeSchema(prisma)
+        const rows = db.prepare(`SELECT id FROM "report_entries" ORDER BY id`).all()
+        assert.equal(rows.length, 3)
+        const left = db.prepare(`SELECT name FROM sqlite_master WHERE name='report_entries_rebuild'`).all()
+        assert.equal(left.length, 0, 'the scratch table should not survive')
       })
     })
   })
