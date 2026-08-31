@@ -111,7 +111,7 @@ Two things that are easy to get wrong here, both checked by
 ```bash
 cd desktop
 npm install
-npm run build      # -> desktop/release/TRC-MMS (Desktop) Setup 1.1.4.exe
+npm run build      # -> desktop/release/TRC-MMS (Desktop) Setup 1.1.5.exe
 ```
 
 `npm run build` runs `scripts/prepare.mjs` first, which:
@@ -141,7 +141,7 @@ PostgreSQL→SQLite conversion could have broken silently.
 
 ## Installing on a technician's PC
 
-Copy `TRC-MMS (Desktop) Setup 1.1.4.exe` (about 126 MB) to the machine and run it. It
+Copy `TRC-MMS (Desktop) Setup 1.1.5.exe` (about 126 MB) to the machine and run it. It
 installs per-user, so it needs no administrator rights, and it creates a desktop
 and Start Menu shortcut.
 

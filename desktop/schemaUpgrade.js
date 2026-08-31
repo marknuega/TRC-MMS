@@ -270,7 +270,84 @@ const STEPS = [
       (await hasIndex(prisma, 'report_entries_sync_id_key')) &&
       (await hasIndex(prisma, 'report_entries_change_seq_idx')),
   },
+  {
+    name: 'inventory columns added since the first desktop build',
+    /*
+     * Everything the inventory tables gained after the installer first shipped
+     * and nothing here was told about. An install that upgraded rather than
+     * being created fresh has the ORIGINAL inventory tables, so the first sync
+     * to write a row dies on the first of these it reaches — "The column
+     * `company` does not exist in the current database" — and fixing that one
+     * only moves the failure to the next.
+     *
+     * They are listed together because they are one gap, not five: every one is
+     * a TEXT column with a default, added to server/prisma/schema.prisma while
+     * this file was not keeping up. See the note at the foot of this module on
+     * why that keeps happening and what would end it.
+     *
+     * Company is the one that matters most. Inventory is scoped per company and
+     * a row that cannot say which one it belongs to is a row nobody can file
+     * against, so a fresh install had this from the day the column existed and
+     * an upgraded one could not receive stock at all.
+     */
+    columns: [
+      ['inventory_items', 'company', `TEXT NOT NULL DEFAULT ''`],
+      ['inventory_items', 'room_id', `TEXT NOT NULL DEFAULT ''`],
+      ['inventory_items', 'description', `TEXT NOT NULL DEFAULT ''`],
+      ['inventory_items', 'alias', `TEXT NOT NULL DEFAULT ''`],
+      ['inventory_items', 'pair_code', `TEXT NOT NULL DEFAULT ''`],
+      ['inventory_items', 'former_pair_code', `TEXT NOT NULL DEFAULT ''`],
+      ['inventory_txns', 'company', `TEXT NOT NULL DEFAULT ''`],
+      ['inventory_txns', 'pair_code', `TEXT NOT NULL DEFAULT ''`],
+    ],
+    sql: [
+      // The indexes a fresh database has over those columns. Missing ones cost
+      // only speed, but "upgraded" and "fresh" should not be two shapes.
+      `CREATE INDEX IF NOT EXISTS "inventory_items_company_idx" ON "inventory_items"("company")`,
+      `CREATE INDEX IF NOT EXISTS "inventory_items_branch_company_idx" ON "inventory_items"("branch", "company")`,
+      `CREATE INDEX IF NOT EXISTS "inventory_items_pair_code_idx" ON "inventory_items"("pair_code")`,
+    ],
+    done: async (prisma) =>
+      (await hasColumn(prisma, 'inventory_items', 'company')) &&
+      (await hasColumn(prisma, 'inventory_items', 'room_id')) &&
+      (await hasColumn(prisma, 'inventory_items', 'description')) &&
+      (await hasColumn(prisma, 'inventory_items', 'alias')) &&
+      (await hasColumn(prisma, 'inventory_items', 'pair_code')) &&
+      (await hasColumn(prisma, 'inventory_items', 'former_pair_code')) &&
+      (await hasColumn(prisma, 'inventory_txns', 'company')) &&
+      (await hasColumn(prisma, 'inventory_txns', 'pair_code')) &&
+      (await hasIndex(prisma, 'inventory_items_company_idx')) &&
+      (await hasIndex(prisma, 'inventory_items_branch_company_idx')) &&
+      (await hasIndex(prisma, 'inventory_items_pair_code_idx')),
+  },
 ]
+
+/*
+ * A NOTE ON WHY THIS FILE KEEPS BEING WRONG
+ *
+ * Three separate faults have now reached an installed machine by the same
+ * route: a column is added to server/prisma/schema.prisma, template.db picks it
+ * up automatically at build time because it is GENERATED from that schema, and
+ * every fresh install is correct — while every upgraded install is missing it
+ * and nothing says so until a query touches the column, often months later and
+ * always on somebody else's PC.
+ *
+ * The asymmetry is the bug. One side of it is derived and cannot drift; the
+ * other is hand-maintained and drifts silently by default. Nothing here fails
+ * when a step is forgotten, because a forgotten step is indistinguishable from
+ * a schema that never moved.
+ *
+ * The fix is to derive both sides. prepare.mjs already generates the SQLite
+ * schema at build time and could emit the expected shape — table, column, type,
+ * default — as data shipped beside it, leaving this module to add whatever a
+ * database is missing rather than whatever somebody remembered to list. It
+ * would stay additive: a column a fresh install has and this one does not, with
+ * the default a fresh install gives it. Anything subtractive is a data
+ * migration and would still be written by hand, deliberately, as these are.
+ *
+ * That is a larger change than the fault in front of it, which is why it is
+ * written down here instead of done in the same breath.
+ */
 
 /** This installation's id, reduced to what is safe to paste into SQL. */
 const originLiteral = () => String(process.env.SYNC_ORIGIN || '').replace(/[^a-zA-Z0-9_-]/g, '')
