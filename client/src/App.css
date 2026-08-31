@@ -1219,7 +1219,11 @@ h2 {
   max-width: 100%;
   padding: 0.2rem 0.3rem 0.2rem 0.6rem;
   border: 1px solid var(--border-strong);
-  border-radius: 999px;
+  /* The same corner a search-result row is drawn with, not a pill. The tally
+     and the rows under it are one answer read twice — the totals, then the
+     lines behind them — so they are cut from the same shape. A pill also reads
+     as a tag, something to click or dismiss, which a count is not. */
+  border-radius: var(--radius-sm);
   background: var(--surface-3);
   font-size: 0.82rem;
   line-height: 1.4;
