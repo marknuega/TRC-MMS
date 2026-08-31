@@ -19,7 +19,7 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 import { DatabaseSync } from 'node:sqlite'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { upgradeSchema } from '../../desktop/schemaUpgrade.js'
@@ -61,6 +61,44 @@ function oldDatabase(dir) {
        VALUES ('2026-08-27', ?, 'PSD', '', '', 'AIRBUS', 'TH1N')`,
     ).run(t)
   }
+  // The inventory tables as the FIRST desktop build shipped them — before
+  // company, room_id, description, alias and the pair codes existed. An install
+  // from back then still has exactly this.
+  db.exec(`
+    CREATE TABLE "inventory_items" (
+      "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+      "sku" TEXT NOT NULL,
+      "branch" TEXT NOT NULL DEFAULT '',
+      "store" TEXT NOT NULL DEFAULT '',
+      "shelf" TEXT NOT NULL DEFAULT '',
+      "item_code" TEXT NOT NULL DEFAULT '',
+      "begin" INTEGER NOT NULL DEFAULT 0,
+      "out" INTEGER NOT NULL DEFAULT 0,
+      "low_stock" INTEGER NOT NULL DEFAULT 0,
+      "remarks" TEXT NOT NULL DEFAULT '',
+      "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updated_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`)
+  db.exec(`CREATE UNIQUE INDEX "inventory_items_sku_key" ON "inventory_items"("sku")`)
+  db.exec(`CREATE INDEX "inventory_items_branch_idx" ON "inventory_items"("branch")`)
+  db.exec(`CREATE INDEX "inventory_items_store_idx" ON "inventory_items"("store")`)
+  // Copied from a real pre-upgrade install, not invented — an approximation
+  // here would test the fixture rather than the upgrade.
+  db.exec(`
+    CREATE TABLE "inventory_txns" (
+      "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+      "item_id" INTEGER NOT NULL,
+      "sku" TEXT NOT NULL DEFAULT '',
+      "type" TEXT NOT NULL DEFAULT 'usage',
+      "change" INTEGER NOT NULL DEFAULT 0,
+      "avail_after" INTEGER NOT NULL DEFAULT 0,
+      "reference" TEXT NOT NULL DEFAULT '',
+      "branch" TEXT NOT NULL DEFAULT '',
+      "material" TEXT NOT NULL DEFAULT '',
+      "created_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`)
+  db.exec(`CREATE INDEX "inventory_txns_item_id_idx" ON "inventory_txns"("item_id")`)
+  db.prepare(`INSERT INTO "inventory_items" ("sku","branch","begin") VALUES ('MOT-MAK-1114-2','Makkah',7)`).run()
   return db
 }
 
@@ -79,7 +117,7 @@ describe('upgrading a database installed before two-way sync', () => {
   test('adds the columns and the tombstone table', async () => {
     await withDb(async (db, prisma) => {
       const ran = await upgradeSchema(prisma)
-      assert.deepEqual(ran.length, 2, 'the identity step and the counter step')
+      assert.deepEqual(ran.length, 4, 'identity, counter, the sync_rev rebuild and the inventory columns')
       const cols = db
         .prepare(`PRAGMA table_info("report_entries")`)
         .all()
@@ -129,6 +167,8 @@ describe('upgrading a database installed before two-way sync', () => {
       assert.deepEqual(await upgradeSchema(prisma), [
         'entry sync (sync_id, sync_rev, entry_tombstones)',
         'entry sync counter (sync_origin, change_seq, sync_rev as a number)',
+        'sync_rev declared as a number, not a moment',
+        'inventory columns added since the first desktop build',
       ])
       const cols = db
         .prepare(`PRAGMA table_info("report_entries")`)
@@ -244,6 +284,182 @@ describe('upgrading a database installed before two-way sync', () => {
         assert.deepEqual(after, before, 'a revision that drifts on restart would resolve conflicts differently')
       })
     })
+  })
+
+  /*
+   * The bug this step exists for, reproduced end to end.
+   *
+   * sync_rev was first ADDED as a DATETIME, back when a revision was a moment.
+   * The step that turned revisions into counters could rewrite the values but
+   * not the column: SQLite has no ALTER COLUMN. So every upgraded database kept
+   * a column DECLARED DATETIME while holding a number — and Prisma decodes by
+   * declared type, reads 86282456 back as 1970-01-01 23:58:02.456, and refuses
+   * to convert that to Int. The first sync that writes an entry dies with
+   * "Error converting field sync_rev of expected non-nullable type Int".
+   *
+   * A fresh install was never affected, which is what kept this hidden.
+   */
+  describe('sync_rev must be declared a number, not just hold one', () => {
+    test('an upgraded database ends up with the type a fresh one has', async () => {
+      await withDb(async (db, prisma) => {
+        await upgradeSchema(prisma)
+        const col = db
+          .prepare(`PRAGMA table_info("report_entries")`)
+          .all()
+          .find((c) => c.name === 'sync_rev')
+        assert.equal(col.type.toUpperCase(), 'INTEGER')
+        // NOT NULL too — the schema says syncRev is non-nullable.
+        assert.equal(col.notnull, 1)
+      })
+    })
+
+    test('every row survives the rebuild, ids and all', async () => {
+      await withDb(async (db, prisma) => {
+        const before = db.prepare(`SELECT id, technician FROM "report_entries" ORDER BY id`).all()
+        await upgradeSchema(prisma)
+        const after = db.prepare(`SELECT id, technician FROM "report_entries" ORDER BY id`).all()
+        // ids are carried across deliberately: faults point at an entry by id.
+        assert.deepEqual(after, before)
+        assert.equal(after.length, 3)
+      })
+    })
+
+    test('sync_id keeps its UNIQUE index — dropping the table took every index with it', async () => {
+      await withDb(async (db, prisma) => {
+        await upgradeSchema(prisma)
+        const names = db
+          .prepare(`SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='report_entries'`)
+          .all()
+          .map((r) => r.name)
+        for (const idx of [
+          'report_entries_sync_id_key',
+          'report_entries_report_date_idx',
+          'report_entries_mode_idx',
+          'report_entries_branch_idx',
+          'report_entries_change_seq_idx',
+        ]) {
+          assert.ok(names.includes(idx), `missing ${idx}`)
+        }
+      })
+    })
+
+    test('the values still read as counters, not as timestamps', async () => {
+      await withDb(async (db, prisma) => {
+        await upgradeSchema(prisma)
+        for (const r of db.prepare(`SELECT sync_rev FROM "report_entries"`).all()) {
+          assert.equal(typeof r.sync_rev, 'number')
+          assert.ok(r.sync_rev >= 1 && r.sync_rev < 100000000000, `${r.sync_rev} is still a timestamp`)
+        }
+      })
+    })
+
+    test('a second run rebuilds nothing', async () => {
+      await withDb(async (db, prisma) => {
+        await upgradeSchema(prisma)
+        assert.deepEqual(await upgradeSchema(prisma), [])
+      })
+    })
+
+    /*
+     * The crash that would otherwise brick the database. Dropping the old table
+     * and renaming the new one cannot be one operation in SQLite, so a machine
+     * that loses power between them wakes with the rows under the working name
+     * and no report_entries at all — which the guard would read as "no tables
+     * yet" and skip, forever.
+     */
+    test('a rebuild interrupted between the drop and the rename is recovered', async () => {
+      await withDb(async (db, prisma) => {
+        await upgradeSchema(prisma)
+        // Recreate exactly that half-done state.
+        db.exec(`ALTER TABLE "report_entries" RENAME TO "report_entries_rebuild"`)
+        const ran = await upgradeSchema(prisma)
+        assert.ok(ran.includes('recovered an interrupted rebuild'), ran.join(', '))
+        const rows = db.prepare(`SELECT id, technician FROM "report_entries" ORDER BY id`).all()
+        assert.equal(rows.length, 3, 'the rows must come back with the table')
+      })
+    })
+
+    test('a leftover rebuild table from a crash before the copy is not mistaken for data', async () => {
+      await withDb(async (db, prisma) => {
+        // Died after CREATE, before INSERT: an empty rebuild table beside a
+        // healthy report_entries. The step drops it and starts over.
+        db.exec(`CREATE TABLE "report_entries_rebuild" ("id" INTEGER PRIMARY KEY)`)
+        await upgradeSchema(prisma)
+        const rows = db.prepare(`SELECT id FROM "report_entries" ORDER BY id`).all()
+        assert.equal(rows.length, 3)
+        const left = db.prepare(`SELECT name FROM sqlite_master WHERE name='report_entries_rebuild'`).all()
+        assert.equal(left.length, 0, 'the scratch table should not survive')
+      })
+    })
+  })
+
+  /*
+   * THE GUARD THAT SHOULD HAVE EXISTED THREE FAULTS AGO.
+   *
+   * Every one of them arrived the same way: a column is added to
+   * schema.prisma, template.db picks it up for free because it is GENERATED
+   * from that schema, every fresh install is correct — and every upgraded
+   * install silently lacks it until a query touches it, months later, on
+   * somebody else's PC. Nothing failed when a step was forgotten, because a
+   * forgotten step looks exactly like a schema that never moved.
+   *
+   * So this reads the expected columns OUT of schema.prisma rather than
+   * listing them. Forget a step and this fails here, in a second, instead of
+   * in the field.
+   *
+   * Scoped to the tables an old install actually has — a table this fixture
+   * never created is a different question and stays out of it.
+   */
+  describe('an upgraded database has every column the schema declares', () => {
+    // Scalar columns of one model: the @map name where there is one, else the
+    // field name. Relation fields carry a model type (or a list) and are not
+    // columns, so they are skipped.
+    // A model's closing brace: a newline then '}' in the first column.
+    const CLOSE = String.fromCharCode(10) + '}'
+
+    function columnsOf(schema, modelName) {
+      const head = `model ${modelName} {`
+      const at = schema.indexOf(head)
+      const body = at < 0 ? null : schema.slice(at + head.length, schema.indexOf(CLOSE, at))
+      assert.ok(body, `model ${modelName} not found in schema.prisma`)
+      const models = new Set([...schema.matchAll(/^model\s+(\w+)/gm)].map((m) => m[1]))
+      const out = []
+      for (const raw of body.split('\n')) {
+        const line = raw.trim()
+        if (!line || line.startsWith('//') || line.startsWith('@@')) continue
+        const m = /^(\w+)\s+(\w+)(\[\])?/.exec(line)
+        if (!m) continue
+        const [, field, type, list] = m
+        if (list || models.has(type)) continue // a relation, not a column
+        out.push(/@map\("([^"]+)"\)/.exec(line)?.[1] ?? field)
+      }
+      return out
+    }
+
+    const schemaPath = new URL('../prisma/schema.prisma', import.meta.url)
+
+    for (const [model, table] of [
+      ['InventoryItem', 'inventory_items'],
+      ['InventoryTxn', 'inventory_txns'],
+      ['ReportEntry', 'report_entries'],
+    ]) {
+      test(`${table} has every column ${model} declares`, async () => {
+        const schema = readFileSync(schemaPath, 'utf8')
+        const want = columnsOf(schema, model)
+        assert.ok(want.length > 3, `parsed too few columns for ${model} — the parser is wrong, not the schema`)
+        await withDb(async (db, prisma) => {
+          await upgradeSchema(prisma)
+          const have = new Set(
+            db
+              .prepare(`PRAGMA table_info("${table}")`)
+              .all()
+              .map((c) => c.name),
+          )
+          const missing = want.filter((c) => !have.has(c))
+          assert.deepEqual(missing, [], `${table} is missing ${missing.join(', ')} — add an upgrade step`)
+        })
+      })
+    }
   })
 
   test('a database with no tables at all is left alone', async () => {
