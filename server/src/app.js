@@ -207,9 +207,28 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 // Any error thrown in a route lands here. Never leak stack traces in production.
+//
+// Except on the desktop build, where masking the message protects nobody and
+// costs the only person who could act on it. The rule exists because a public
+// server's errors are read by strangers; this server listens on 127.0.0.1, is
+// reachable only by the person sitting at the machine, and — unlike the
+// deployed app — has no log anyone can open. NODE_ENV is 'production' there for
+// an unrelated reason (it is what makes app.js serve client/dist), so without
+// this the standalone build answers every fault with "Internal server error"
+// and offers no second way to find out what happened.
+//
+// Keyed off APP_EDITION rather than a new flag, because "is this the desktop
+// build" is a question already asked and answered in five other places.
+//
+// Read per request, not hoisted to a constant. main.js sets APP_EDITION before
+// it imports this module today, but that ordering is not something this file
+// can see or enforce, and a constant would turn a reordering into a silent
+// regression to masked errors. The original read NODE_ENV here for the same
+// reason; this keeps that property.
 app.use((err, req, res, next) => {
   console.error(err)
+  const mask = process.env.NODE_ENV === 'production' && process.env.APP_EDITION !== 'desktop'
   res.status(err.status || 500).json({
-    error: process.env.NODE_ENV === 'production' ? 'Internal server error' : err.message,
+    error: mask ? 'Internal server error' : err.message,
   })
 })
