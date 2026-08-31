@@ -1,7 +1,7 @@
 {
   "name": "trc-mms-desktop",
   "private": true,
-  "version": "1.0.4",
+  "version": "1.1.5",
   "description": "TRC-MMS offline desktop build — Software Developed by Muhammad Amir MT# MT1063 © 2026 Muhammad Amir. All rights reserved.",
   "author": "Muhammad Amir <marknuega@gmail.com>",
   "type": "module",

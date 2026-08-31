@@ -56,6 +56,24 @@ const here = dirname(fileURLToPath(import.meta.url))
 // mistake this name exists to prevent.
 const APP_TITLE = 'TRC-MMS (Desktop)'
 
+/**
+ * What the TITLE BAR says: the name, then the version.
+ *
+ * Separate from APP_TITLE, and it must stay separate. APP_TITLE is passed to
+ * app.setName() below, which is what names the data folder — putting a version
+ * in it would move %APPDATA%\TRC-MMS (Desktop)\ to a new path on every release,
+ * and an upgraded install would open on an empty database. That looks exactly
+ * like losing every report ever typed, and the reports would still be sitting
+ * in the old folder with nothing pointing at them.
+ *
+ * So the version goes only where it is read, never where it is resolved.
+ *
+ * Lazy, because app.getVersion() is called for each window rather than once at
+ * import: createWindow runs after the app is ready, which is the state this is
+ * documented to be safe in.
+ */
+const windowTitle = () => `${APP_TITLE} ${app.getVersion()}`
+
 // Pin the data folder name before anything reads it. Left alone, Electron names
 // it from package.json's `name` ("trc-mms-desktop"), which is a build-time
 // detail nobody should have to recognise when they go looking for the database
@@ -368,7 +386,7 @@ function createWindow() {
     minWidth: 1024,
     minHeight: 640,
     show: false,
-    title: APP_TITLE,
+    title: windowTitle(),
     backgroundColor: '#ffffff',
     icon: app.isPackaged ? undefined : join(here, 'build/icon.png'),
     webPreferences: {
