@@ -3306,6 +3306,17 @@ button.sync-pill {
   margin: 0;
   min-width: 0;
 }
+/* In the edit row this sits inside .edit-code-row, a flex container, where
+   flex-basis: 100% above is what spans it. In the Add row it is a direct
+   child of .manage-controls instead, which .manage-inputs turns into a CSS
+   Grid (see the breakpoint rules below) — flex-basis does nothing there, so
+   with no grid-column of its own it was auto-placed into a single narrow
+   track and everything inside it wrapped word-by-word down the page. `1/-1`
+   spans it across however many columns the grid currently has, at every
+   breakpoint, the same way .field-desc and .add-action do below. */
+.manage-inputs .field-models {
+  grid-column: 1 / -1;
+}
 .field-models legend {
   font-size: 0.72rem;
   font-weight: 700;
