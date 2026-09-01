@@ -109,6 +109,10 @@ export default function ManageInputs({
   // renaming a part does not quietly re-open it to every device. `null` is
   // "not narrowed", an array is the devices it is on — see withModels.
   const [newModels, setNewModels] = useState(null)
+  // Collapsed by default — most new parts are on every device, which is what
+  // leaving this closed already means, so the Add row stays as short as it
+  // always was until someone actually needs to narrow one.
+  const [newModelsOpen, setNewModelsOpen] = useState(false)
   const [editModels, setEditModels] = useState(null)
   // Per-device name overrides for the open row: { <model>: <part name> }. One
   // code can be a different physical part per radio, and this is where that is
@@ -1227,6 +1231,7 @@ export default function ManageInputs({
     setNewVariant('A')
     setNewDeviceLetter('')
     setNewModels(null)
+    setNewModelsOpen(false)
     setNewPrefixes('')
     setNewIssiPrefixes('')
     setNewStandIn('')
@@ -1434,6 +1439,7 @@ export default function ManageInputs({
                   setNewParts('')
                   setNewVariant('A')
                   setNewModels(null)
+                  setNewModelsOpen(false)
                   setNewPrefixes('')
                   setNewId('')
                   setNewInitials2('')
@@ -1449,32 +1455,53 @@ export default function ManageInputs({
                 left you guessing which box was which. */}
             {isIssues && (
               <>
-                {/* Same fieldset the edit view has, so a NEW part can be
+                {/* Same picker the edit view has, so a NEW part can be
                     narrowed to the devices it is really on before it is
                     added — without this, every new entry claimed every
                     device by default, and a code already narrowed on one
                     device (44B = Battery BLN-4 on THR9) could never be
                     reused for a different device (44B = Battery 3180 on
-                    TH1N) without the add being refused first. */}
+                    TH1N) without the add being refused first.
+
+                    Collapsed by default, behind the same toggle+chevron the
+                    "Manage inputs" section itself uses: most new parts ARE
+                    on every device, which is exactly what leaving this
+                    closed already means, so the Add row stays as short as
+                    it always was until someone actually needs it open. */}
                 {deviceModels.length > 0 && (
-                  <fieldset className="field-models">
-                    <legend>Models that use this part</legend>
-                    <div className="model-rows">
-                      {deviceModels.map((m) => {
-                        const on = (newModels ?? deviceModels).includes(m)
-                        return (
-                          <div key={m} className={on ? 'model-row on' : 'model-row'}>
-                            <label className="model-tick" title={m}>
-                              <input type="checkbox" checked={on} onChange={() => toggleNewModel(m)} />
-                              <span className="model-tick-letter">{letterOf(m)}</span>
-                              <span className="model-tick-name">{m}</span>
-                            </label>
-                            <span className="model-row-code">{on ? codeFor(m, newParts, newVariant) : ''}</span>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </fieldset>
+                  <div className="field-models-collapsible">
+                    <button
+                      type="button"
+                      className="field-models-toggle"
+                      onClick={() => setNewModelsOpen((o) => !o)}
+                      aria-expanded={newModelsOpen}
+                    >
+                      <span>Models that use this part</span>
+                      <span className="field-models-summary">
+                        {newModels === null ? 'All devices' : `${newModels.length} of ${deviceModels.length}`}
+                      </span>
+                      <span className="chev">{newModelsOpen ? '▲' : '▼'}</span>
+                    </button>
+                    {newModelsOpen && (
+                      <fieldset className="field-models" aria-label="Models that use this part">
+                        <div className="model-rows">
+                          {deviceModels.map((m) => {
+                            const on = (newModels ?? deviceModels).includes(m)
+                            return (
+                              <div key={m} className={on ? 'model-row on' : 'model-row'}>
+                                <label className="model-tick" title={m}>
+                                  <input type="checkbox" checked={on} onChange={() => toggleNewModel(m)} />
+                                  <span className="model-tick-letter">{letterOf(m)}</span>
+                                  <span className="model-tick-name">{m}</span>
+                                </label>
+                                <span className="model-row-code">{on ? codeFor(m, newParts, newVariant) : ''}</span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </fieldset>
+                    )}
+                  </div>
                 )}
                 <label className="field-code">
                   Parts Code

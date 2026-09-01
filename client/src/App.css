@@ -3307,16 +3307,9 @@ button.sync-pill {
   min-width: 0;
 }
 /* In the edit row this sits inside .edit-code-row, a flex container, where
-   flex-basis: 100% above is what spans it. In the Add row it is a direct
-   child of .manage-controls instead, which .manage-inputs turns into a CSS
-   Grid (see the breakpoint rules below) — flex-basis does nothing there, so
-   with no grid-column of its own it was auto-placed into a single narrow
-   track and everything inside it wrapped word-by-word down the page. `1/-1`
-   spans it across however many columns the grid currently has, at every
-   breakpoint, the same way .field-desc and .add-action do below. */
-.manage-inputs .field-models {
-  grid-column: 1 / -1;
-}
+   flex-basis: 100% above is what spans it. In the Add row it is now wrapped
+   in .field-models-collapsible instead (see that rule below) — this fieldset
+   itself is no longer a direct grid child there, only its wrapper is. */
 .field-models legend {
   font-size: 0.72rem;
   font-weight: 700;
@@ -3358,8 +3351,19 @@ button.sync-pill {
    code, so it is the part worth seeing at a glance. */
 /* `.edit-code-row label` is a class AND a type, so it outweighs a lone class
    and was stacking the checkbox, the letter and the name into a column. Matched
-   on weight rather than fought with !important. */
+   on weight rather than fought with !important.
+
+   The SAME trap exists again for the Add row: `.entry-form label,
+   .manage-controls label { display:flex; flex-direction:column; ...}` is
+   scoped to catch every plain field label (Category, Parts Code, ...) and
+   stack its caption above its input — which is right for those, but
+   .model-tick is ALSO a <label> and sits inside .manage-controls there, so
+   it inherited the same vertical stack. `.manage-controls .model-tick`
+   (two classes) outweighs `.manage-controls label` (one class + one type)
+   by class-count, the same way `.edit-code-row .model-tick` already does
+   for the edit view — this is that fix's twin for the Add row. */
 .edit-code-row .model-tick,
+.manage-controls .model-tick,
 .model-tick {
   display: inline-flex;
   flex-direction: row;
@@ -3385,6 +3389,50 @@ button.sync-pill {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* Only in the Add row, where the picker is collapsed by default (see
+   newModelsOpen in ManageInputs.jsx) — the wrapper is what spans the grid
+   row now, not the fieldset it contains. */
+.manage-inputs .field-models-collapsible {
+  grid-column: 1 / -1;
+}
+/* Same shape as .manage-toggle (the "Manage inputs" header itself), scaled
+   down for a control that sits inside a row of fields rather than heading a
+   whole section. */
+.field-models-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-h);
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  background: var(--surface-2);
+  cursor: pointer;
+}
+.field-models-toggle:hover {
+  border-color: var(--border-strong);
+}
+/* "All devices" or "3 of 12" — the answer this control is hiding, said in
+   the one place someone would otherwise have to open it to find out. */
+.field-models-summary {
+  color: var(--muted);
+  font-weight: 500;
+}
+/* Pushes the chevron to the far right without needing a third flex child. */
+.field-models-toggle .field-models-summary {
+  margin-left: auto;
+}
+.field-models-toggle .chev {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.field-models-collapsible .field-models {
+  margin-top: 0.5rem;
 }
 /* The per-device breakdown on a closed card: each device's code and the name
    the part goes by there. Wraps, because a part can be on ten devices. */
@@ -3486,7 +3534,12 @@ button.sync-pill {
 .manage-inputs .manage-controls > label {
   white-space: normal; /* long labels wrap rather than widening the row */
 }
-.manage-inputs .manage-controls input,
+/* Every INPUT here is meant to be a full-width text/number field — Category,
+   Parts Code, Description, and so on. A checkbox is also an <input>, so
+   without the exclusion the very first checkbox added here (the models
+   picker) inherited "stretch to fill the row", which is how a small tick box
+   became a giant square that shoved its own label onto the next line. */
+.manage-inputs .manage-controls input:not([type='checkbox']),
 .manage-inputs .manage-controls .search-select {
   width: 100%;
 }
@@ -3641,6 +3694,20 @@ button.sync-pill {
   color: var(--text-h);
 }
 
+/* Same trap again, third time: the models-picker toggle in the Add row is
+   also a bare <button> inside .manage-controls, so it inherits the navy
+   action fill unless scoped and placed after the generic rule the same way. */
+.manage-inputs .manage-body .manage-controls button.field-models-toggle {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-h);
+  font-weight: 600;
+}
+.manage-inputs .manage-body .manage-controls button.field-models-toggle:hover:not(:disabled) {
+  background: var(--surface-2);
+  border-color: var(--border-strong);
+}
+
 /* The row being edited: a heavier border marks it as the one thing in hand. */
 .manage-inputs .manage-list li.editing {
   flex-direction: column;
@@ -3764,8 +3831,10 @@ button.sync-pill {
     padding: 0.9rem;
     gap: 0.9rem;
   }
-  /* Full-size, full-width targets throughout. */
-  .manage-inputs .manage-controls input,
+  /* Full-size, full-width targets throughout — but not the models
+     checkboxes, which are 44px touch targets of their own (see
+     .field-models-toggle and .model-tick below), not 44px-tall text boxes. */
+  .manage-inputs .manage-controls input:not([type='checkbox']),
   .manage-inputs .manage-list .edit-input {
     font-size: 1rem; /* 16px — below this iOS zooms on focus */
     line-height: 1.55;
