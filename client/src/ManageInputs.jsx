@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   CATEGORIES,
   CHART_TOGGLES,
@@ -41,6 +41,7 @@ import {
 } from './options'
 import { FALLBACK, useCodeMap } from './codes'
 import { deviceLetterFor, parsePairCode } from './pairCode.js'
+import { getCodeMap, saveCodeMap } from './api'
 
 // How many Model Codes fit on a card before the rest become a count.
 const MAX_PAIR_BADGES = 4
@@ -133,6 +134,34 @@ export default function ManageInputs({
   // Only to describe what a code already means in the shared vocabulary — the
   // issue type itself carries no device.
   const { map } = useCodeMap()
+
+  // Renaming a parts code's family name (the "Complete Unit" / "Fuse Cover"
+  // line on a card) right from this list, instead of sending an admin to the
+  // separate Edit Code Map section to fix a name they are already looking at.
+  // `partNameOverrides` shows the saved name immediately rather than waiting
+  // for the next poll (see useCodeMap, POLL_MS) — cleared once the poll
+  // itself agrees, so a later edit made elsewhere is never shadowed by a
+  // stale optimistic value.
+  const [editingPart, setEditingPart] = useState('')
+  const [partNameDraft, setPartNameDraft] = useState('')
+  const [partNameSaving, setPartNameSaving] = useState(false)
+  const [partNameError, setPartNameError] = useState('')
+  const [partNameOverrides, setPartNameOverrides] = useState({})
+
+  useEffect(() => {
+    if (!map) return
+    setPartNameOverrides((prev) => {
+      const next = { ...prev }
+      let changed = false
+      for (const code of Object.keys(prev)) {
+        if ((map.components ?? {})[code] === prev[code]) {
+          delete next[code]
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    })
+  }, [map])
 
   // Materials carry a separate Description; Issue types carry a parts code +
   // variant, and their description IS their name; Models and Agencies carry the
@@ -574,7 +603,42 @@ export default function ManageInputs({
   // What the parts list calls a number — "Fuses" over 10, "Knobs" over 41. The
   // card is headed by the number and its variants; this is the word for the
   // family they are variants OF, which is the one thing the head could not say.
-  const partsName = (parts) => (map?.components ?? FALLBACK.components)[String(parts ?? '').trim()] ?? ''
+  const partsName = (parts) => {
+    const code = String(parts ?? '').trim()
+    return partNameOverrides[code] ?? (map?.components ?? FALLBACK.components)[code] ?? ''
+  }
+
+  function startPartNameEdit(code) {
+    setEditingPart(code)
+    setPartNameDraft(partsName(code))
+    setPartNameError('')
+  }
+
+  function cancelPartNameEdit() {
+    setEditingPart('')
+    setPartNameError('')
+  }
+
+  // Saves against a FRESH copy of the map, not the polled one sitting in
+  // `map` — this can be open a while, and PUT replaces the whole document
+  // (see /api/codemap), so building off a stale copy would silently undo
+  // whatever anyone else changed meanwhile.
+  async function savePartName(code) {
+    const name = partNameDraft.trim()
+    if (!name) return setPartNameError('Enter what this parts code means.')
+    setPartNameSaving(true)
+    setPartNameError('')
+    try {
+      const fresh = await getCodeMap()
+      const saved = await saveCodeMap({ ...fresh, components: { ...(fresh.components ?? {}), [code]: name } })
+      setPartNameOverrides((prev) => ({ ...prev, [code]: saved.components?.[code] ?? name }))
+      setEditingPart('')
+    } catch (e) {
+      setPartNameError(e.status === 403 ? 'Only an admin can rename a parts code.' : e.message)
+    } finally {
+      setPartNameSaving(false)
+    }
+  }
 
   // The code one device gives this part+variant — H + 99 + A = H99A. Shown on
   // the device's own row, because a code read off the row beats one assembled
@@ -1147,6 +1211,9 @@ export default function ManageInputs({
     setNewValue('')
     setNewDesc('')
     setNewParts('')
+    // Back to the default rather than blank — most new parts are an "A"
+    // build, so resetting to nothing just made the next entry retype what it
+    // almost always is. Whoever wants a different one still types over it.
     setNewVariant('A')
     setNewDeviceLetter('')
     setNewModels(null)
@@ -1729,8 +1796,51 @@ export default function ManageInputs({
                         number has none rather than printing a placeholder: an
                         unnamed number is a real state (see the Code Reference
                         card, which shows the same gap), and a head reading
-                        "— unnamed —" would be louder than the name itself. */}
-                    {partsName(g.parts) && <span className="manage-group-base">{partsName(g.parts)}</span>}
+                        "— unnamed —" would be louder than the name itself.
+
+                        Editable right here: this is the name an admin looks
+                        at this card to check, and a stale or missing one
+                        (see Fuse Cover) used to mean a trip to Edit Code Map
+                        to fix it. Saves through the same admin-only API that
+                        section uses, so the rule — one name, one place — still
+                        holds; this is just a second door onto it. */}
+                    {editingPart === g.parts ? (
+                      <span className="manage-group-base-edit">
+                        <input
+                          className="edit-input manage-group-base-input"
+                          value={partNameDraft}
+                          onChange={(e) => setPartNameDraft(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') savePartName(g.parts)
+                            if (e.key === 'Escape') cancelPartNameEdit()
+                          }}
+                          placeholder="What this parts code is called"
+                          aria-label={`Name for parts code ${g.parts}`}
+                          autoFocus
+                          disabled={partNameSaving}
+                        />
+                        <button type="button" onClick={() => savePartName(g.parts)} disabled={partNameSaving}>
+                          {partNameSaving ? 'Saving…' : 'Save'}
+                        </button>
+                        <button type="button" className="ghost" onClick={cancelPartNameEdit} disabled={partNameSaving}>
+                          Cancel
+                        </button>
+                        {partNameError && <span className="manage-group-base-error">{partNameError}</span>}
+                      </span>
+                    ) : (
+                      <span className="manage-group-base-wrap">
+                        {partsName(g.parts) && <span className="manage-group-base">{partsName(g.parts)}</span>}
+                        <button
+                          type="button"
+                          className="manage-group-base-edit-btn"
+                          title={partsName(g.parts) ? 'Rename this parts code' : 'Name this parts code'}
+                          aria-label={partsName(g.parts) ? 'Rename this parts code' : 'Name this parts code'}
+                          onClick={() => startPartNameEdit(g.parts)}
+                        >
+                          ✎
+                        </button>
+                      </span>
+                    )}
                   </div>
                 )}
                 {/* `variant-lead` marks a claim that has another claim of the

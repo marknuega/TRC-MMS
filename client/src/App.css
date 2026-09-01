@@ -3054,6 +3054,44 @@ button.sync-pill {
   color: var(--text-h);
   overflow-wrap: break-word;
 }
+/* The read view: the name (if any) plus a small pencil to rename it in
+   place. Sits on the same line the name used to have to itself — the
+   button is tiny enough not to fight it for the wrap. */
+.manage-group-base-wrap {
+  flex: 0 0 100%;
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+.manage-group-base-edit-btn {
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 0.75rem;
+  line-height: 1;
+  color: var(--muted);
+  cursor: pointer;
+}
+.manage-group-base-edit-btn:hover {
+  color: var(--text-h);
+}
+/* The edit view: takes the same full-width line as the name it replaces. */
+.manage-group-base-edit {
+  flex: 0 0 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+.manage-group-base-input {
+  flex: 1 1 12rem;
+  min-width: 8rem;
+}
+.manage-group-base-error {
+  flex: 0 0 100%;
+  font-size: 0.72rem;
+  color: var(--danger, #c0392b);
+}
 /* Outside a group the wrapper must not exist as far as layout is concerned:
    the <li> is still the row, and the label and the actions are still its
    children. display:contents takes the wrapper out of the box tree entirely,
