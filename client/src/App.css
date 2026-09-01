@@ -3612,6 +3612,24 @@ button.sync-pill {
   opacity: 0.35;
 }
 
+/* Same trap as .icon-edit above (see the comment on .manage-inputs
+   .manage-body button:not(...)): the generic action-fill rule outranks a
+   single class, so the rename pencil on a card's family name painted navy
+   until it was scoped to the same specificity and written after it. */
+.manage-inputs .manage-body .manage-group-head button.manage-group-base-edit-btn {
+  background: none;
+  border: none;
+  box-shadow: none;
+  color: var(--muted);
+  padding: 0;
+  font-size: 0.75rem;
+}
+.manage-inputs .manage-body .manage-group-head button.manage-group-base-edit-btn:hover:not(:disabled) {
+  background: none;
+  border-color: transparent;
+  color: var(--text-h);
+}
+
 /* The row being edited: a heavier border marks it as the one thing in hand. */
 .manage-inputs .manage-list li.editing {
   flex-direction: column;
