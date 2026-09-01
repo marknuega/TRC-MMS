@@ -20,7 +20,7 @@ export const LICENSE_ELECTRICAL = 'Electrical License#: CLN-NQ-***6092'
 export const LICENSE_LINE = `${LICENSE_ELECTRONICS} · ${LICENSE_ELECTRICAL}`
 
 // Plain copyright, one line — the ONLY thing shown on exported/printed reports.
-export const COPYRIGHT_HTML = `${DEVELOPED_BY} · ${COPYRIGHT}`
+export const COPYRIGHT_HTML = `${COMPANY} · ${DEVELOPED_BY} · ${COPYRIGHT}`
 
 // JSX plain copyright for on-page print sheets (Save-as-PDF report views).
 export function Copyright() {
