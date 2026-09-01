@@ -1168,6 +1168,16 @@ export default function ManageInputs({
   // Ticking inside the open edit row. Untouched means every device, so that is
   // the set the first untick works from — the same rule toggleIssueModel
   // follows in the grid, because they are the one field.
+  // Same move as toggleEditModel, for the row that does not exist yet. A new
+  // part defaults to every device — the same "untouched" state an existing
+  // row starts in — so the first tick here narrows it exactly the same way.
+  const toggleNewModel = (model) => {
+    const set = new Set(newModels ?? deviceModels)
+    if (set.has(model)) set.delete(model)
+    else set.add(model)
+    setNewModels(set.size === deviceModels.length ? null : deviceModels.filter((m) => set.has(m)))
+  }
+
   const toggleEditModel = (model) => {
     const set = new Set(editModels ?? deviceModels)
     if (set.has(model)) set.delete(model)
@@ -1423,6 +1433,7 @@ export default function ManageInputs({
                   setNewDesc('')
                   setNewParts('')
                   setNewVariant('A')
+                  setNewModels(null)
                   setNewPrefixes('')
                   setNewId('')
                   setNewInitials2('')
@@ -1438,6 +1449,33 @@ export default function ManageInputs({
                 left you guessing which box was which. */}
             {isIssues && (
               <>
+                {/* Same fieldset the edit view has, so a NEW part can be
+                    narrowed to the devices it is really on before it is
+                    added — without this, every new entry claimed every
+                    device by default, and a code already narrowed on one
+                    device (44B = Battery BLN-4 on THR9) could never be
+                    reused for a different device (44B = Battery 3180 on
+                    TH1N) without the add being refused first. */}
+                {deviceModels.length > 0 && (
+                  <fieldset className="field-models">
+                    <legend>Models that use this part</legend>
+                    <div className="model-rows">
+                      {deviceModels.map((m) => {
+                        const on = (newModels ?? deviceModels).includes(m)
+                        return (
+                          <div key={m} className={on ? 'model-row on' : 'model-row'}>
+                            <label className="model-tick" title={m}>
+                              <input type="checkbox" checked={on} onChange={() => toggleNewModel(m)} />
+                              <span className="model-tick-letter">{letterOf(m)}</span>
+                              <span className="model-tick-name">{m}</span>
+                            </label>
+                            <span className="model-row-code">{on ? codeFor(m, newParts, newVariant) : ''}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </fieldset>
+                )}
                 <label className="field-code">
                   Parts Code
                   <input
