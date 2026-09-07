@@ -77,23 +77,15 @@ describe('mergeOptions', () => {
     assert.ok(mergeOptions(undefined).actions.includes('RTO'))
   })
 
-  // Same reasoning for the 30F fault code: an issueTypes list saved before it
-  // existed must not make the documented shorthand undecodable.
-  // (Moved 50F -> 32F -> 30F — Marknuega Standard — as PCB keeps getting
-  // renumbered to free up room for other parts codes.)
-  test('30F is re-added to a stored issueTypes list that predates it', () => {
+  // DEFECTIVE PCB used to be forced onto 30F the same way RTO is forced onto
+  // actions (see above) — retired: a defective board is now PCB (the ordinary
+  // parts claim) plus a descriptive action, so nothing needs a code held open
+  // for it any more. REQUIRED_ISSUE_TYPES is empty today; this just confirms
+  // an empty list truly forces nothing, so a future required code can be
+  // added here with confidence it starts from a clean slate.
+  test('with no required issue types, a stored list is left exactly as saved', () => {
     const out = mergeOptions({ issueTypes: ['ANTENNA'] })
-    assert.equal(issueCodeIndex(out.issueTypes)['30F'], 'DEFECTIVE PCB')
-  })
-
-  test('an installation that already claims 30F keeps its own wording', () => {
-    const out = mergeOptions({ issueTypes: [{ name: 'BAD MAINBOARD', parts: '30', variant: 'F' }] })
-    assert.equal(issueCodeIndex(out.issueTypes)['30F'], 'BAD MAINBOARD')
-    assert.equal(out.issueTypes.length, 1, 'must not append a second claim on the same code')
-  })
-
-  test('the defaults already claim 30F', () => {
-    assert.equal(issueCodeIndex(mergeOptions(undefined).issueTypes)['30F'], 'DEFECTIVE PCB')
+    assert.deepEqual(out.issueTypes, ['ANTENNA'])
   })
 
   // Every install that has ever opened Manage inputs has a saved models list,
@@ -647,6 +639,13 @@ describe('isServiceAction', () => {
     for (const a of ['RTO', 'REPAIR', 'PROGRAM', 'RE-PROGRAM', 'INSTALL', 'RE-INSTALL', 'DISMANTLE']) {
       assert.ok(offered.has(a), `${a} is not in the actions list`)
     }
+  })
+
+  // An admin renamed "Repair" to "Repaired" — both spellings must still read
+  // as a service action, so a report saved under the older word is unaffected.
+  test('REPAIRED is a service action, and REPAIR still is too', () => {
+    assert.equal(isServiceAction('REPAIRED'), true)
+    assert.equal(isServiceAction('REPAIR'), true)
   })
 })
 

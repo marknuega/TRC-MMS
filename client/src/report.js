@@ -39,6 +39,7 @@ const COMPANY_DISPLAY = {
 const ACTION_CODE = {
   CHANGE: 'C',
   REPAIR: 'R',
+  REPAIRED: 'R',
   'NEW ITEM': 'N',
   PCB: 'PCB',
   PROGRAM: 'P',
@@ -49,7 +50,11 @@ const ACTION_CODE = {
   RTO: 'RTO',
 }
 
-const MAINTENANCE_ACTIONS = new Set(['CHANGE', 'REPAIR', 'NEW ITEM', 'PCB'])
+// REPAIR and REPAIRED both listed: an admin renamed the action from "Repair"
+// to "Repaired" (Manage inputs allows this), and a report saved under the
+// older spelling must still classify, print and tally exactly as it always
+// did — the word changed, not what it means.
+const MAINTENANCE_ACTIONS = new Set(['CHANGE', 'REPAIR', 'REPAIRED', 'NEW ITEM', 'PCB'])
 const PROGRAM_ACTIONS = new Set(['PROGRAM', 'RE-PROGRAM'])
 const INSTALL_ACTIONS = new Set(['INSTALL', 'INSTALLATION', 'RE-INSTALL', 'RE-INSTALLATION'])
 const DISMANTLE_ACTIONS = new Set(['DISMANTLE'])
@@ -107,7 +112,7 @@ const techNames = (v) => {
 // a part.
 const isSparePartAction = (action) => {
   const a = up(action)
-  return MAINTENANCE_ACTIONS.has(a) && a !== 'REPAIR'
+  return MAINTENANCE_ACTIONS.has(a) && a !== 'REPAIR' && a !== 'REPAIRED'
 }
 
 /**
@@ -116,7 +121,7 @@ const isSparePartAction = (action) => {
  * Repair maintenance). It still gets its own line in the Materials block,
  * tagged "(R)" so nobody reads it as stock consumed: see isRepairFault below.
  */
-const isRepairFault = (f) => !isNoActivityIssue(f.issue) && up(f.action) === 'REPAIR'
+const isRepairFault = (f) => !isNoActivityIssue(f.issue) && (up(f.action) === 'REPAIR' || up(f.action) === 'REPAIRED')
 
 export function classify(action) {
   const a = up(action)

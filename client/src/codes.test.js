@@ -22,6 +22,12 @@ const OPTS = {
     { name: 'ROT KNOB', parts: '41', variant: 'A' },
     { name: 'SIDE GRIP', parts: '43', variant: 'A' },
     { name: 'SIDE GRIP 3D', parts: '43', variant: 'B' },
+    // An ordinary parts claim — used below to show RTO pairing with any
+    // parts code, PCB included. There is no dedicated "defective PCB" code
+    // any more: a board handed back defective is this claim plus RTO, and
+    // WHICH defect it was is said by the action on an ordinary fault
+    // (CRACKED, BURNED, ...), not by a second claim on the same part.
+    { name: 'PCB', parts: '30', variant: 'B' },
   ],
 }
 // 99A/99B are deliberately left unclaimed above so the tests below can show
@@ -645,8 +651,7 @@ test('the WhatsApp decoder reads the shorthand identically', async () => {
 })
 
 // ---------------------------------------------------------------------------
-// RTO — the one action written out in full, and the 50F parts code it pairs
-// with. See ACTION_ALT in codes.js.
+// RTO — the one action written out in full. See ACTION_ALT in codes.js.
 // ---------------------------------------------------------------------------
 describe('RTO shorthand', () => {
   test('RTO is read as one action, not "R" plus a company', () => {
@@ -665,19 +670,19 @@ describe('RTO shorthand', () => {
     assert.deepEqual(dense.entry, spaced.entry)
   })
 
-  test('50F decodes to the defective PCB it claims', () => {
-    const r = parseCodeReport('H50F RTO MT 2221 6575 1', FALLBACK, OPTS)
-    assert.ok(r.ok, r.errors.join('; '))
-    assert.equal(r.faults[0].issue, 'DEFECTIVE PCB')
-    assert.equal(r.faults[0].action, 'RTO')
-  })
+  test('30B decodes to the PCB it claims, whether pairing with RTO or not', () => {
+    const rto = parseCodeReport('H30B RTO MT 2221 6575 1', FALLBACK, OPTS)
+    assert.ok(rto.ok, rto.errors.join('; '))
+    assert.equal(rto.faults[0].issue, 'PCB')
+    assert.equal(rto.faults[0].action, 'RTO')
 
-  test('50F is a parts code, so it pairs with an ordinary action too', () => {
-    const r = parseCodeReport('H50F C 2 MT 2221 6575 1', FALLBACK, OPTS)
-    assert.ok(r.ok, r.errors.join('; '))
-    assert.equal(r.faults[0].issue, 'DEFECTIVE PCB')
-    assert.equal(r.faults[0].action, 'CHANGE')
-    assert.equal(r.faults[0].quantity, 2)
+    // Any parts code pairs with an ordinary action too — RTO is not special
+    // to PCB, it is special only in being spelled out (see ACTION_ALT).
+    const changed = parseCodeReport('H30B C 2 MT 2221 6575 1', FALLBACK, OPTS)
+    assert.ok(changed.ok, changed.errors.join('; '))
+    assert.equal(changed.faults[0].issue, 'PCB')
+    assert.equal(changed.faults[0].action, 'CHANGE')
+    assert.equal(changed.faults[0].quantity, 2)
   })
 
   test('a single-letter R action still means Repair', () => {
@@ -687,13 +692,13 @@ describe('RTO shorthand', () => {
   })
 
   test('RTO works in the device-less shorthand from the second code on', () => {
-    const r = parseCodeReport('H43AC1MT 50FRTOMT 2221 6575 1', FALLBACK, OPTS)
+    const r = parseCodeReport('H43AC1MT 30BRTOMT 2221 6575 1', FALLBACK, OPTS)
     assert.ok(r.ok, r.errors.join('; '))
     assert.deepEqual(
       r.faults.map((f) => [f.issue, f.action]),
       [
         ['SIDE GRIP', 'CHANGE'],
-        ['DEFECTIVE PCB', 'RTO'],
+        ['PCB', 'RTO'],
       ],
     )
   })
@@ -703,15 +708,15 @@ describe('RTO shorthand', () => {
     const map = { ...FALLBACK, faults: claimIndex(OPTS.issueTypes, FALLBACK.equipmentCodes) }
     // WhatsApp is space-TOKENIZED, so one fault is one token there — the app's
     // free-form separators are a Quick Code Entry convenience, not a wire format.
-    const bot = decodeBatch('H50FRTOMT 1', map)
+    const bot = decodeBatch('H30BRTOMT 1', map)
     assert.ok(bot.ok, bot.reason)
     const botFaults = bot.batch.groups.flatMap((g) => g.faults)
     assert.equal(botFaults.length, 1)
-    assert.equal(botFaults[0].componentCode, 'H50F')
+    assert.equal(botFaults[0].componentCode, 'H30B')
 
-    const app = parseCodeReport('H50F RTO MT 2221 6666 1', FALLBACK, OPTS)
+    const app = parseCodeReport('H30B RTO MT 2221 6666 1', FALLBACK, OPTS)
     assert.ok(app.ok, app.errors.join('; '))
-    assert.equal(app.faults[0].code, 'H50F')
+    assert.equal(app.faults[0].code, 'H30B')
     assert.equal(botFaults[0].companyCode, app.faults[0].companyCode)
   })
 })

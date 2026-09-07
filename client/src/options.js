@@ -121,10 +121,6 @@ export const DEFAULT_OPTIONS = {
   ],
 
   issueTypes: [
-    // Claims the fault code 50F, so "H50F RTO MT" decodes to a defective PCB
-    // handed back to its owner. A claim needs no code-map entry: parts 50 and
-    // variant F mean nothing on their own, only together and only here.
-    { name: 'DEFECTIVE PCB', parts: '50', variant: 'F' },
     // The one "fault" that says no work was done — 00 being the parts number
     // that claims nothing. It is what an ISSI of 00 puts on the row.
     { name: 'No Activity', parts: '00', variant: 'A' },
@@ -1266,10 +1262,14 @@ const REQUIRED_ACTIONS = ['RTO']
 // auto-select. Nothing else changes by RTO being named here.
 // INSTALLATION/RE-INSTALLATION included alongside INSTALL/RE-INSTALL: Manage
 // inputs lets an admin rename the Actions list, and "Installation" is a
-// renaming of the same action, not a different one.
+// renaming of the same action, not a different one. REPAIRED alongside
+// REPAIR for the same reason — an admin renamed "Repair" to "Repaired" and
+// both spellings must go on meaning the same thing, including on reports
+// saved under the older one.
 export const SERVICE_ACTIONS = [
   'RTO',
   'REPAIR',
+  'REPAIRED',
   'PROGRAM',
   'RE-PROGRAM',
   'INSTALL',
@@ -1289,11 +1289,15 @@ export const isServiceAction = (action) =>
 
 // Fault codes the shorthand is documented to understand, so a stored
 // issueTypes list saved before they existed cannot make them undecodable.
-// Re-added by CODE, not by name: an installation that already claims 30F for
-// its own wording keeps that wording — the claim is what matters, not ours.
-// History: 50 -> 32 -> 30 (Marknuega Standard) as the admin keeps
-// renumbering PCB to make room for other parts codes.
-const REQUIRED_ISSUE_TYPES = [{ name: 'DEFECTIVE PCB', parts: '30', variant: 'F' }]
+// Re-added by CODE, not by name — the claim is what matters, not ours.
+//
+// DEFECTIVE PCB used to live here (50 -> 32 -> 30, Marknuega Standard) as a
+// dedicated code. Retired: a defective board is now reported as PCB (the
+// ordinary parts claim) paired with a descriptive action — CRACKED, BURNED,
+// WATER DAMAGE, SHORT CIRCUIT — so "defective" is said by the action, not by
+// a second parts claim for the same physical part. Nothing forces a code here
+// any more; the list stays so a future one has somewhere to go.
+const REQUIRED_ISSUE_TYPES = []
 
 // The shipped prefixes of one category, keyed by name — read straight off the
 // defaults above so there is only ever one place they are written down. The

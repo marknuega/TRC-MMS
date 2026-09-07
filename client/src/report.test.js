@@ -56,6 +56,7 @@ describe('classify', () => {
   test('the real service actions are unchanged', () => {
     assert.equal(classify('CHANGE'), 'maintenance')
     assert.equal(classify('REPAIR'), 'maintenance')
+    assert.equal(classify('REPAIRED'), 'maintenance') // renamed spelling reads the same
     assert.equal(classify('PCB'), 'maintenance')
     assert.equal(classify('PROGRAM'), 'programming')
     assert.equal(classify('RE-INSTALL'), 'install')
@@ -1088,6 +1089,16 @@ describe('a PCB, a programming and an installation on one day', () => {
 
     test('a repaired symptom prints its own name, tagged, with no company', () => {
       assert.deepEqual(lines([did('NO POWER', 'REPAIR')]), ['1. NO POWER (R) = 1'])
+    })
+
+    // An admin renamed the action from "Repair" to "Repaired" — the renamed
+    // spelling must tag and total exactly the same as the old one did.
+    test('the renamed spelling REPAIRED reads exactly the same as REPAIR', () => {
+      assert.deepEqual(lines([did('NO POWER', 'REPAIRED')]), ['1. NO POWER (R) = 1'])
+      assert.deepEqual(lines([did('ANTENNA', 'CHANGE'), did('NO POWER', 'REPAIRED')]), [
+        '1. ANTENNA (MOI) = 1',
+        '2. NO POWER (R) = 1',
+      ])
     })
 
     test('…and the device summary still counts the work', () => {

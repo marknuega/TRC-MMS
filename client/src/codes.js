@@ -64,12 +64,14 @@
  * written out in full, because it is a special designation rather than a
  * service action — it says the device went back untouched, which marks the
  * saved report reference-only, draws no stock and counts towards no service
- * total. It combines with any parts code, so a defective PCB handed back is
+ * total. It combines with any parts code, so a PCB handed back defective is
  *
- *     H 30 F  RTO  MT
+ *     H 30 B  RTO  MT
  *
- * where 30F is the parts code for Defective PCB (claimed by an issue type
- * under Manage inputs) and RTO is the action.
+ * where 30B is the ordinary PCB parts code (claimed by an issue type under
+ * Manage inputs) and RTO is the action — "defective" is said by whichever
+ * Issue is filed alongside it (CRACKED, BURNED, WATER DAMAGE, ...), not by a
+ * second parts claim for the same physical part.
  */
 
 import { useEffect, useRef, useState } from 'react'
