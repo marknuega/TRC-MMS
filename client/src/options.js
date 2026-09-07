@@ -1289,9 +1289,11 @@ export const isServiceAction = (action) =>
 
 // Fault codes the shorthand is documented to understand, so a stored
 // issueTypes list saved before they existed cannot make them undecodable.
-// Re-added by CODE, not by name: an installation that already claims 50F for
+// Re-added by CODE, not by name: an installation that already claims 32F for
 // its own wording keeps that wording — the claim is what matters, not ours.
-const REQUIRED_ISSUE_TYPES = [{ name: 'DEFECTIVE PCB', parts: '50', variant: 'F' }]
+// Moved from 50 to 32 (Marknuega Standard) — PCB now lives at 32, so 50 is
+// free and no longer force-kept alive.
+const REQUIRED_ISSUE_TYPES = [{ name: 'DEFECTIVE PCB', parts: '32', variant: 'F' }]
 
 // The shipped prefixes of one category, keyed by name — read straight off the
 // defaults above so there is only ever one place they are written down. The

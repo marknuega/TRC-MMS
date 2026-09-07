@@ -714,8 +714,15 @@ function App({ user, onLogout }) {
   // every document type: a transmittal draws TRA, and a save holding an RTO
   // draws RTO rather than the REP it is not (see nextSeries above).
   useEffect(() => {
-    document.title = `TRC ${isTransmittal ? 'Transmittal' : 'Maintenance'} Report-${nextShortId}`
-  }, [isTransmittal, nextShortId])
+    // The Code Reference page is not a report and carries no document id, so
+    // it must not inherit whichever report id last set the title — otherwise
+    // its own "Save as PDF" seeds the filename with e.g. "TRC Maintenance
+    // Report-MAK-REP-A027" instead of naming what the PDF actually is.
+    document.title =
+      page === 'reference'
+        ? 'TRC-MMS Code Reference'
+        : `TRC ${isTransmittal ? 'Transmittal' : 'Maintenance'} Report-${nextShortId}`
+  }, [isTransmittal, nextShortId, page])
 
   // Every name an inventory item answers to: the listing name on the box, and
   // the alias it is written by on a report ("Battery 3180" for "BLN-11 BATTERY
