@@ -77,22 +77,23 @@ describe('mergeOptions', () => {
     assert.ok(mergeOptions(undefined).actions.includes('RTO'))
   })
 
-  // Same reasoning for the 32F fault code: an issueTypes list saved before it
+  // Same reasoning for the 30F fault code: an issueTypes list saved before it
   // existed must not make the documented shorthand undecodable.
-  // (Moved from 50F to 32F — Marknuega Standard — so 50 is free for reuse.)
-  test('32F is re-added to a stored issueTypes list that predates it', () => {
+  // (Moved 50F -> 32F -> 30F — Marknuega Standard — as PCB keeps getting
+  // renumbered to free up room for other parts codes.)
+  test('30F is re-added to a stored issueTypes list that predates it', () => {
     const out = mergeOptions({ issueTypes: ['ANTENNA'] })
-    assert.equal(issueCodeIndex(out.issueTypes)['32F'], 'DEFECTIVE PCB')
+    assert.equal(issueCodeIndex(out.issueTypes)['30F'], 'DEFECTIVE PCB')
   })
 
-  test('an installation that already claims 32F keeps its own wording', () => {
-    const out = mergeOptions({ issueTypes: [{ name: 'BAD MAINBOARD', parts: '32', variant: 'F' }] })
-    assert.equal(issueCodeIndex(out.issueTypes)['32F'], 'BAD MAINBOARD')
+  test('an installation that already claims 30F keeps its own wording', () => {
+    const out = mergeOptions({ issueTypes: [{ name: 'BAD MAINBOARD', parts: '30', variant: 'F' }] })
+    assert.equal(issueCodeIndex(out.issueTypes)['30F'], 'BAD MAINBOARD')
     assert.equal(out.issueTypes.length, 1, 'must not append a second claim on the same code')
   })
 
-  test('the defaults already claim 32F', () => {
-    assert.equal(issueCodeIndex(mergeOptions(undefined).issueTypes)['32F'], 'DEFECTIVE PCB')
+  test('the defaults already claim 30F', () => {
+    assert.equal(issueCodeIndex(mergeOptions(undefined).issueTypes)['30F'], 'DEFECTIVE PCB')
   })
 
   // Every install that has ever opened Manage inputs has a saved models list,

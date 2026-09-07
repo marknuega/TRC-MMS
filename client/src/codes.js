@@ -66,9 +66,9 @@
  * saved report reference-only, draws no stock and counts towards no service
  * total. It combines with any parts code, so a defective PCB handed back is
  *
- *     H 32 F  RTO  MT
+ *     H 30 F  RTO  MT
  *
- * where 32F is the parts code for Defective PCB (claimed by an issue type
+ * where 30F is the parts code for Defective PCB (claimed by an issue type
  * under Manage inputs) and RTO is the action.
  */
 
