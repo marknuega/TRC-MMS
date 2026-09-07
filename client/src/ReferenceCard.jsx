@@ -777,15 +777,14 @@ export default function ReferenceCard({ isAdmin = false, issueTypes = [] }) {
             </p>
           ) : (
             <div className="catalog-grid">
+              {/* Read-only, same as Type Letters/Actions/Companies below — this
+                  is a live mirror of Manage Inputs, not a second place to edit
+                  from, so it carries no Edit control (there used to be one
+                  here with nothing behind it to edit with). */}
               {data.claims.map(([code, name]) => (
-                <div className="catalog-card parts-card" key={code}>
-                  <div className="parts-card-info">
-                    <span className="catalog-badge">{code}</span>
-                    <span className="catalog-name">{name}</span>
-                  </div>
-                  <button type="button" className="parts-card-edit">
-                    Edit
-                  </button>
+                <div className="catalog-card code-card" key={code}>
+                  <span className="catalog-badge">{code}</span>
+                  <span className="catalog-name">{name}</span>
                 </div>
               ))}
             </div>
