@@ -1020,7 +1020,7 @@ describe('a PCB, a programming and an installation on one day', () => {
       // below about what the Device Summary carries alone.
       for (const [action, code] of [
         ['CHANGE', 'C'],
-        ['NEW', 'N'],
+        ['NEW ITEM', 'N'],
         ['PCB', 'PCB'],
       ]) {
         assert.deepEqual(one([did('PCB', action)]), [`PCB (${code}) (MOI) = 1`], action)

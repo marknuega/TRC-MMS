@@ -184,7 +184,7 @@ export const DEFAULT_OPTIONS = {
   // Adding a custom action is fine — it just prints its own name as the code.
   // RTO (Return to Owner) means the device went back untouched; saving a report
   // that contains one auto-marks it reference-only (see savedReports.js).
-  actions: ['CHANGE', 'REPAIR', 'NEW', 'PCB', 'PROGRAM', 'RE-PROGRAM', 'INSTALL', 'RE-INSTALL', 'DISMANTLE', 'RTO'],
+  actions: ['CHANGE', 'REPAIR', 'NEW ITEM', 'PCB', 'PROGRAM', 'RE-PROGRAM', 'INSTALL', 'RE-INSTALL', 'DISMANTLE', 'RTO'],
 
   // The report engine knows the display codes for these (MOT (P2), MOI, ...).
   // Each entry is a plain string, or { name, code } where `code` is the SKU

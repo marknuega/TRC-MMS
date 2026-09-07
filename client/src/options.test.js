@@ -620,7 +620,7 @@ describe('isServiceAction', () => {
   })
 
   test('anything that fits a part is not', () => {
-    for (const a of ['CHANGE', 'NEW', 'PCB']) assert.equal(isServiceAction(a), false, a)
+    for (const a of ['CHANGE', 'NEW ITEM', 'PCB']) assert.equal(isServiceAction(a), false, a)
   })
 
   // The device went back untouched: no part fitted, and nothing done at all.

@@ -39,7 +39,7 @@ const COMPANY_DISPLAY = {
 const ACTION_CODE = {
   CHANGE: 'C',
   REPAIR: 'R',
-  NEW: 'N',
+  'NEW ITEM': 'N',
   PCB: 'PCB',
   PROGRAM: 'P',
   'RE-PROGRAM': 'RP',
@@ -49,7 +49,7 @@ const ACTION_CODE = {
   RTO: 'RTO',
 }
 
-const MAINTENANCE_ACTIONS = new Set(['CHANGE', 'REPAIR', 'NEW', 'PCB'])
+const MAINTENANCE_ACTIONS = new Set(['CHANGE', 'REPAIR', 'NEW ITEM', 'PCB'])
 const PROGRAM_ACTIONS = new Set(['PROGRAM', 'RE-PROGRAM'])
 const INSTALL_ACTIONS = new Set(['INSTALL', 'INSTALLATION', 'RE-INSTALL', 'RE-INSTALLATION'])
 const DISMANTLE_ACTIONS = new Set(['DISMANTLE'])
@@ -102,8 +102,9 @@ const techNames = (v) => {
   return list.length ? list : ['-']
 }
 
-// A spare part is consumed by a Change / New / PCB action — a Repair reuses the
-// existing part, so it is counted as maintenance activity but not a part.
+// A spare part is consumed by a Change / New Item / PCB action — a Repair
+// reuses the existing part, so it is counted as maintenance activity but not
+// a part.
 const isSparePartAction = (action) => {
   const a = up(action)
   return MAINTENANCE_ACTIONS.has(a) && a !== 'REPAIR'
@@ -1010,7 +1011,7 @@ export function sparePartsByType(entries) {
       }
       const bucket = byModel.get(md)
       for (const f of e.faults ?? []) {
-        if (!isSparePartAction(f.action)) continue // only Change/New/PCB consume a part (Repair reuses it)
+        if (!isSparePartAction(f.action)) continue // only Change/New Item/PCB consume a part (Repair reuses it)
         const part = up(f.issue)
         if (!part) continue
         const company = companyDisplay(f.company)
